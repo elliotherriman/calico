@@ -1,3 +1,9 @@
+### Introduction
+
+This is a simple, incomplete guide to inkle's ink. Although the ink documentation is comprehensive, it's also hard to navigate, and borderline impossible to just search for a simple to figure out what it means. This is a mostly complete list of all those symbols, which you can easily search for here, and then click to expand for more details.
+
+Right now, most of the details you'll find will simply be links to the original documentation. My plan is to expand that shortly, but... sleep beckons, and I'd rather let people use a half finished version than nothing at all.
+
 ### Content
 
 <p><details><summary>Includes <code>INCLUDE</code></summary>
