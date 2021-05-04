@@ -180,10 +180,10 @@ Here's a brief refresher on some basic Javascript.
 
 When you change an option, Javascript has to guess at what kind of value you're assigning. Speaking roughly, there are a few kinds.
 
-* Numbers.
-* Text, also known as strings.
-* Lists, also known as arrays.
-* Objects, which are like an English to French dictionaries. As in, they're full of values that each correspond to another value, I dunno.
+- Numbers.
+- Text, also known as strings.
+- Lists, also known as arrays.
+- Objects, which are like an English to French dictionaries. As in, they're full of values that each correspond to another value, I dunno.
 
 If you don't already know these things, you might be confused. That's fine. That's why I didn't tell you there's more than one kind of number, or that there are a *lot* of other kinds of value.
 
