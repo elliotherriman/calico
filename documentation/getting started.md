@@ -124,7 +124,7 @@ If you're replacing one of these values, make sure you preserve the format of th
   The default location for image files. Used for tags that import images if you don't specify a folder manually.  
   Defaults to `"images/"`.
 - `defaultaudiolocation`  
-  The default location for image files. Used for tags that import images if you don't specify a folder manually.  
+  The default location for image files. Used for tags that import audio if you don't specify a folder manually.  
   Defaults to `"music/"`.
 - `textanimation`  
   The default text animation to use.  
