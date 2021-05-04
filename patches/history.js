@@ -83,11 +83,6 @@ function load(story, index, el, callback)
 	}
 }
 
-window.addEventListener("story restarting", (event) => 
-{
-	event.detail.story.history.choices = [];
-});
-
 Patches.add(function()
 {	
 	// create our history object if it doesn't already exist
@@ -96,6 +91,11 @@ Patches.add(function()
 	this.history.choices = [];
 	// back up our story's initial seed
 	this.history.initialSeed = this.ink.state.storySeed;
+
+	this.outerdiv.addEventListener("story restarting", (event) => 
+	{
+		this.history.choices = [];
+	});
 
 	// at the end of each passage,
 	this.outerdiv.addEventListener("passage end", (event) =>
