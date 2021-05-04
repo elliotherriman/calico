@@ -112,7 +112,7 @@ If you're replacing one of these values, make sure you preserve the format of th
   How long it takes for each line to fully fade out.  
   Defaults to `600.0`.
 - `suppresschoice`  
-  By default, Calico will only let the player click on a choice once it's been fully rendered. If `suppresschoice` is great than zero, Calico will add an invisible delay before any choices are enabled.  
+  By default, Calico will only let the player click on a choice once it's been fully rendered. If `suppresschoice` is greater than zero, Calico will add an invisible delay before any choices are enabled.  
   Defaults to `0.0`.
 - `defaultimageformat`  
   The default format for image files. Used for tags that import images if you don't manually specify a file type.  
