@@ -217,7 +217,9 @@ And finally, an object looks like this:
 
 Now, just like we did in the last section, if we want to replace an option? Here's how we do it.
 
-`option.property = value;`
+```js
+option.property = value;
+```
 
 And to break that down...
 
