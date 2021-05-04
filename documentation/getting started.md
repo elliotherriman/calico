@@ -1,3 +1,5 @@
+# Getting Started
+
 ## What is ink?
 
 Ink is a language used to write interactive fiction. Head over [here](https://www.inklestudios.com/ink/) to learn more.

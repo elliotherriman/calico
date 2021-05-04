@@ -1,10 +1,12 @@
-### Introduction
+# Ink Symbols
+
+## Introduction
 
 This is a simple, incomplete guide to inkle's ink. Although the ink documentation is comprehensive, it's also hard to navigate, and borderline impossible to just search for a simple to figure out what it means. This is a mostly complete list of all those symbols, which you can easily search for here, and then click to expand for more details.
 
 Right now, most of the details you'll find will simply be links to the original documentation. My plan is to expand that shortly, but... sleep beckons, and I'd rather let people use a half finished version than nothing at all.
 
-### Content
+## Content
 
 <p><details><summary>Includes <code>INCLUDE</code></summary>
 
@@ -150,7 +152,7 @@ have to "*\ " choices if you want to start them with a sequence
 
 ---
 
-### Variables
+## Variables
 
 <p><details><summary>Variables <code>VAR</code> <code>=</code></summary>
 
@@ -259,7 +261,7 @@ has additional meaning in other languages, but here, is literally just identical
 
 ---
 
-### Conditionals
+## Conditionals
 
 <p><details><summary>Conditional content <code>{}</code> <code>:</code> <code>|</code> <code>-</code> <code>else</code></summary>
 
@@ -293,7 +295,7 @@ switch statements
 
 ---
 
-### Comparisons
+## Comparisons
 
 <p><details><summary>Is equal to <code>==</code></summary>
 
@@ -337,7 +339,7 @@ use not instead of !, otherwise compiler may see text as once only list
 
 ---
 
-### Functions
+## Functions
 
 <p><details><summary>Functions <code>==</code> <code>===</code> <code>FUNCTION</code> <code>()</code></summary>
 
