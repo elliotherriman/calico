@@ -187,7 +187,7 @@ When you change an option, Javascript has to guess at what kind of value you're 
 
 If you don't already know these things, you might be confused. That's fine. That's why I didn't tell you there's more than one kind of number, or that there are a *lot* of other kinds of value.
 
-Here's what actually mattesr: if an option is already set to one type of value, it's going to expect that same kind of value if you reassign it. So here's how we make sure that happens.
+Here's what actually matters: if an option is already set to one type of value, it's going to expect that same kind of value if you reassign it. So here's how we make sure that happens.
 
 If you're setting a value to a number, that number should only contain the characters 0 through to 9, with a single optional decimal place.
 
