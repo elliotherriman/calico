@@ -1857,7 +1857,7 @@ class ExternalFunctions
 }
 
 // set a simple flag to check if we're on a mobile browser
-window.isMobile = ("ontouchstart" in window || navigator.maxTouchPoints);
+window.isMobile = ("ontouchstart" in window);
 ExternalFunctions.add("isMobile", () => { return window.isMobile });
 
 // ================================================
