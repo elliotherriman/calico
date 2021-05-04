@@ -209,7 +209,11 @@ An array of objects is just a list of other values, separated by commas and wrap
 
 And finally, an object looks like this:
 
-`{property: "value"}`
+```js
+{
+	"property": "value",
+}
+```
 
 Now, just like we did in the last section, if we want to replace an option? Here's how we do it.
 
