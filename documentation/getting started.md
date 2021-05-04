@@ -96,68 +96,40 @@ winter.options.linedelay = 600.0;
 <summary>For a list of Calico's default options, click here.</summary>
 <br>
 If you're replacing one of these values, make sure you preserve the format of the original. Numbers should be replaced by numbers, and text surrounded by quotation marks should be replaced by... yeah, you get it. There's a section below on data types if you want to know more.
+<br>
+<br>
 
-<br><br>
+- `passagedelay`  
+  The delay between removing an old passage, and showing the next passage.  
+  Defaults to `200.0`.
+- `linedelay`  
+  The delay after each line, before showing the next. If set to zero, all passage will appear at once.  
+  Defaults to `50.0`.
+- `showlength`  
+  How long it takes for each line to fully appear.  
+  Defaults to `500.0`.
+- `hidelength`  
+  How long it takes for each line to fully fade out.  
+  Defaults to `600.0`.
+- `suppresschoice`  
+  By default, Calico will only let the player click on a choice once it's been fully rendered. If `suppresschoice` is great than zero, Calico will add an invisible delay before any choices are enabled.  
+  Defaults to `0.0`.
+- `defaultimageformat`  
+  The default format for image files. Used for tags that import images if you don't manually specify a file type.  
+  Defaults to `".png"`.
+- `defaultaudioformat`  
+  The default format for audio files. Used for tags that import audio if you don't manually specify a file type.  
+  Defaults to `".mp3"`.
+- `defaultimagelocation`  
+  The default location for image files. Used for tags that import images if you don't specify a folder manually.  
+  Defaults to `"images/"`.
+- `defaultaudiolocation`  
+  The default location for image files. Used for tags that import images if you don't specify a folder manually.  
+  Defaults to `"music/"`.
+- `textanimation`  
+  The default text animation to use.  
+  Defaults to `"fade"`.
 
-<code>passagedelay</code>
-
-The delay between removing an old passage, and showing the next passage.
-
-Defaults to `200.0`.
-
-<br><code>linedelay</code>
-
-The delay after each line, before showing the next. If set to zero, all passage will appear at once.
-
-Defaults to `50.0`.
-
-<br><code>showlength</code>
-
-How long it takes for each line to fully appear.
-
-Defaults to `500.0`.
-
-<br><code>hidelength</code>
-
-How long it takes for each line to fully fade out.
-
-Defaults to `600.0`.
-
-<br><code>suppresschoice</code>
-
-By default, Calico will only let the player click on a choice once it's been fully rendered. If `suppresschoice` is great than zero, Calico will add an invisible delay before any choices are enabled.
-
-Defaults to `0.0`.
-
-<br><code>defaultimageformat</code>
-
-The default format for image files. Used for tags that import images if you don't manually specify a file type.
-
-Defaults to `".png"`.
-
-<br><code>defaultaudioformat</code>
-
-The default format for audio files. Used for tags that import audio if you don't manually specify a file type.
-
-Defaults to `".mp3"`.
-
-<br><code>defaultimagelocation</code>
-
-The default location for image files. Used for tags that import images if you don't specify a folder manually.
-
-Defaults to `"images/"`.
-
-<br><code>defaultaudiolocation</code>
-
-The default location for image files. Used for tags that import images if you don't specify a folder manually.
-
-Defaults to `"music/"`.
-
-<br><code>textanimation</code>
-
-The default text animation to use.
-
-Defaults to `"fade"`.
 </details>
 
 ## Importing patches
