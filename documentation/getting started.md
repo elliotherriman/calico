@@ -247,7 +247,7 @@ I'd recommend importing the autosave patch into your project, which will allow y
 
 If your game doesn't load, then something probably went a little wrong. Which is totally fine! Just click Window, then Toggle Developer Tools. A panel will open, and it'll show you some text. If it's yellow or red, then something's gone wrong. Usually, I just Google whatever message it gives me, and figure it out from there.
 
-If nothing comes up... well, that's a little harder. First, make sure that Catmint and Calico are both working by trying to load a fresh copy of the Calico template. If that's broken, please let me know. If it works, then try commenting out any lines you've recently tweaked from your project file. You can do that by pretending a line with `//`, like so.
+If nothing comes up... well, that's a little harder. First, make sure that Catmint and Calico are both working by trying to load a fresh copy of the Calico template. If that's broken, please let me know. If it works, then try commenting out any lines you've recently tweaked from your project file. You can do that by prepending a line with `//`, like so.
 
 ```js
 // import "./patches/preload.js";
