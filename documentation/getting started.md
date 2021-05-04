@@ -74,9 +74,9 @@ If you want to rename `project.js` to something else, that's totally fine too, j
 
 ## Changing options
 
-Since Calico is technically running in Javascript, you might have to use some Javascript here, but it isn't too tricky. For
+Since Calico is technically running in Javascript, you might have to use some Javascript here, but it isn't too tricky. I'll step you through it. 
 
-All options in Calico are stored in an object called `options`. When you create a story, it will import these options, along with any changes you've made before that point.
+All options in Calico are stored in an object called `options`. When you create a story, it will automatically apply all those options, along with any changes you've made before that point.
 
 Changing an option is as simple as this:
 
