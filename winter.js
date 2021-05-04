@@ -1,9 +1,9 @@
 // -----------------------------------
 // attempt to preload all files before starting the story
-import preload from "./patches/preload.js";
+import "./patches/preload.js";
 
-preload.options.preload_tags.audio.push("play", "pause", "resume", "stop");
-preload.options.preload_tags.image.push("frame");
+options.preload_tags.audio.push("play", "pause", "resume", "stop");
+options.preload_tags.image.push("frame");
 
 // always attempt to break to a new line in a way that
 // preserves a minimum number of words per line
@@ -16,8 +16,8 @@ import "./patches/dragtoscroll.js";
 import "./patches/markdowntohtml.js"
 // -----------------------------------
 // enable saving and loading
-import memorycard from "./patches/memorycard.js"
-memorycard.options.memorycard_applymostrecenttag.push("play", "resume", "pause", "stop");
+import "./patches/memorycard.js"
+options.memorycard_applymostrecenttag.push("play", "resume", "pause", "stop");
 // -----------------------------------
 // preserve the player's position if they reload
 import "./patches/autosave.js"
@@ -43,9 +43,9 @@ for (var i = 0; i < 9; i++)
 choices.add(" ", 0, true, true);
 // -----------------------------------
 // bind custom tags that apply CSS styles to a line
-import shorthandclasstags from "./patches/shorthandclasstags.js";
+import "./patches/shorthandclasstags.js";
 // set which tags (and by extension CSS styles) to use
-shorthandclasstags.options.shorthandclasstags_tags = ["red", "winter"];
+options.shorthandclasstags_tags = ["red", "winter"];
 // -----------------------------------
 // allow stepping the story forwards and backwards
 import "./patches/stepback.js"

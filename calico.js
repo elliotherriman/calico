@@ -1977,11 +1977,12 @@ class Patches
 	// live inside the call to story.patch in the project file. the code
 	// that is included there is put there to ensure it's called once
 	// the story object is fully built, and everything else is ready
-	static add(callback, options, credits)
+	static add(callback, patchOptions, credits)
 	{
+		Object.assign(options, patchOptions);
+
 		Patches.patches.push({
 								callback:callback, 
-								options:options, 
 								credits:credits,
 							});
 	}
@@ -2013,13 +2014,6 @@ class Patches
 				{
 					continue;
 				}
-			}
-
-			if (patch.options)
-			{	
-				// define all these things if they haven't already been
-				story.options = story.options || {};
-				Object.assign(story.options, patch.options || {});
 			}
 
 			// if we have a function to call
