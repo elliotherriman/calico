@@ -36,7 +36,7 @@ To set up Calico, just download the most recent release from itch.io or Github, 
 
 You'll end up with a folder that looks like this.
 
-```
+```plaintext
 index.html
 style.css
 ink.js
@@ -60,7 +60,7 @@ Assuming you're using Catmint, you can simply open up `index.html`. Now, every t
 
 `project.js` is set up as a basic template, which means near the bottom of the file, you should find a line like...
 
-```
+```js
 var story = new Story("story.json");
 ```
 
@@ -68,7 +68,7 @@ This line alone is technically a complete project file. It will take `story.json
 
 However, since you're probably working with a `.json` file that isn't called "story", you can simply reword that line to import a different file, like so.
 
-```
+```js
 var winter = new Story("winter.json");
 ```
 
@@ -82,13 +82,13 @@ All options in Calico are stored in an object called `options`. When you create 
 
 Changing an option is as simple as this:
 
-```
+```js
 options.linedelay = 600.0;
 ```
 
 Alternatively, if you want to change options for a story that's already been created, you can do it like so:
 
-```
+```js
 winter.options.linedelay = 600.0;
 ```
 
@@ -166,19 +166,19 @@ Patches are simple (or complex) tweaks that you can import into a project to cha
 
 Doing so is simple. Just open up your project file, and add a line like this before you create your story.
 
-```
+```js
 import "./patches/preload.js";
 ```
 
 That, of course, assumes a couple of things. First of all, that a file called "preload.js" exists inside the `patches` folder inside your project's directory. And secondly, that you actually wanted to import the preload patch. If that *wasn't* what you were trying to import, then you'll have to replace "preload.js" with something else, in the form of...
 
-```
+```js
 import "./patches/[file].js";
 ```
 
 Or...
 
-```
+```js
 import "./patches/[folder]/[file].js";
 ```
 
@@ -190,7 +190,7 @@ So to change a patch's options, you just have to open up the patch file, find th
 
 Let's put it all together!
 
-```
+```js
 // import a patch that creates simple tags to apply CSS classes to lines
 import "./patches/shorthandclasstags.js";
 
@@ -269,7 +269,7 @@ If your game doesn't load, then something probably went a little wrong. Which is
 
 If nothing comes up... well, that's a little harder. First, make sure that Catmint and Calico are both working by trying to load a fresh copy of the Calico template. If that's broken, please let me know. If it works, then try commenting out any lines you've recently tweaked from your project file. You can do that by pretending a line with `//`, like so.
 
-```
+```js
 // import "./patches/preload.js";
 ```
 
