@@ -223,11 +223,11 @@ option.property = value;
 
 And to break that down...
 
-`option`: the options object (just an English to French dictionary, remember?)
-`.property`: the value we're accessing,
-` = `: equals, which is how we assign a new value to that property,
-`value`: the new value,
-`;`: a symbol that marks the end of our line. I think it's usually optional in Javascript, but it's good practice.
+- `option`: the options object (just an English to French dictionary, remember?)
+- `.property`: the value we're accessing,
+- `=`: equals, which is how we assign a new value to that property,
+- `value`: the new value,
+- `;`: a symbol that marks the end of our line. I think it's usually optional in Javascript, but it's good practice.
 
 The important thing to remember is this.
 
