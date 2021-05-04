@@ -267,7 +267,7 @@ If nothing comes up... well, that's a little harder. First, make sure that Catmi
 // import "./patches/preload.js";
 ```
 
-## Uploading your game to itch.
+## Uploading your game to itch.io
 
 You're done? Hell yeah, okay.
 
