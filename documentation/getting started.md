@@ -287,6 +287,6 @@ Then add a description, as many tags as you can think of (particularly "calico"!
 
 ## Final thoughts
 
-I can feel myself getting less eloquent as I type, so I'm going to stop here. I'm going to come back and add more information on creating custom tags, shortcuts, text animations, patches, all of that noise. But hopefully this is enough to get youa ll started.
+I can feel myself getting less eloquent as I type, so I'm going to stop here. I'm going to come back and add more information on creating custom tags, shortcuts, text animations, patches, all of that noise. But hopefully this is enough to get you all started.
 
 I'm [here](https://twitter.com/elliotherriman) on Twitter if you run into any problems at all, or have any questions, or just want to show me what you made.
