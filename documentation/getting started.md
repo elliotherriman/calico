@@ -103,7 +103,7 @@ If you're replacing one of these values, make sure you preserve the format of th
   The delay between removing an old passage, and showing the next passage.  
   Defaults to `200.0`.
 - `linedelay`  
-  The delay after each line, before showing the next. If set to zero, all passage will appear at once.  
+  The delay after each line, before showing the next. If set to zero, the whole passage will appear at once.  
   Defaults to `50.0`.
 - `showlength`  
   How long it takes for each line to fully appear.  
