@@ -201,7 +201,9 @@ If you want to add quotes within that line of text, you can prepend them with a 
 
 An array of objects is just a list of other values, separated by commas and wrapped up in square brackets. Let's say we want to make a list of strings. We'd use an array, like so.
 
-`["a", "b", "c", 6]`
+```js
+["a", "b", "c", 6]
+```
 
 "That last one isn't a string!" Correct! Very good! Any data can go into an array. I lied to you, and you passed with flying colours.
 
