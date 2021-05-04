@@ -6,6 +6,10 @@ Ink is a language used to write interactive fiction. Head over [here](https://ww
 
 Calico is an engine for ink games, designed for the web. The general idea is this: you write a story in ink, import it into Calico, tweak some settings, and then upload it to a website like itch.io. Alternatively, you can compile it to a standalone application using something like Electron.
 
+## How do I use Calico?
+
+That's what I'm about to explain, you peanut. But if you're asking how to edit the files we're about to cover... that's a fair question. Inkle offers Inky, an app for writing Ink stories, which you can find [here](https://github.com/inkle/inky/releases/latest). For editing the HTML, CSS, and Javascript, you can always use a basic text editor like Notepad, but if you're comfortable with it, my suggestion would be [Visual Studio Code](https://code.visualstudio.com/download).
+
 ## A note, for those of you who can't code
 
 Calico is written in Javascript. And Javascript is a programming language, which for a lot of people, is kind of scary. 
