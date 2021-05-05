@@ -24,7 +24,7 @@ Also? I didn't know Javascript when I started this project. I do know how to cod
 
 Calico was designed to ensure you could spend as little time programming as necessary. For the most part, you can copy and paste in lines of code, or tweak existing lines, and that'll serve you perfectly.
 
-If you try to load up your project and something breaks, there might be an error in your Javascript. If you open up the developer console (through your browser or Catmint), it will show you what went wrong. Then you can Google the error, or message me, or figure it out yourself. But I promise you, you can do this.
+Worst case scenario, your project just might not load if you try to open it. But if you open up the developer console (through your browser or Catmint), it'll show you what went wrong. Then you can Google the error, or message me, or just tweak things until they work again.
 
 Okay, are we ready to go?
 
@@ -176,18 +176,14 @@ var winter = new Story("winter.json");
 
 ## Data types
 
-Here's a brief refresher on some basic Javascript.
-
 When you change an option, Javascript has to guess at what kind of value you're assigning. Speaking roughly, there are a few kinds.
 
 - Numbers.
 - Text, also known as strings.
 - Lists, also known as arrays.
-- Objects, which are like an English to French dictionaries. As in, they're full of values that each correspond to another value, I dunno.
+- Objects, which is an unordered box of objects. They're sometimes called dictionaries, because they contain keys (words) that correspond to values (definitions).
 
-If you don't already know these things, you might be confused. That's fine. That's why I didn't tell you there's more than one kind of number, or that there are a *lot* of other kinds of value.
-
-Here's what actually matters: if an option is already set to one type of value, it's going to expect that same kind of value if you reassign it. So here's how we make sure that happens.
+If you don't already know these things, you might be confused. That's fine. Here's what actually matters: if an option is already set to one type of value, it's going to expect that same kind of value if you reassign it. So here's how we make sure that happens.
 
 If you're setting a value to a number, that number should only contain the characters 0 through to 9, with a single optional decimal place.
 
@@ -195,9 +191,7 @@ Here's a number, `6`, or another kind of number, `34.7`.
 
 If you're setting a value to text, it should be wrapped in quotes. Either double or single is fine.
 
-For example, `"A line of text"`.
-
-If you want to add quotes within that line of text, you can prepend them with a backslash, like so, `"A line of \"text"\"`, or use the other kind of quotation marks, `"like 'so'"`.
+For example, `"A line of text"`. If you want to add quotes within that line of text, you can prepend them with a backslash, like so, `"A line of \"text"\"`, or use the other kind of quotation marks, `"like 'so'"`.
 
 An array of objects is just a list of other values, separated by commas and wrapped up in square brackets. Let's say we want to make a list of strings. We'd use an array, like so.
 
@@ -223,15 +217,14 @@ option.property = value;
 
 And to break that down...
 
-- `option`: the options object (just an English to French dictionary, remember?)
-- `.property`: the value we're accessing,
+- `option`: the options object (like a dictionary, remember?)
+- `.`: how we mark that we're accessing something within that object,
+- `property`: the property we're accessing, which corresponds to a value,
 - `=`: equals, which is how we assign a new value to that property,
 - `value`: the new value,
-- `;`: a symbol that marks the end of our line. I think it's usually optional in Javascript, but it's good practice.
+- `;`: a symbol that marks the end of our line.
 
-The important thing to remember is this.
-
-You absolutely can't break your game or computer by experimenting. That's how you learned, and I know that, because that's how I learned. Just make backups every hour or so, and you'll be absolutely fine.
+The important thing to remember is this. You absolutely can't break your game or computer by experimenting. That's how you learn, and I know that, because that's how I learned. Just make backups every hour or so, and every time before you do something big, and you'll be absolutely fine.
 
 ## Testing your game
 
