@@ -1,0 +1,121 @@
+body
+{
+	font-family: 'Open Sans', sans-serif;
+	font-weight: 300;
+	background: black;
+	color: white;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+	-webkit-user-drag: none;
+	-khtml-user-drag: none;
+	-moz-user-drag: none;
+	-o-user-drag: none;
+}
+
+/* Seems necessary to make iframes work on itch.io on mobile iOS :-( */
+#container
+{
+    position: absolute;
+    display: block;
+    margin: 0;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+    overflow: scroll;
+    overflow-x: hidden;
+    height: 100%;
+    width: 100%;
+    top: 0;
+    left: 0;
+    background-size: cover;
+    background-repeat: no-repeat;
+	z-index: 10;    
+}
+
+#story
+{
+	position: relative;
+	margin: 0 auto;
+	overflow: hidden;
+	height: 100%;
+	width: 700px;
+	min-width: 60vw;
+	max-width: 80vw !important;
+	transition: opacity 2s ease;
+	padding: 0em 1em 0em 1em;
+}
+
+@media (hover:none), (hover:on-demand)
+{
+	#story
+	{
+		max-width: 90%;
+	} 
+}
+
+#story > *:first-child {
+	margin-top: 10vh !important;
+}
+
+#story > *:last-child 
+{
+	margin-bottom: 15vh !important;
+}
+
+/* ================================================================= */
+
+p
+{
+	margin-block-start: 0px !important;
+	font-size: 16pt;
+	line-height: 1.4;
+}
+
+p, p > *
+{
+	-webkit-user-drag: none;
+	-khtml-user-drag: none;
+	-moz-user-drag: none;
+	-o-user-drag: none;
+}
+
+a 
+{
+	color: #f16d69;
+	text-decoration: none !important;
+	transition: all 0.5s linear;
+}
+
+a:hover
+{
+	color: #ffffff;
+}
+
+.choice > a
+{
+	color: inherit;
+	opacity: 0.5;
+	transition: all 1s;
+	color: white;
+}
+
+.choice > a:hover
+{
+	color: white;
+	opacity: 1;
+	transition: all 1s;	
+}
+
+.choice > a:active
+{
+	color:red;
+}
+
+.chosen
+{
+	color: white !important;
+	opacity: 1 !important;
+}

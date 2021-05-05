@@ -1847,7 +1847,7 @@ class ExternalFunctions
 	static bind(story, id)
 	{
 		var f = ExternalFunctions.get(id);
-		if (f) story.ink.BindExternalFunction(id, f);
+		if (f) story.ink.BindExternalFunction(id, f.bind(story));
 	}
 
 	static clear()

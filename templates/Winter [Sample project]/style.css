@@ -1,0 +1,277 @@
+body
+{
+	font-family: 'Open Sans', sans-serif;
+	font-weight: 300;
+	background: black;
+	color: white;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+	-webkit-user-drag: none;
+	-khtml-user-drag: none;
+	-moz-user-drag: none;
+	-o-user-drag: none;
+}
+
+/* Seems necessary to make iframes work on itch.io on mobile iOS :-( */
+#container
+{
+    position: absolute;
+    display: block;
+    margin: 0;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+    overflow: scroll;
+    overflow-x: hidden;
+    height: 100%;
+    width: 100%;
+    top: 0;
+    left: 0;
+    background-size: cover;
+    background-repeat: no-repeat;
+	z-index: 10;    
+}
+
+#story
+{
+	position: relative;
+	margin: 0 auto;
+	overflow: hidden;
+	height: 100%;
+	width: 700px;
+	min-width: 60vw;
+	max-width: 80vw !important;
+	transition: opacity 2s ease;
+	padding: 0em 1em 0em 1em;
+}
+
+@media (hover:none), (hover:on-demand)
+{
+	#story
+	{
+		max-width: 90%;
+	} 
+}
+
+#story > *:first-child {
+	margin-top: 10vh !important;
+}
+
+#story > *:last-child 
+{
+	margin-bottom: 15vh !important;
+}
+
+/* ================================================================= */
+
+p
+{
+	margin-block-start: 0px !important;
+	font-size: 16pt;
+	line-height: 1.4;
+}
+
+p, p > *
+{
+	-webkit-user-drag: none;
+	-khtml-user-drag: none;
+	-moz-user-drag: none;
+	-o-user-drag: none;
+}
+
+a 
+{
+	color: #f16d69;
+	text-decoration: none !important;
+	transition: all 0.5s linear;
+}
+
+a:hover
+{
+	color: #ffffff;
+}
+
+.choice > a
+{
+	color: inherit;
+	opacity: 0.5;
+	transition: all 1s;
+	color: white;
+}
+
+.choice > a:hover
+{
+	color: white;
+	opacity: 1;
+	transition: all 1s;	
+}
+
+.choice > a:active
+{
+	color:red;
+}
+
+.chosen
+{
+	color: white !important;
+	opacity: 1 !important;
+}
+
+/* ================================================================= */
+
+.progressbar
+{
+	position: absolute;
+	overflow: hidden;
+	top: 0;
+	background: #7690ac;
+	width: 0%;	
+	height: 1vh;
+}
+
+.frame
+{
+	width: 100%;
+	height: calc(100vw * 0.2);
+	overflow: hidden;
+	position: relative;
+}
+
+.frameLayer
+{
+	position: absolute;
+	width: 120%;
+	display: block;
+	top: -9999px;
+	bottom: -9999px;
+	left: -9999px;
+	right: -9999px;
+	margin: auto;
+	max-width: auto;
+}
+
+/* css for mobile */
+@media (hover:none), (hover:on-demand) 
+{ 
+	.frame 
+	{ 
+		min-height: calc(100vmax * 0.25);
+	}
+	.frameLayer
+	{
+		width: 150%;
+	}
+}
+
+/* ================================================================= */
+
+.winter
+{
+	color: #7690ac !important;
+}
+
+.red
+{
+	color: #f76e6a !important;
+}
+
+
+img 
+{
+	-ms-interpolation-mode: nearest-neighbor;
+	image-rendering: crisp-edges;
+	image-rendering: pixelated;
+}
+
+/* ================================================================= */
+
+.frame.menu
+{
+	width: 60vh;
+	height: 48vh;
+	margin: auto;
+	margin-bottom: revert;
+	min-height: revert;
+	max-height: revert;
+}
+
+.menu, .menu ~ p
+{
+	width: 60vh;
+	margin: auto;
+	margin-bottom: revert;
+}
+
+@media (hover:none), (hover:on-demand) 
+{ 
+	.frame.menu
+	{
+		width: 80vmin;
+		height: 64vmin;
+	}
+	
+	.menu, .menu ~ p
+	{
+		width: 80vmin;
+	}	
+}
+
+.menu > .frameLayer
+{
+	width: 120%;
+	height: 120%;
+}
+
+.menu > .frameLayer:nth-child(n+3)
+{
+	width: 100%;
+	height: 100%;
+}
+
+/* ================================================================= */
+
+/* open-sans-300 - latin */
+@font-face {
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 300;
+  src: url('./fonts/OpenSans-Light.ttf');
+}
+/* open-sans-300italic - latin */
+@font-face {
+  font-family: 'Open Sans';
+  font-style: italic;
+  font-weight: 300;
+  src: url('./fonts/OpenSans-LightItalic.ttf');
+}
+/* open-sans-regular - latin */
+@font-face {
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('./fonts/OpenSans-Regular.ttf');
+}
+/* open-sans-italic - latin */
+@font-face {
+  font-family: 'Open Sans';
+  font-style: italic;
+  font-weight: 400;
+  src: url('./fonts/OpenSans-Italic.ttf');
+}
+/* open-sans-700 - latin */
+@font-face {
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 700;
+  src: url('./fonts/OpenSans-Bold.ttf');
+}
+/* open-sans-700italic - latin */
+@font-face {
+  font-family: 'Open Sans';
+  font-style: italic;
+  font-weight: 700;
+  src: url('./fonts/OpenSans-BoltItalic.ttf');
+}
