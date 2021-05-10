@@ -286,17 +286,17 @@ class Story
 				// which is a list of all the text fragments and tags in this 
 				// line). we mark tags as coming before or after text, style 
 				// each segment of the line, and finally paste it all together
-				var currentTags = [];
+				let currentTags = [];
 				
 				// define item iterator here so we don't 
 				// have to recreate it every time
-				var item
+				let item;
 
 				// necessary flag for checking whether we're before or after
 				// the line-- if we use a check for text length alone it'll 
 				// pass every time, but we might not have any tags after the
 				// line, so we can't trust tags.array.length either
-				var tagsAfter = true;
+				let tagsAfter = true;
 
 				// start by going through each item in the stream (backwards)
 				for (var i = this.ink.state.outputStream.length - 1; i >= 0; i--) 
@@ -1101,14 +1101,6 @@ class Element
 			
 			// mark we're rendering
 			el.state = Element.states.rendering;
-			
-			// if the element ends up outside our story's height, something's
-			// loaded in later than we expected it to, or something else odd,
-			if (el.offsetTop + el.offsetHeight > el.parentNode.offsetHeight)
-			{
-				// so we update the height now
-				// el.parent.story.setHeight();
-			}
 			
 			notify("element show", {element: el, story: el.parent.story, queue: el.parent}, el.parent.story.outerdiv);
 			
