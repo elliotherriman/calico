@@ -19,10 +19,10 @@ Right now, most of the details you'll find will simply be links to the original 
 - [Gathers `-` `--` `---`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#1-gathers)
 - [Alternatives `{}` `|` `&` `!` `~`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#sequences-cycles-and-other-alternatives)  
   have to "*\ " choices if you want to start them with a sequence
-- Sequences `{}` `|`
-- Cycles `{}` `|` `&`
-- Once-only sequences `{}` `|` `!`
-- Shuffles `{}` `|` `~`
+  - Sequences `{}` `|`
+  - Cycles `{}` `|` `&`
+  - Once-only sequences `{}` `|` `!`
+  - Shuffles `{}` `|` `~`
 - [Knots `==` `===`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#pieces-of-content-are-called-knots)
 - [Stitches `=`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#knots-can-be-subdivided)
 - [Labelled gathers `-` `()`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#gathers-and-options-can-be-labelled)

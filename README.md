@@ -9,4 +9,4 @@ If you're interested in contributing, please don't hesitate to tear this code ap
 ## Further reading
 
 - [Getting Started](./documentation/getting%20started.md)
-- [Ink Symbols](./documentation/ink%20symbols.md)
+- [A Beginner's Guide To Ink](./documentation/ink%20guide.md)
