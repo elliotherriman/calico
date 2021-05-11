@@ -33,38 +33,51 @@ var options = {
 	minwordsperline_length: 2,
 };
 
-function applyMinLength(event)
-{
-	var line = event.detail.line || event.detail.choice
+var currentLength;
+var rgx = getRegex(options.minwordsperline_length);
 
+function getRegex(length)
+{
+	if (length > 0)
+	{
+		currentLength = length;
+		return new RegExp("((([^ ]|<[^>]+>)+ ?){1," + length + "}$)");
+	}
+}
+
+function applyMinLength(line)
+{		
 	// if there's any text that also includes a space
 	if (line.text && line.text.trim().includes(" "))
 	{
-		// skip the first html tag so we don't have to worry 
-		// var endOfTag = line.text.indexOf(">") + 1;
-		// minLineLength sets how many times the last space is replaced, 
-		// thereby setting the minimum length of a line
-		for (var i = 1; i < event.detail.story.options.minwordsperline_length; i++)
+		// figure out how long we want to ensure the last line will be
+		let length = event.detail.story.options.minwordsperline_length;
+	
+		// and if it's different to our previously recorded length,
+		if (length != currentLength)
 		{
-			// takes the last space in the line (that comes before other words)
-			// and replaces it with a non breaking space, which is a character 
-			// that looks like a space, but won't let the words on either side
-			// break onto separate lines
-			line.text = line.text.replace(/ (?!<\/span>\s*$)(([^ <>]| <\/span>|<[^>]+>)*)$/, "&nbsp;$1");
+			// we recreate our regex, and set the new currentLength
+			rgx = getRegex(length);
 		}
+
+		// then finally we match the last X words and wrap it in a span
+		// that won't break across lines
+		line.text = line.text.replace(rgx, "<span style='white-space: nowrap'>$1</span>");
 	}
 }
 
 Patches.add(function()
 {
+	// trigger this in response to us finding a text line,
 	this.outerdiv.addEventListener("passage line", (event) =>
 	{
-		applyMinLength(event);
+		applyMinLength(event.detail.line);
 	});
 
+	// or a choice line
 	this.outerdiv.addEventListener("passage choice", (event) =>
 	{
-		applyMinLength(event);
+		applyMinLength(event.detail.choice);
 	});
 
 }, options, credits);
