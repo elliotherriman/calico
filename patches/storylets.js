@@ -67,7 +67,6 @@ ExternalFunctions.add("get_storylet", function(index)
 
 		if (tags && tags.includes("storylet"))
 		{
-			console.log(index, container, tags);
 			index -= 1;
 			if (index > 0) continue;
 			return new inkjs.Path(container[0]);
