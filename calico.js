@@ -272,68 +272,54 @@ class Story
 				text: "",
 				tags: { before: [], after: [] }
 			}
-				
-			// if we don't have any tags for this line,
-			if (!this.ink.currentTags.length)
-			{
-				// then we just process any patterns we might have
-				line.text = Lexer.process(this, this.ink.currentText, []);
-			}
-			// otherwise, we get a little creative
-			else
-			{
-				// we're going to loop through each item in the output stream,
-				// which is a list of all the text fragments and tags in this 
-				// line). we mark tags as coming before or after text, style 
-				// each segment of the line, and finally paste it all together
-				let currentTags = [];
-				
-				// define item iterator here so we don't 
-				// have to recreate it every time
-				let item;
+			
+			// we're going to loop through each item in the output stream,
+			// which is a list of all the text fragments and tags in this 
+			// line). we mark tags as coming before or after text, style 
+			// each segment of the line, and finally paste it all together
+			let currentTags = [];
+			
+			// define item iterator here so we don't 
+			// have to recreate it every time
+			let item;
 
-				// necessary flag for checking whether we're before or after
-				// the line-- if we use a check for text length alone it'll 
-				// pass every time, but we might not have any tags after the
-				// line, so we can't trust tags.array.length either
-				let tagsAfter = true;
+			// necessary flag for checking whether we're before or after
+			// the line-- if we use a check for text length alone it'll 
+			// pass every time, but we might not have any tags after the
+			// line, so we can't trust tags.array.length either
+			let tagsAfter = true;
 
-				// start by going through each item in the stream (backwards)
-				for (var i = this.ink.state.outputStream.length - 1; i >= 0; i--) 
+			// start by going through each item in the stream (backwards)
+			for (var i = this.ink.state.outputStream.length - 1; i >= 0; i--) 
+			{
+				// store the item for easy reference
+				item = this.ink.state.outputStream[i];
+				// if it's text,
+				if (item.value)
 				{
-					// store the item for easy reference
-					item = this.ink.state.outputStream[i];
-
-					// if it's text,
-					if (item.value && item.value.trim())
+					// we take the current string, and attempt to style it,
+					// before adding it to the front of our line
+					line.text = Lexer.process(this, item.value, currentTags) + line.text;
+				}
+				// otherwise, if it's a tag
+				else if (item.text)
+				{
+					// we check if we've reached any text yet
+					if (line.text.length && tagsAfter)
 					{
-						// we take the current string, and attempt to style it,
-						// before adding it to the front of our line
-						line.text = Lexer.process(this, item.value, currentTags) + line.text;
+						// if so, we sort away our tags
+						line.tags.after = currentTags;
+						// and then we clear the old tags
+						currentTags = [];
+						tagsAfter = false;
 					}
-					// otherwise, if it's a tag
-					else if (item.text)
-					{
-						// we check if we've reached any text yet
-						if (line.text.length && tagsAfter)
-						{
-							// if so, we sort away our tags
-							line.tags.after = currentTags;
-							// and then we clear the old tags
-							currentTags = [];
-							tagsAfter = false;
-						}
-						// otherwise, we append it to our list of current tags
-						currentTags.unshift(item.text);
-					}
-				};
+					// otherwise, we append it to our list of current tags
+					currentTags.unshift(item.text);
+				}
+			};
 
-				// store any tags we found between the final text line and now
-				line.tags.before = currentTags;
-
-				// remove any duplicated spaces in the line
-				line.text = line.text.replace(/\s+((<[^>]+>)*)?\s+/, " $1");
-			}
+			// store any tags we found between the final text line and now
+			line.tags.before = currentTags;
 			
 			// notify that we've built a line
 			notify("passage line", {story: this, line: line}, this.outerdiv);
@@ -343,12 +329,7 @@ class Story
 	
 			// if that line has some text,
 			if (line.text && line.text.trim())
-			{
-				// trim the text down, removing spaces on either side
-				line.text = line.text.trim();
-
-				line.text = this.ink.state.CleanOutputWhitespace(line.text);
-				
+			{				
 				// create a paragraph element to display later
 				var paragraphElement = document.createElement('p');
 				
