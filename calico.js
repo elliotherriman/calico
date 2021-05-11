@@ -1971,12 +1971,14 @@ class Patches
 		{ 
 			credit(this.patches[patch].credits); 
 		}
-		throwIntoVoid(console.groupEnd);;
+		throwIntoVoid(console.groupEnd);
+
+		Patches.printed = true;
 	}
 
 	static apply(story, content)
 	{
-		for (var patch of Patches.patches)
+		for (let patch of Patches.patches)
 		{
 			// if we have a blacklist of patches, we skip binding those
 			// to this story. idk if this is useful but hey whatever
@@ -2019,19 +2021,14 @@ class Patches
 // i'm honestly going to skip commenting this, it's messy and hopefully i can
 // find a cleaner solution soon, but also i *really* don't want people tweaking
 // this unless they know what they're doing
-var printed = [];
 function credit(credits)
 {
-	printed = printed || [];
-
 	const licences = {mit: MIT, self: self}
 
-	if (credits && credits.name && !printed.includes(credits.name))
+	if (credits && credits.name)
 	{
 		throwIntoVoid(console.groupCollapsed, (credits.emoji ? credits.emoji + " " : "") + credits.name + (credits.version ? " %c[" + credits.version + "]": "%c"), "color: grey");
-		
-		printed.push(credits.name);
-		
+				
 		if (credits.description)
 		{
 			if (typeof credits.description === "string")
