@@ -313,6 +313,13 @@ class Story
 						currentTags = [];
 						tagsAfter = false;
 					}
+					// if we don't want to carry over our tag to this line, we 
+					// mark that with #unstyled
+					else if (item.text == "unstyled")
+					{
+						line.tags.before = currentTags.concat(line.tags.before);
+						currentTags = [];
+					}
 					// otherwise, we append it to our list of current tags
 					currentTags.unshift(item.text);
 				}
