@@ -481,18 +481,24 @@ By default, if you have text on two different lines in your `.ink` file, it will
 <summary><b>Using glue</b></summary>
 <br>
 
+To glue two lines together, add glue to the end of the first line, or the start of the second.
+
 ```
 First line...
 <> second line.
+
+Third, <>
+and fourth!
 ```
 
 Which will produce...
 
 ```
 First line... second line.
+Third, and fourth!
 ```
 
-Glue can appear at the start of a line, or at the end of one. The following is totally fine.
+Glue can appear at the start of one line *and* at the end of the next, too. The following is totally fine.
 
 ```
 One, <>
@@ -575,9 +581,17 @@ If you want to leave notes inside your ink, you can create a comment by prependi
 <summary><b>Using comments</b></summary>
 <br>
 
+Any line that starts appears after `//` won't be shown to the player.
+
 ```
-// A comment
-And here's some text that will render... // and a comment that won't
+// here's some text that won't show up
+And here's some text that will!
+```
+
+This applies to instances of `//` anywhere in a line.
+
+```
+And here's some text *will* show up... // and a comment that won't
 ```
 
 Comments won't be included when ink compiles your story to a `.JSON` file, so feel free to swear.
