@@ -2,11 +2,13 @@
 
 ## What is ink?
 
-Ink is a language used to write interactive fiction. Head over [here](https://www.inklestudios.com/ink/) to learn more.
+Ink is a language used to write interactive fiction. Head over [here](https://www.inklestudios.com/ink/) to learn more, or check out my guide to ink [here](https://github.com/elliotherriman/calico/blob/main/documentation/ink%20guide.md).
 
 ## What is Calico?
 
-Calico is an engine for ink games, designed for the web. The general idea is this: you write a story in ink, compile it, tweak a few lines of code in Calico to import it and customise your game, and then upload your project to a website like itch.io. Alternatively, you can compile it to a standalone application using something like Electron.
+A story written in ink isn't a complete, standalone game. Not yet. It's not even half of a game, really. It's just text inside of a document. For someone to play what you've written, your story has to be compiled and imported into an engine, which is responsible for handling all the rendering and interactivity. Calico is one of these engines, designed to help you release your games on the web.
+
+Calico doesn't have a user interface, which I know might seem a tiny bit intimidating at first. But in truth, you don't need any experience with programming to build a game in Calico. There's only one file you'll need to worry about, and once you've opened that up, you can import your story, customise the engine, and finalise your project, all just by copying, pasting, and tweaking a few lines of code.
 
 ## What will I need?
 
