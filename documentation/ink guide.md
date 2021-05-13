@@ -4,8 +4,8 @@ Ink has comprehensive [official documentation](https://github.com/inkle/ink/blob
 
 If this guide feels overwhelming to you, or you get confused over anything, please let me know — it's a work in progress, and I want to make it as accessible as possible.
 
-<p><details>
-<summary><b>Table of contents</b></summary><p>
+<p><details markdown="1">
+<summary><b>Table of contents</b></summary>
 	
 - [The Basics](#the-basics)
   - [Text](#text)
@@ -32,7 +32,7 @@ If this guide feels overwhelming to you, or you get confused over anything, plea
   - [Comments](#comments)
   	- [Using comments](#basics-tags)
   
-</p></details></p>
+</details></p>
 
 ## The Basics
 
@@ -52,11 +52,10 @@ If you want to add branching paths to your story, or even just to control the pa
 
 **Important:** Make sure you've read this entire section, and understand the purpose and importance of gathers before jumping into writing a story. Your game will behave *very* strangely if you forget to include gathers after your choices.
 
-<p markdown="1">
+<p>
 <a name="basics-choices"></a>
 <details markdown="1">
 <summary><b>Creating a choice</b></summary>
-<br>
 
 To add a choice to your story, start a line with `*`.
 
@@ -95,9 +94,8 @@ This is more text.
 </details></p>
 <p>
 <a name="basics-choices-multiple"></a>
-<details>
+<details markdown="1">
 <summary><b>Multiple choices</b></summary>
-<br>
 
 It's common, though by no means necessary, to offer the player multiple choices. Sometimes these choices will branch the story significantly, and other times they will lead to the exact same result immediately. Either one is more than fine.
 
@@ -126,9 +124,8 @@ Clicking the third choice will likewise remove the other choices, but only show 
 
 <p>
 <a name="basics-choices-gathers"></a>
-<details>
+<details markdown="1">
 <summary><b>Marking the end of choices</b></summary>
-<br>
 
 Consider the following.
 
@@ -176,9 +173,8 @@ Feel free to jump ahead if you want to read up on [gathers](#gathers), but we'll
 
 <p>
 <a name="basics-choices-text"></a>
-<details>
+<details markdown="1">
 <summary><b>Controlling how a choice appears as text</b></summary>
-<br>
 
 Clicking a choice will remove it, and all other choices, from the page. That choice will then be shown as regular text, along with any content that comes after that choice.
 
@@ -232,9 +228,8 @@ You may also be able to use [#glue](#gathers) (`<>`), depending on the situation
 
 <p>
 <a name="basics-choices-nested"></a>
-<details>
+<details markdown="1">
 <summary><b>Nested choices</b></summary>
-<br>
 
 Sometimes, you might want to include choices that are exclusive to other choices. That's easy. You just add an extra `*`.
 
@@ -258,9 +253,8 @@ Everything that's left in this section on choices is a little more advanced, and
 
 <p>
 <a name="basics-choices-sticky"></a>
-<details>
+<details markdown="1">
 <summary><b>Reusable choices</b></summary>
-<br>
 
 By default, each choice can only be taken once. If you expect a player to revisit a section, you can use something called a sticky choice, created with `+` instead of `*` , that can be used an infinite number of times.
 
@@ -270,9 +264,8 @@ Like regular choices and gathers, you can nest a sticky choice inside another ch
 
 <p>
 <a name="basics-choices-labels"></a>
-<details>
+<details markdown="1">
 <summary><b>Labelled choices</b></summary>
-<br>
 
 By using `(` and `)`, you can label a choice using a single word made of alphanumeric characters and underscores. Labels aren't shown to the player, but are instead used like knots and stitches.
 
@@ -306,9 +299,8 @@ Diverting to a choice will also show the choice as plain text, after accounting 
 
 <p>
 <a name="basics-choices-conditional"></a>
-<details>
+<details markdown="1">
 <summary><b>Conditional choices</b></summary>
-<br>
 
 You can use inline conditionals to determine whether a choice should be available to the player.
 
@@ -333,9 +325,8 @@ If you're using both a conditional and a label, make sure you put the label firs
 
 <p>
 <a name="basics-choices-fallback"></a>
-<details>
+<details markdown="1">
 <summary><b>Fallback choices</b></summary>
-<br>
 
 Since some choices can disappear (if you use `*`), or never appear (if you use conditionals), the player might find themselves in a situation where they don't have any choices left to click.
 
@@ -387,9 +378,8 @@ Including a gather is really, really important if you want to distinguish betwee
 
 <p>
 <a name="basics-gathers"></a>
-<details>
+<details markdown="1">
 <summary><b>Using gathers</b></summary>
-<br>
 
 Take a look at the following example.
 ```
@@ -422,9 +412,8 @@ Text that will show up either way
 
 <p>
 <a name="basics-gathers-nested"></a>
-<details>
+<details markdown="1">
 <summary><b>Nested gathers</b></summary>
-<br>
 
 Like regular (`*`) and sticky (`+`) choices, gathers can be nested within choices. You'll just need to add an extra `-` for each level of depth.
 
@@ -444,9 +433,8 @@ Like regular (`*`) and sticky (`+`) choices, gathers can be nested within choice
 
 <p>
 <a name="basics-gathers-labels"></a>
-<details>
+<details markdown="1">
 <summary><b>Labelled gathers</b></summary>
-<br>
 
 You can add a label to gathers in the same way you can add them to choices. Just add a name (that only contains letters, numbers, and underscores) in brackets after a gather.
 
@@ -477,9 +465,8 @@ By default, if you have text on two different lines in your `.ink` file, it will
 
 <p>
 <a name="basics-glue"></a>
-<details>
+<details markdown="1">
 <summary><b>Using glue</b></summary>
-<br>
 
 To glue two lines together, add glue to the end of the first line, or the start of the second.
 
@@ -524,9 +511,8 @@ Tags are used to add information to a line that only the engine can see, not the
 
 <p>
 <a name="basics-tags"></a>
-<details>
+<details markdown="1">
 <summary><b>Using tags</b></summary>
-<br>
 
 Tags are marked with a `#`, and any text after is seen as part of that tag. You can include a "#" in your story by escaping it, like so "\#".
 
@@ -541,9 +527,8 @@ A line of text, that includes a #, and also a...
 </details></p>
 <p>
 <a name="basics-tags-order"></a>
-<details>
+<details markdown="1">
 <summary><b>Processing order</b></summary>
-<br>
 
 Take the following example.
 
@@ -561,9 +546,8 @@ I've provided a backwards compatibility patch (TODO) that will force all tags to
 </details></p>
 <p>
 <a name="basics-tags-styling"></a>
-<details>
+<details markdown="1">
 <summary><b>Styling text</b></summary>
-<br>
 
 Calico technically has two ways of processing tags. Tags added to the `Tags` class will apply before or after a line has been assembled. Tags added to the `Lexer` class will apply while a line is being assembled.
 
@@ -577,9 +561,8 @@ If you want to leave notes inside your ink, you can create a comment by prependi
 
 <p>
 <a name="basics-tags"></a>
-<details>
+<details markdown="1">
 <summary><b>Using comments</b></summary>
-<br>
 
 Any line that starts appears after `//` won't be shown to the player.
 
@@ -597,3 +580,88 @@ And here's some text *will* show up... // and a comment that won't
 Comments won't be included when ink compiles your story to a `.JSON` file, so feel free to swear.
 
 </details></p>
+
+## Organising Your Ink
+
+### Knots
+	`==` is the same as `===` 
+	`==` or `===` after stitch name is ignored
+
+### Stitches
+
+	just `=`
+	
+### Labels
+
+### Divets
+	divert to knot vs local stitch vs remote stitch
+
+### Threads
+
+### Tunnels
+
+## Dynamic Content, Variables, and Conditions
+
+### Alternatives
+	advanced: alternatives in choices
+
+### Variables
+	global
+	constants
+	temp
+	advanced: lists
+
+  #### Updating Variables
+    (the tilde)
+
+  #### Printing Variables
+
+### Conditional Content
+
+	how it works - equate variable to true or false, continues based off that
+
+		one line if
+		multi line if
+
+	if false, can have alternatives
+	
+		one line if else
+		if, else
+
+	more than two outcomes:
+
+		if, else if, else
+		switch statements
+
+	more complicated comparisons, and, or, not
+
+### Conditional Choices
+	fallback choices
+
+## Functions
+
+  ### Ink functions
+	Creating
+	Returning from
+    Calling
+
+  ### External functions
+
+  ### Native functions
+
+## Differences in Calico
+
+### Whitespace
+As far as I know, every other implementations of ink will automatically remove duplicate spaces and tabs. Words will be separated by one space, and only ever one space, no matter how were included in the original ink.
+
+Calico preserves that whitespace.
+
+I've made this change, since by default, these duplicate whitespaces are already hidden though the default value for the CSS property white-space. See here for more information. https://developer.mozilla.org/en-US/docs/Web/CSS/white-space TODO
+
+If you want to show the full, uncollapsed whitespace of a line, you can change the value of `white-space` to (or add a class that applies a white-space value of) `pre`, `pre-wrap`, `pre-line`, or `break-spaces`.
+
+### Tag processing order
+
+Calico prcesses tags either before or after a line of text, based on that tag's relative position. This is in contrast to other implementations of ink, which always apply tags before a line of text, even if that tag is on the line above that text.
+
+If you are importing a game into Calico that was written for Inky's web player, you might not want to fiddle with every tag's position in order for it to run properly. In this case, I've provided a backwards compatibility patch (TODO) that will force all tags to run before a line is processed.
