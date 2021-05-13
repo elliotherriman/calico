@@ -54,7 +54,7 @@ If you want to add branching paths to your story, or even just to control the pa
 
 <p>
 <a name="basics-choices"></a>
-<details>
+<details markdown="1">
 <summary><b>Creating a choice</b></summary>
 <br>
 
