@@ -52,7 +52,7 @@ If you want to add branching paths to your story, or even just to control the pa
 
 **Important:** Make sure you've read this entire section, and understand the purpose and importance of gathers before jumping into writing a story. Your game will behave *very* strangely if you forget to include gathers after your choices.
 
-<p>
+<p markdown="1">
 <a name="basics-choices"></a>
 <details markdown="1">
 <summary><b>Creating a choice</b></summary>
