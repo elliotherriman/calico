@@ -17,7 +17,7 @@ var options = {
 	// only include tags that are registered in the lexer class
 	// probably unnecessary, since this is all handled for you
 	// in style.process(), but i wanted to include the option
-	choicetags_checkifstyletag: false,
+	choicetags_checkiflexertag: false,
 };
 
 Patches.add(function()

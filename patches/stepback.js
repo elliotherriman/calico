@@ -29,8 +29,9 @@ Story.prototype.stepForwards = function()
 
 Story.prototype.stepBack = function()
 {
-	if (this.state != Story.states.waiting) return;
-	
+	if (this.state != Story.states.waiting ||
+		!this.options.stepback_enabled) return;
+
 	history.load(this, this.ink.state.currentTurnIndex, 
 		this.innerdiv.firstElementChild, () => 
 	{
