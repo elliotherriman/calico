@@ -35,6 +35,6 @@ Tags.add("eval",
 			}
 		});
 
-patches.add(null, options, credits);
+Patches.add(null, options, credits);
 
 export default {options: options, credits: credits};
