@@ -15,6 +15,7 @@ var options = {
 	// let the player go forwards as well as backwards
 	// (you can go forward once for every time you've
 	// called backwards, basically sugarcube's behaviour)
+	stepback_enabled: true,
 	stepback_stepforwards: true,
 };
 

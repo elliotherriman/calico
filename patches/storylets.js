@@ -13,6 +13,8 @@ var credits = {
 	}
 }
 
+var options = {};
+
 // Tag any storylet passages with #storylet at the top, and include
 // a condition near the top to call "-> DONE" if the storylet isn't
 // ready to be shown, like so:
