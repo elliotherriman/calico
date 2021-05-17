@@ -60,7 +60,7 @@ Finally, `project.js` is where everything exclusive to your project exists. This
 
 ## Creating a new project
 
-A story written in ink is usually stored in a file that ends with the extension `.ink`. Unfortunately, this needs to be compiled into a `.json` file before it can be run by Calico. You can do so by using Inky, the command line tool Inklecate, or [Catmint](https://elliotherriman.itch.io/calico).
+A story written in ink is usually stored in a file that ends with the extension `.ink`. Unfortunately, this needs to be compiled into a `.json` file before it can be run by Calico. You can do so by using Inky, the command line tool Inklecate, or [Catmint](https://elliotherriman.itch.io/catmint).
 
 Assuming you're using Catmint, you can place your `.ink` files inside the unzipped Calico template folder, and open up `index.html` in Catmint. Now, every time you make a change to one of those `.ink` files, Catmint will automatically compile it to a `.json` file with the same name.
 
