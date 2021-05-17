@@ -2399,7 +2399,7 @@ function throwIntoVoid(func, ...parameters)
 // a native function)
 function inject(target, search, replacement, context)
 {
-	if (target.startsWith("inkjs.")) return inkjs.inject(target, search, replacement, context);
+	// if (target.startsWith("inkjs.")) return inkjs.inject(target, search, replacement, context);
 
 	if (!target || !search) return;
 
