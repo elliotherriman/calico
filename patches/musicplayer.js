@@ -33,7 +33,7 @@ var credits = {
 	name: "Music player",
 	author: "Elliot Herriman",
 	version: "1.0",
-	description: "",
+	description: "Adds tags allowing for playback and control of audio files.",
 	licences: {
 		self: "2021",
 		mit: {"howler.js" : "2013-2020 James Simpson and GoldFire Studios, Inc."}
@@ -180,7 +180,6 @@ class audio
 		}
 	}
 
-
 	static pause(story, file, options = {})
 	{
 		options.duration = parseFloat(options.duration) || story.options.musicplayer_fadeout;
@@ -225,13 +224,8 @@ class audio
 	}
 }
 
-Patches.add(() => {
-	// this.;
-var fadeOut;
+Patches.add(null, options, credits);
 
-}, options, credits);
-
-window.audio = audio;
 export default {options: options, credits: credits};
 
 /*! howler.js v2.2.1 | (c) 2013-2020, James Simpson of GoldFire Studios | MIT License | howlerjs.com */
