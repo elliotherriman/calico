@@ -1,6 +1,6 @@
 {
 	"name": "Calico",
-	"version": "0.0.3",
+	"version": "1.0.0",
 	"description": "An interactive fiction engine for the web",
 	"scripts": {
 		"build": "cd templates; for folder in *; do echo \"$folder\"; rm -rf \"$folder\"/patches; mkdir \"$folder\"/patches; cp ../{calico,ink}.js \"$folder\"/; cp -r ../patches/* \"$folder\"/patches; zip -r ../release/\"$folder\" \"$folder\"/*; done;"
