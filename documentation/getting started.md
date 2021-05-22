@@ -77,8 +77,10 @@ This line alone is technically a complete project file. It will take `story.json
 However, since you're probably working with a `.json` file that isn't called "story", you can simply reword that line to import a different file, like so.
 
 ```js
-var winter = new Story("winter.json");
+var story = new Story("winter.json");
 ```
+
+You can rename `var story` to `var winter`, or anything else, just as long as that second word doesn't have any spaces in it. I'd recommend you don't, though, as it can interfere with the engine.
 
 If you want to rename `project.js` to something else, that's totally fine too, just as long as you mirror that change within `index.html`.
 
