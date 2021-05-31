@@ -12,7 +12,7 @@ var credits = {
 	name: "Always process tags before text",
 	author: "Elliot Herriman",
 	version: "1.0",
-	description: "Forces all tags to execute before each line, to ensure backwards compatibility with the vanilla web player.",
+	description: "Forces all tags to execute before each line, to ensure compatibility with stories written for the vanilla web player.",
 	licences: {
 		self: "2021",
 	}
