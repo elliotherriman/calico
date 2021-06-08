@@ -50,7 +50,7 @@ calico.js
 project.js
 ```
 
-If you upload this zip to itch.io and run it, `index.html` will load as a blank page, apply the style rules in `style.css`, and then boot up the Javascript files that are linked in `index.html` — by default, `ink.js`, `calico.js`, and then `project.js`, in that order.
+If you compress these files into a zip, upload that zip as an HTML project to itch.io, and click play, `index.html` will load as a blank page, apply the style rules in `style.css`, and then boot up the Javascript files that are linked in `index.html` — by default, `ink.js`, `calico.js`, and then `project.js`, in that order.
 
 `ink.js` takes your compiled ink and handles the logic side of your game. So if you click on a choice, Calico will tell `ink.js` about it, and `ink.js` will hand back the new text.
 
