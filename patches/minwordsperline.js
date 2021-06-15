@@ -45,13 +45,13 @@ function getRegex(length)
 	}
 }
 
-function applyMinLength(line)
+function applyMinLength(story, line)
 {		
 	// if there's any text that also includes a space
 	if (line.text && line.text.trim().includes(" "))
 	{
 		// figure out how long we want to ensure the last line will be
-		let length = event.detail.story.options.minwordsperline_length;
+		let length = story.options.minwordsperline_length;
 	
 		// and if it's different to our previously recorded length,
 		if (length != currentLength)
@@ -71,13 +71,13 @@ Patches.add(function()
 	// trigger this in response to us finding a text line,
 	this.outerdiv.addEventListener("passage line", (event) =>
 	{
-		applyMinLength(event.detail.line);
+		applyMinLength(event.detail.story, event.detail.line);
 	});
 
 	// or a choice line
 	this.outerdiv.addEventListener("passage choice", (event) =>
 	{
-		applyMinLength(event.detail.choice);
+		applyMinLength(event.detail.story, event.detail.choice);
 	});
 
 }, options, credits);
