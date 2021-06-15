@@ -495,7 +495,7 @@ class Story
 				return;
 			}
 		};
-		this.removeElements(".choice");
+		this.removeElements(":scope > .choice");
 	}
 
 	// clears all elements from the story container, and resets the queue
@@ -516,7 +516,7 @@ class Story
 			});
 		
 		// remove all elements in story container
-		this.removeElements("p");
+		this.removeElements(":scope > p");
 
 		// then as long as it's not a partial clear,
 		// (since we only want to clear the queue at the start of a new loop)
