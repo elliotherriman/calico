@@ -62,7 +62,17 @@ function applyMinLength(story, line)
 
 		// then finally we match the last X words and wrap it in a span
 		// that won't break across lines
-		line.text = line.text.replace(rgx, "<span style='white-space: nowrap'>$1</span>");
+		let match = line.text.match(rgx);
+		if (match && match[1])
+		{
+			let replacement = "<span style='white-space: nowrap'>" + match[1] + "</span>";
+			if (match[1].trim().startsWith("</span>"))
+			{
+				match[1] = match[1].replace(/<\/span>/, "");
+				replacement = "</span>" + replacement;
+			}
+			line.text = line.text.replace(match[1], replacement);
+		}
 	}
 }
 
