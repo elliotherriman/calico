@@ -65,7 +65,7 @@ var options =
 credit({
 	emoji: "🐈",
 	name: "Calico",
-	version: "1.0.0",
+	version: "1.0.1",
 	description: ["An interactive fiction engine built from patchwork and ink stains.", "Want to write a game like this one? Check out the project at https://elliotherriman.itch.io/calico.", "Trans rights are human rights. 🏳️‍⚧✨️"],
 	licences: {
 		self: "2021 Elliot Herriman",
@@ -272,62 +272,59 @@ class Story
 				text: "",
 				tags: { before: [], after: [] }
 			}
+
 			
 			// we're going to loop through each item in the output stream,
 			// which is a list of all the text fragments and tags in this 
 			// line). we mark tags as coming before or after text, style 
 			// each segment of the line, and finally paste it all together
+			let currentText = "";
 			let currentTags = [];
 			
 			// define item iterator here so we don't 
 			// have to recreate it every time
 			let item;
 
-			// necessary flag for checking whether we're before or after
-			// the line-- if we use a check for text length alone it'll 
-			// pass every time, but we might not have any tags after the
-			// line, so we can't trust tags.array.length either
-			let tagsAfter = true;
-
 			// start by going through each item in the stream (backwards)
-			for (var i = this.ink.state.outputStream.length - 1; i >= 0; i--) 
+			for (var i = 0; i < this.ink.state.outputStream.length; i++) 
 			{
 				// store the item for easy reference
 				item = this.ink.state.outputStream[i];
 				// if it's text,
 				if (item.value)
 				{
-					// we take the current string, and attempt to style it,
-					// before adding it to the front of our line
-					line.text = Lexer.process(this, item.value, currentTags) + line.text;
+					if (currentText.length && currentTags.length)
+					{
+						currentText = Lexer.process(this, currentText, currentTags);
+						
+						currentTags = [];
+					}
+					
+					currentText += item.value;
 				}
 				// otherwise, if it's a tag
 				else if (item.text)
 				{
-					// we check if we've reached any text yet
-					if (line.text.length && tagsAfter)
+					if (item.text == "unstyled")
+					{
+						line.text += currentText;
+						currentText = "";
+					}
+					else if (!currentText.trim())
 					{
 						// if so, we sort away our tags
-						line.tags.after = currentTags;
-						// and then we clear the old tags
-						currentTags = [];
-						tagsAfter = false;
+						line.tags.before.push(item.text);
 					}
-					// if we don't want to carry over our tag to this line, we 
-					// mark that with #unstyled
-					else if (item.text == "unstyled")
+					else
 					{
-						line.tags.before = currentTags.concat(line.tags.before);
-						currentTags = [];
+						line.tags.after.push(item.text);
+						currentTags.push(item.text);
 					}
-					// otherwise, we append it to our list of current tags
-					currentTags.unshift(item.text);
 				}
 			};
 
-			// store any tags we found between the final text line and now
-			line.tags.before = currentTags;
-			
+			line.text += currentText;
+
 			// notify that we've built a line
 			notify("passage line", {story: this, line: line}, this.outerdiv);
 
