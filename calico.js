@@ -1246,7 +1246,7 @@ class Tags
 	}
 
 	// take each tag and decide what to do with it
-	static process(story, inputString, afterText)
+	static process(story, inputString, isAfterText)
 	{
 		// if there's no tag, then obviously let's stop here
 		if (!inputString) return;
@@ -1266,7 +1266,7 @@ class Tags
 				// notify about it,
 				notify("tags matched", {story: story, tag: splitTag.before, property: splitTag.after}, story.outerdiv);
 				// then execute it
-				Tags.functions[splitTag.before](story, splitTag.after, afterText);
+				Tags.functions[splitTag.before](story, splitTag.after, isAfterText);
 			}
 			// otherwise, we check if that value exists in our tag variables
 			else if (story.options[splitTag.before])
