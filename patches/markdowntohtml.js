@@ -25,7 +25,7 @@ var credits = {
 
 Patches.add(function()
 {
-    var converter = new showdown.Converter();
+	var converter = new showdown.Converter({"openLinksInNewWindow": true});
 
 	// trigger this in response to us finding a text line,
 	this.outerdiv.addEventListener("passage line", (event) =>
