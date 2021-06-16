@@ -1271,10 +1271,35 @@ class Tags
 			// otherwise, we check if that value exists in our tag variables
 			else if (story.options[splitTag.before])
 				{
-					notify("tags option", {story: story, variable: splitTag.before, new: splitTag.after, old: story.options[splitTag.before]}, story.outerdiv);
+					// make sure we convert it
+					switch (typeof story.options[splitTag.before])
+					{
+						case "string":
+							break;
+						
+						case "number":
+							splitTag.after = parseFloat(splitTag.after);
+							break;
+						
+						case "boolean":
+							splitTag.after = !!splitTag.after;
+							break;
+						
+						default:
+							splitTag.after = undefined;
+					}
 
-					// if so, we update the variable
-					story.options[splitTag.before] = splitTag.after;
+					if (splitTag.after !== undefined && splitTag.after !== NaN)
+					{
+						notify("tags option", {story: story, variable: splitTag.before, new: splitTag.after, old: story.options[splitTag.before]}, story.outerdiv);
+						// if so, we update the variable
+						story.options[splitTag.before] = splitTag.after;
+					}
+					else
+					{
+						console.warn("You tried to change option \"" + splitTag.before + "\", via a tag, but it's not a string, number, or boolean.");
+						notify("tags unhandled", {tag: splitTag.before, property: splitTag.after}, story.outerdiv);
+					}
 				}
 			// if not, 
 			else if (!(splitTag.before in Tags.functions || splitTag.before in Lexer.tags))
