@@ -54,6 +54,18 @@ Patches.add(function()
 			}
 		}
 	});
+
+	this.outerdiv.addEventListener("passage choice element", (event) =>
+	{
+		event.detail.choice.tags.forEach((tag) => 
+		{ 
+			if (tag.trim().toLowerCase().startsWith("class"))
+			{
+				Tags.process(this, tag, true); 
+			}
+		});
+	});
+
 }, options, credits);
 
 export default {options: options, credits: credits};
