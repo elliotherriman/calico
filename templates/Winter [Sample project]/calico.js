@@ -65,7 +65,7 @@ var options =
 credit({
 	emoji: "🐈",
 	name: "Calico",
-	version: "1.0.2",
+	version: "1.0.3",
 	description: ["An interactive fiction engine built from patchwork and ink stains.", "Want to write a game like this one? Check out the project at https://elliotherriman.itch.io/calico.", "Trans rights are human rights. 🏳️‍⚧✨️"],
 	licences: {
 		self: "2021 Elliot Herriman",
@@ -825,7 +825,7 @@ class Queue
 		if (this.contents[index] && className)
 		{
 			// notify,
-			notify("queue addclass", {element: this.contents[index], class: className, queue: this}, this.story.outerdiv);
+			notify("element addclass", {element: this.contents[index], class: className, queue: this}, this.story.outerdiv);
 			
 			// and apply the class
 			this.contents[index].classList.add(...className);
