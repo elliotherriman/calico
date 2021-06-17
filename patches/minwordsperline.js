@@ -21,7 +21,7 @@ var credits = {
 	emoji: "📝",
 	name: "Minimum words per line",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "1.0.1",
 	description: "Prevent lines from breaking in a way that only leaves one (or more) word(s) on the next line.",
 	licences: {
 		self: "2021",
