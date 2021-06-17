@@ -342,11 +342,11 @@ class Story
 				// set the element's content
 				paragraphElement.innerHTML = "<span>" + line.text + "</span>";
 				
-				// notify that we built a line element
-				notify("passage line element", {story: this, element: paragraphElement, line: line}, this.outerdiv);
-				
 				// and push that element to queue so we can show it later
 				this.queue.push(paragraphElement);
+				
+				// notify that we built a line element
+				notify("passage line element", {story: this, element: paragraphElement, line: line}, this.outerdiv);
 			}
 	
 			// process all tags that come after any story text
@@ -385,6 +385,9 @@ class Story
 			// and then add the link element to the paragraph element
 			choiceParagraphElement.appendChild(choiceAnchorEl);
 			
+			// queue up the choice to show later
+			this.queue.push(choiceParagraphElement);
+			
 			// tell people that we've built a choice
 			notify("passage choice element", {story: this, choice: choice, element: choiceParagraphElement}, this.outerdiv);
 
@@ -396,8 +399,6 @@ class Story
 				event.preventDefault();
 			});
 			
-			// queue up the choice to show later
-			this.queue.push(choiceParagraphElement);
 
 			// set up function to continue story when the player clicks a choice
 			this.queue.onRendered(() =>
