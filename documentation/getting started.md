@@ -130,8 +130,6 @@ In general, you'll add a tag using the format #tag: value.
 #### class
 This tag allows you to add a css class or classes to the attached line. If you attach CSS styling, this will allow you to customize the appearance of specific lines in the text using a simple tag in ink! You can apply several classes by adding them separated by spaces.
 
-Note: Does not apply consistently to clickable text at the moment
-
 Examples:
 
 ```
