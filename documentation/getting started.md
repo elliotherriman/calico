@@ -121,13 +121,13 @@ Falling until I skinned my knees #delay: 500
 
 In general, you'll add a tag using the format #tag: value.
 
-###Out-of-the-box Tags
+### Out-of-the-box Tags
 
 <details>
   <summary>Click here for a list of the tags that Calico supports out-of-the-box and how to use them </summary>
 <br>
 
-####class
+#### class
 This tag allows you to add a css class or classes to the attached line. If you attach CSS styling, this will allow you to customize the appearance of specific lines in the text using a simple tag in ink! You can apply several classes by adding them separated by spaces.
 
 Note: Does not apply consistently to clickable text at the moment
@@ -141,7 +141,7 @@ Down the street
 And tripped over the package #class goblin falcon mango
 ```
 
-####image
+#### image
 
 Adds an in-line image. The image should be stored in the default image location. By default this will be the "images" folder in the document root, which you will have to add yourself. If no image format is given, it will default to the filetype specified in the defaultImageType option - png by default.
 
@@ -153,7 +153,7 @@ I ran out of the door
 #image: package
 ```
 
-####background
+#### background
 
 Works very similarly to the "image" tag, but instead of placing it in-line sets it as the background image.
 
@@ -163,7 +163,7 @@ Example:
 I ran out of the door #background: door.png
 ```
 
-####clear
+#### clear
 
 Gracefully removes all text from the screen. It will clean inline images, but not the background image.
 
@@ -179,7 +179,7 @@ Falling until I skinned my knees
 #clear
 ```
 
-####restart
+#### restart
 
 Starts the story over from the beginning. Clears all inline text and images, but does not clear background images.
 
@@ -196,7 +196,7 @@ Falling until I skinned my knees
 #restart
 ```
 
-####delay
+#### delay
 
 This tag will add a delay before the text it's attached to appears. If it's on it's own line or on a line with only other tags, it will add a delay before the next line of text appears. The delay is counted in milliseconds.
 
@@ -207,13 +207,13 @@ Down the street
 And tripped over the package
 ```
 
-####linebyline
+#### linebyline
 
 This feature is still under development! If you use it, it will freeze each line until something calls ``queue.render`` to step it forward. As a tag with no argument, it will toggle on and off. With a ``true`` or ``false`` argument, you can control its behaviour directly.
 
 </details>
 
-###Writing Custom Tags
+### Writing Custom Tags
 
 ## Importing patches
 
