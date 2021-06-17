@@ -825,7 +825,7 @@ class Queue
 		if (this.contents[index] && className)
 		{
 			// notify,
-			notify("queue addclass", {element: this.contents[index], class: className, queue: this}, this.story.outerdiv);
+			notify("element addclass", {element: this.contents[index], class: className, queue: this}, this.story.outerdiv);
 			
 			// and apply the class
 			this.contents[index].classList.add(...className);
