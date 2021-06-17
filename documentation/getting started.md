@@ -123,6 +123,10 @@ In general, you'll add a tag using the format #tag: value.
 
 ###Out-of-the-box Tags
 
+<details>
+  <summary>Click here for a list of the tags that Calico supports out-of-the-box and how to use them </summary>
+<br>
+
 ####class
 This tag allows you to add a css class or classes to the attached line. If you attach CSS styling, this will allow you to customize the appearance of specific lines in the text using a simple tag in ink! You can apply several classes by adding them separated by spaces.
 
@@ -132,7 +136,8 @@ Examples:
 
 ```
 I ran out of the door #class: center
-Down the street #class: rocky center
+Down the street
+#class: rocky center
 And tripped over the package #class goblin falcon mango
 ```
 
@@ -204,7 +209,9 @@ And tripped over the package
 
 ####linebyline
 
+This feature is still under development! If you use it, it will freeze each line until something calls ``queue.render`` to step it forward. As a tag with no argument, it will toggle on and off. With a ``true`` or ``false`` argument, you can control its behaviour directly.
 
+</details>
 
 ###Writing Custom Tags
 
