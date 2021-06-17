@@ -65,7 +65,7 @@ var options =
 credit({
 	emoji: "🐈",
 	name: "Calico",
-	version: "1.0.1",
+	version: "1.0.2",
 	description: ["An interactive fiction engine built from patchwork and ink stains.", "Want to write a game like this one? Check out the project at https://elliotherriman.itch.io/calico.", "Trans rights are human rights. 🏳️‍⚧✨️"],
 	licences: {
 		self: "2021 Elliot Herriman",
