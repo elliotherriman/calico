@@ -83,15 +83,14 @@ p, p > *
 }
 
 a 
-{
-	color: #f16d69;
+{	
 	text-decoration: none !important;
 	transition: all 0.5s linear;
 }
 
 a:hover
 {
-	color: #ffffff;
+	color: white;
 }
 
 .choice > a
@@ -99,7 +98,6 @@ a:hover
 	color: inherit;
 	opacity: 0.5;
 	transition: all 1s;
-	color: white;
 }
 
 .choice > a:hover
