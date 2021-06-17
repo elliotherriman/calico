@@ -11,12 +11,15 @@ If you're interested in contributing, please don't hesitate to submit a pull req
 ## Resources
 
 **[Getting Started](./documentation/getting%20started.md)**
+
 How to set up Calico, import patches, build a game, and upload everything to itch.io.
 
 **[A Beginner's Guide To Ink](./documentation/ink%20guide.md)**
+
 A condensed introduction to ink, the narrative scripting language that powers Calico.
 
 **[Events](./documentation/events.md)**
+
 An explanation and list of the custom events that Calico offers, which allow you to easily tweak the engine's functionality.
 
 ## License
