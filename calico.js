@@ -2254,7 +2254,7 @@ function addFileType(text, format, directory)
 		text += format;
 	}
 	// and if there's no directory provided, 
-	if (directory && text.indexOf("/") != 0)
+	if (directory && !text.startsWith("./"))
 	{
 		// we add one, and clean up the file path
 		text = ("./" + directory + "/" + text).replace("//", "/");
