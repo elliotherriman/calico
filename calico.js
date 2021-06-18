@@ -500,7 +500,7 @@ class Story
 	clear(queueDelay = this.options.hidelength, howMany = undefined)
 	{
 		// if we don't have anything to clear, we'll just quietly cancel
-		if (!this.innerdiv.childNodes.length || this.innerdiv.firstElementChild.state == Element.states.clearing)
+		if (!this.innerdiv.firstElementChild || !this.innerdiv.childNodes.length || this.innerdiv.firstElementChild.state == Element.states.clearing)
 		{
 			return;
 		}
@@ -955,7 +955,7 @@ class Queue
 		// don't try to render if there's nothing to render
 		if (!this.contents.length) return;
 
-		if (target && target.childNodes && target.childNodes.length && target.firstElementChild.state == Element.states.clearing)
+		if (target && target.firstElementChild && target.firstElementChild.state == Element.states.clearing)
 		{
 			Element.addCallback(target.firstElementChild, "onRemove", () => { this.render(target)});
 			return;
@@ -1149,10 +1149,13 @@ class Element
 		// mark we're clearing it
 		el.state = Element.states.clearing;
 		
-		notify("element hide", {element: el, story: el.parent.story, queue: el.parent}, el.parent.story.outerdiv);
+		if (el.parent)
+		{
+			notify("element hide", {element: el, story: el.parent.story, queue: el.parent}, el.parent.story.outerdiv);
+		}
 
 		// do the callbacks,
-		if (el.callbacks.onHide && el.callbacks.onHide.length)
+		if (el.callbacks && el.callbacks.onHide && el.callbacks.onHide.length)
 		{
 			el.callbacks.onHide.forEach((f) => f());
 			el.callbacks.onHide = null;
@@ -1187,14 +1190,17 @@ class Element
 
 		el.parentNode.removeChild(el);
 		
-		notify("element remove", {element: el, story: el.parent.story, queue: el.parent}, el.parent.story.outerdiv);
+		if (el.parent)
+		{
+			notify("element remove", {element: el, story: el.parent.story, queue: el.parent}, el.parent.story.outerdiv);
+		}
 		
 		// fire any callbacks bound to el element
-		if (el.callbacks.onRemove && el.callbacks.onRemove.length)
+		if (el.callbacks && el.callbacks.onRemove && el.callbacks.onRemove.length)
 		{
 			el.callbacks.onRemove.forEach((f) => f());
+			el.callbacks.onRemove = null;
 		}
-		el.callbacks.onRemove = null;
 
 		if (el.previous && el.previous.readyToRemove && el.previous.parentNode)
 		{
