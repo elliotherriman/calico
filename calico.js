@@ -1337,10 +1337,7 @@ Tags.add("class",
 				
 				// if there's multiple classes separated by spaces, 
 				// add all of them to the element
-				story.queue.addClass(property.split(" "));
-				
-				// and then return it
-				return Element;
+				story.queue.addClass(property.split(" "));				
 			});
 
 // -----------------------------------
