@@ -18,6 +18,10 @@ How to set up Calico, import patches, build a game, and upload everything to itc
 
 A condensed introduction to ink, the narrative scripting language that powers Calico.
 
+**[Tags](./documentation/tags.md)**
+
+A list of tags offered out of the box by Calico, and an explanation of how to create your own.
+
 **[Events](./documentation/events.md)**
 
 An explanation and list of the custom events that Calico offers, which allow you to easily tweak the engine's functionality.

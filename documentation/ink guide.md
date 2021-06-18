@@ -520,7 +520,9 @@ Keep in mind, though, that there's no way to remove glue from a line. You can't 
 
 ### Tags
 
-Tags are used to add information to a line that only the engine can see, not the player. Tags are frequently used to do things like inserting images, playing music, or clearing the page of previous passages. You can see a list of tags that Calico currently supports, along with a guide on how to create your own, you can find that over here. (TODO)
+Tags are used to add invisible information to a line. When Calico reaches that line, it will process your tag without ever showing it to the player.
+
+Tags are frequently used to do things like inserting images, playing music, or clearing the page of previous passages. You can see a list of tags that Calico currently supports, along with a guide on how to create your own, over [here](https://github.com/elliotherriman/calico/blob/main/documentation/tags.md).
 
 <p>
 <a name="basics-tags"></a>
@@ -536,6 +538,12 @@ A line of text, that includes a \#, and also a... #tag
 
 ```
 A line of text, that includes a #, and also a...
+```
+
+You can add several tags to the same line by delimiting with ``#``:
+
+```
+I ran out of the door #image: door.png #delay: 500
 ```
 
 </details></p>
@@ -556,7 +564,32 @@ In Calico, `#tag1` will be processed before "Text", and "Text" will be processed
 
 This is in contrast to other implementations of ink, where both tags would be processed before the text.
 
-I've provided a backwards compatibility patch (TODO) that will force all tags to run before a line is processed, if you prefer the old behaviour.
+If you prefer the old behaviour, the patch `forcetagsbeforeline.js` will ensure all tags run before a line is processed.
+
+</details></p>
+<p>
+<a name="basics-tags-arguments"></a>
+<details>
+<summary><b>Arguments and options</b></summary>
+<br>
+
+Some tags expect arguments, which Calico will process alongside the tag.
+
+```
+#tag: value
+```
+
+Some patches include tags that support multiple values, like so--
+
+```
+#tag: value, value2, value3
+```
+
+Some patches also support options, which by convention are separated with a "|". For example, in `musicplayer.js`, you can apply a custom `fadein` value by supplying it as an option.
+
+```
+#play: file | fadein: 1000
+```
 
 </details></p>
 <p>
@@ -567,8 +600,16 @@ I've provided a backwards compatibility patch (TODO) that will force all tags to
 
 Calico technically has two ways of processing tags. Tags added to the `Tags` class will apply before or after a line has been assembled. Tags added to the `Lexer` class will apply while a line is being assembled.
 
-This makes Lexer tags really, really handy for styling text, allowing you to easily set the font, colour, and any other CSS properties for a word or line. Check out this page (TODO) to see more.
+This makes Lexer tags really, really handy for styling text, allowing you to easily set the font, colour, and any other CSS properties for a word or line.
 
+</details></p>
+<p>
+<a name="basics-tags-list"></a>
+<details>
+<summary><b>List of tags</b></summary>
+<br>
+
+You can see a list of tags that Calico supports out of the box [here](https://github.com/elliotherriman/calico/blob/main/documentation/tags.md).
 </details></p>
 
 ### Comments
