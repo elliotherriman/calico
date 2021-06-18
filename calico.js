@@ -1361,6 +1361,7 @@ Tags.add("image",
 				
 				// create the element
 				var imageParagraph = document.createElement("p");
+				imageParagraph.className = "image"
 				var imageElement = document.createElement("img");
 
 				imageParagraph.appendChild(imageElement);
