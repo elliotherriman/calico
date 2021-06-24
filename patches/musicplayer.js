@@ -59,7 +59,7 @@ Tags.add("play", function(story, property)
 Tags.add("playonce", function(story, property)
 {
 	property = process(story, property);
-	audio.play(story, property, property.options); 
+	audio.playonce(story, property, property.options); 
 });
 
 Tags.add("pause", function(story, property)
