@@ -8,6 +8,7 @@
 // #play: song | fadein: 1000 will play a song but fade it in over one second,
 // instead of whatever the default is
 // you can use the | option: value syntax for all of these i think
+// #playonce: song will act as #play, but will not loop
 //
 // #pause: song won't actually pause the song, but it will mute it
 // and #resume: song will restore its volume
