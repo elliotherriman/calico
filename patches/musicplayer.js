@@ -8,6 +8,7 @@
 // #play: song | fadein: 1000 will play a song but fade it in over one second,
 // instead of whatever the default is
 // you can use the | option: value syntax for all of these i think
+// #playonce: song will act as #play, but will not loop
 //
 // #pause: song won't actually pause the song, but it will mute it
 // and #resume: song will restore its volume
@@ -53,6 +54,12 @@ Tags.add("play", function(story, property)
 {
 	property = process(story, property);
 	audio.play(story, property, property.options); 
+});
+
+Tags.add("playonce", function(story, property)
+{
+	property = process(story, property);
+	audio.playonce(story, property, property.options); 
 });
 
 Tags.add("pause", function(story, property)
@@ -133,6 +140,48 @@ class audio
 		var sound = new Howl({
 			src: [file.path],
 			loop: true,
+			volume: 0,
+		});
+
+		audio.sounds.set(file.name, sound);
+
+		sound.on('play', function()
+		{
+			sound.fade(0, audio.volume, options.fadein);
+			
+			sound.fadeout = setTimeout(function()
+			{ 
+				sound.fade(audio.volume, 0, options.fadein);
+			}, (sound.duration() - sound.seek()) * 1000 - options.fadeout);
+		});
+
+		setTimeout(function() 
+		{
+			sound.play();
+		}, options.delay);
+	}
+
+	static playonce(story, file, options = {})
+	{	
+		options.fadein = parseFloat(options.fadein) || story.options.musicplayer_fadein;
+		options.fadeout = parseFloat(options.fadeout) || story.options.musicplayer_fadeout;
+		options.delay = parseFloat(options.delay) || 0;
+		
+		if (!story.options.musicplayer_allowmultipletracks && audio.sounds.size)
+		{
+			audio.sounds.forEach((sounds) =>
+			{
+				clearTimeout(options.fadeout);
+			});
+
+			audio.stop(story);
+
+			options.delay += options.fadeout;
+		}
+
+		var sound = new Howl({
+			src: [file.path],
+			loop: false,
 			volume: 0,
 		});
 
