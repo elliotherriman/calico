@@ -59,7 +59,7 @@ Tags.add("play", function(story, property)
 Tags.add("playonce", function(story, property)
 {
 	property = process(story, property);
-	audio.playonce(story, property, property.options); 
+	audio.play(story, property, property.options, false); 
 });
 
 Tags.add("pause", function(story, property)
@@ -119,7 +119,7 @@ class audio
 		this._sounds = value;
 	}
 
-	static play(story, file, options = {})
+	static play(story, file, options = {}, loop = true)
 	{	
 		options.fadein = parseFloat(options.fadein) || story.options.musicplayer_fadein;
 		options.fadeout = parseFloat(options.fadeout) || story.options.musicplayer_fadeout;
@@ -139,49 +139,7 @@ class audio
 
 		var sound = new Howl({
 			src: [file.path],
-			loop: true,
-			volume: 0,
-		});
-
-		audio.sounds.set(file.name, sound);
-
-		sound.on('play', function()
-		{
-			sound.fade(0, audio.volume, options.fadein);
-			
-			sound.fadeout = setTimeout(function()
-			{ 
-				sound.fade(audio.volume, 0, options.fadein);
-			}, (sound.duration() - sound.seek()) * 1000 - options.fadeout);
-		});
-
-		setTimeout(function() 
-		{
-			sound.play();
-		}, options.delay);
-	}
-
-	static playonce(story, file, options = {})
-	{	
-		options.fadein = parseFloat(options.fadein) || story.options.musicplayer_fadein;
-		options.fadeout = parseFloat(options.fadeout) || story.options.musicplayer_fadeout;
-		options.delay = parseFloat(options.delay) || 0;
-		
-		if (!story.options.musicplayer_allowmultipletracks && audio.sounds.size)
-		{
-			audio.sounds.forEach((sounds) =>
-			{
-				clearTimeout(options.fadeout);
-			});
-
-			audio.stop(story);
-
-			options.delay += options.fadeout;
-		}
-
-		var sound = new Howl({
-			src: [file.path],
-			loop: false,
+			loop: loop,
 			volume: 0,
 		});
 
