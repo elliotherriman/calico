@@ -8,6 +8,7 @@
 // #play: song | fadein: 1000 will play a song but fade it in over one second,
 // instead of whatever the default is
 // you can use the | option: value syntax for all of these i think
+// #playonce: song will act as #play, but will not loop
 //
 // #pause: song won't actually pause the song, but it will mute it
 // and #resume: song will restore its volume
@@ -53,6 +54,12 @@ Tags.add("play", function(story, property)
 {
 	property = process(story, property);
 	audio.play(story, property, property.options); 
+});
+
+Tags.add("playonce", function(story, property)
+{
+	property = process(story, property);
+	audio.play(story, property, property.options, false); 
 });
 
 Tags.add("pause", function(story, property)
@@ -112,7 +119,7 @@ class audio
 		this._sounds = value;
 	}
 
-	static play(story, file, options = {})
+	static play(story, file, options = {}, loop = true)
 	{	
 		options.fadein = parseFloat(options.fadein) || story.options.musicplayer_fadein;
 		options.fadeout = parseFloat(options.fadeout) || story.options.musicplayer_fadeout;
@@ -132,7 +139,7 @@ class audio
 
 		var sound = new Howl({
 			src: [file.path],
-			loop: true,
+			loop: loop,
 			volume: 0,
 		});
 

@@ -13,6 +13,8 @@ import "./patches/dragtoscroll.js";
 // convert markdown to HTML tags
 import "./patches/markdowntohtml.js"
 
+import "./patches/storylets.js"
+
 // -----------------------------------
 
 // import helper patch for binding shortcuts to choices

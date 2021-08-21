@@ -1,10 +1,14 @@
 {
 	"name": "Calico",
-	"version": "1.0.0",
+	"version": "1.0.4",
 	"description": "An interactive fiction engine for the web",
 	"scripts": {
 		"build": "./build.sh"
 	},
 	"author": "Elliot Herriman",
-	"license": "MIT"
+	"license": "MIT",
+	"devDependencies": {
+		"@babel/cli": "^7.14.5",
+		"@babel/core": "^7.14.6"
+	}
 }

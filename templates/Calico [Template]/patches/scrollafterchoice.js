@@ -6,7 +6,7 @@ var credits = {
 	emoji: "⤵️",
 	name: "Scroll after choice",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "1.1",
 	description: ["After choosing a choice, the story will automatically scroll to show the new content."],
 	licences: {
 		self: "2021",
@@ -84,7 +84,7 @@ Story.prototype.scrollAfterChoice = function()
 		t = (time-startTime) / duration;
 		
 		// if the user's manually scrolled, break
-		if (t > 1 || this.options.scrollafterchoice_breakonuserscroll && pos != div.scrollTop) 
+		if (t > 1 || game.options.scrollafterchoice_breakonuserscroll && pos != div.scrollTop) 
 		{
 			return;
 		}
