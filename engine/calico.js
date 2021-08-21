@@ -94,10 +94,10 @@ class Story
 				"waiting": 1,
 				"active": 2,
 				"locked": 3,
-			}
+			};
 		}		
 		return this._states;
-	};
+	}
 
 	// called whenever we create a new story object
 	constructor(input, innerdiv = "story", outerdiv = "container")
@@ -118,12 +118,12 @@ class Story
 			// ensure we can refer to this object while we're inside its functions
 			bindFunctions(this);
 
-			// apply any external functions
-			this.bindExternalFunctions(content);
-
 			// apply all our patches
 			Patches.apply(this, content);
-
+			
+			// apply any external functions
+			this.bindExternalFunctions(content);
+			
 			// mark that the engine's idle, and ready to start looping
 			this.state = Story.states.idle;
 
@@ -140,7 +140,7 @@ class Story
 		if (input.endsWith(".ink"))
 		{ 
 			// we'll politely crash the engine, 
-			throw throwIntoVoid(console.error, "Calico doesn't support loading ink files directly. You'll need to convert it to a \".json\" or \".js\" file by using the Inky editor, or via the command line with Inklecate.");;
+			throw throwIntoVoid(console.error, "Calico doesn't support loading ink files directly. You'll need to convert it to a \".json\" or \".js\" file by using the Inky editor, or via the command line with Inklecate.");
 			// since we can't do anything with that (yet)
 		}
 		// if we've been handed a string, it might be the story data, or it 
@@ -166,7 +166,7 @@ class Story
 					// we open up the file,
 					fetch(input)
 					// read that file's contents,
-					.then((response) => { return response.text() })
+					.then((response) => { return response.text(); })
 					// and with that text,
 					.then((storyContent) => 
 					{
@@ -174,7 +174,7 @@ class Story
 						if (!storyContent)
 						{
 							// (in which case we'll throw an error about here,)
-							throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");;
+							throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
 						}
 						
 						// then we can use it to create the story object
@@ -208,7 +208,7 @@ class Story
 		{
 			// and attempt to bind that to our story. if it doesn't work, 
 			// ink.js will throw an error, so we don't need to handle it here
-			ExternalFunctions.bind(this, match)
+			ExternalFunctions.bind(this, match);
 		});
 	}
 
@@ -271,7 +271,7 @@ class Story
 			var line = {
 				text: "",
 				tags: { before: [], after: [] }
-			}
+			};
 
 			
 			// we're going to loop through each item in the output stream,
@@ -321,7 +321,7 @@ class Story
 						currentTags.push(item.text);
 					}
 				}
-			};
+			}
 
 			line.text += currentText;
 
@@ -415,7 +415,7 @@ class Story
 	
 					// function that fires when you click the link,
 					// telling the story where to go
-					choiceAnchorEl.onclick = () => { this.choose(choice, choiceAnchorEl) };
+					choiceAnchorEl.onclick = () => { this.choose(choice, choiceAnchorEl); };
 
 					// how long we're waiting for (this is the standard pattern
 					// for timeouts, i won't comment them in future)
@@ -428,7 +428,7 @@ class Story
 
 		// and we mark that the story is waiting for input
 		this.state = Story.states.waiting;
-	};
+	}
 
 	// called once the player chooses a choice, to process that choice
 	// and clean everything up for the next loop
@@ -492,7 +492,7 @@ class Story
 				this.queue.reset(0);
 				return;
 			}
-		};
+		}
 		this.removeElements(":scope > .choice");
 	}
 
@@ -522,8 +522,7 @@ class Story
 		{
 			// reset the queue, and set its delay 
 			// (but not if there aren't any elements to clear)
-			this.queue.reset(this.innerdiv.childNodes.length ? queueDelay : 0
-			, howMany);
+			this.queue.reset(this.innerdiv.childNodes.length ? queueDelay : 0, howMany);
 		}
 	}
 
@@ -807,7 +806,7 @@ class Queue
 		el.state = Element.states.queued;
 
 		// apply any text animation we have
-		TextAnimation.apply(this.story, el, this.story.options.textanimation)
+		TextAnimation.apply(this.story, el, this.story.options.textanimation);
 
 		// add element to the queue for later rendering
 		this.contents.push(el);
@@ -891,7 +890,7 @@ class Queue
 		if (this.contents[index] && this.contents[index].callbacks) 
 		{
 			// set the callback
-			Element.addCallback(this.contents[index], "onAdded", callback.bind(this, index))
+			Element.addCallback(this.contents[index], "onAdded", callback.bind(this, index));
 		}	
 	}
 
@@ -903,7 +902,7 @@ class Queue
 		if (this.contents[index] && this.contents[index].callbacks) 
 		{
 			// set the callback
-			Element.addCallback(this.contents[index], "onShow", callback.bind(this, index))
+			Element.addCallback(this.contents[index], "onShow", callback.bind(this, index));
 		}	
 	}
 
@@ -915,7 +914,7 @@ class Queue
 		if (this.contents[index] && this.contents[index].callbacks) 
 		{
 			// set the callback
-			Element.addCallback(this.contents[index], "onRendered", callback.bind(this, index))
+			Element.addCallback(this.contents[index], "onRendered", callback.bind(this, index));
 		}	
 	}
 
@@ -927,7 +926,7 @@ class Queue
 		if (this.contents[index] && this.contents[index].callbacks) 
 		{
 			// set the callback
-			Element.addCallback(this.contents[index], "onHide", callback.bind(this, index))
+			Element.addCallback(this.contents[index], "onHide", callback.bind(this, index));
 		}	
 	}
 
@@ -939,7 +938,7 @@ class Queue
 		if (this.contents[index] && this.contents[index].callbacks) 
 		{
 			// set the callback
-			Element.addCallback(this.contents[index], "onRemove", callback.bind(this, index))
+			Element.addCallback(this.contents[index], "onRemove", callback.bind(this, index));
 		}
 	}
 
@@ -2447,4 +2446,71 @@ function deconstructFunction(target)
 {
 	var results = target.toString().match(/^.+\((.*)\)\s+{([^]*)}/i);
 	return {arguments: results[1] || "", body: results[2] || ""};
+}
+
+// extension method for inkjs that returns the container 
+// at the provided path string
+inkjs.Story.prototype.ContainerAtPathString = function(path)
+{
+	let container = this.mainContentContainer;
+	
+	for (var name of path.split(".")) 
+	{
+		if (!container.namedContent.has(name)) return null;
+		container = container.namedContent.get(name);
+	}
+	return container;
+}
+
+// extension method for inkjs that returns the array of content
+// at the provided path string
+inkjs.Story.prototype.ContentAtPathString = function(path)
+{
+	return this.ContainerAtPathString(path).content;
+}
+
+// returns the last item in a container in the form of {expression}
+// where expression is truthy, a variable assignment, a native opertation, 
+// a function call, etc. 
+// the knot or stitch shouldn't include any text or diverts, only
+// functions and a final return value wrapped in curly brackets ({})
+// v much a hack, but necessary for cleanly organised storylets, 
+// since you can't return a value from a stitch
+inkjs.Story.prototype.EvaluateContainer = function(container)
+{
+	if (!container) return;
+
+	let content = [].concat(container.content);
+	let outputStream = [].concat(this.state._currentFlow.outputStream);
+
+	// check if the container contains an expression, 
+	// and if and where we should crop it
+	let lastIndex;
+	for(let i = container.content.length - 1; i >= 0; i--)
+	{
+		// commandType 1 (EvalOutput) will remove the value we want
+		// from the evaluationStack, so we trim the array to stop that happening
+		if(container.content[i].commandType === 1)
+		{
+			lastIndex = i;
+			break;
+		}
+		lastIndex = -1;
+	};
+		
+	if (lastIndex >= 0)
+	{
+		// crop the expression now so the result doesn't get removed
+		// from the stack in the next step
+		container.content.splice(lastIndex);
+	}
+	
+	// then we evaluate it, and return that value from the stack
+	let result = this.EvaluateExpression(container);
+	
+	this.state._currentFlow.outputStream = outputStream;
+	container._content = content;
+
+	if (result && result.value) return result.value;
+	else return null;
 }
