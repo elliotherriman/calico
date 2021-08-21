@@ -6,7 +6,7 @@ var credits = {
 	emoji: "🧶",
 	name: "Storylets",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "1.1",
 	description: "Enables storylets, as seen in Twine's Harlowe.",
 	licences: {
 		self: "2021",
