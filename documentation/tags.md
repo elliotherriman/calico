@@ -66,14 +66,16 @@ Falling until I skinned my knees
 #clear
 ```
 
-The clear tag is most often used after a choice. If a clear tag is included on the same line as a choice, Calico will clear the page's text and the choice together.
+The clear tag is typically used immediately following a choice. 
+
+If the clear tag is included on the same line as a choice, Calico will clear the page's text and the choice at the same time.
 
 ```
 * choice #clear
 -
 ```
 
-If the clear tag appears on a line after the choice, Calico will first clear the choice, and then clear the rest of the text.
+If the clear tag appears on a line after the choice, Calico will first clear the choice, pause, and then clear the rest of the text.
 
 ```
 * choice
@@ -81,9 +83,9 @@ If the clear tag appears on a line after the choice, Calico will first clear the
 #clear
 ```
 
-Depending on how you want to style your clears, you may wish to use `[` and `]` to wrap your choice's text.
+You may wish to use `[` and `]` to wrap your choice's text.
 
-You can also use `#clear` in the middle of a passage. Upon reaching a clear tag, Calico will breifly pause, before removing any text on screen, and continuing with the rest of the passage.
+You can also use `#clear` in the middle of a passage. Upon reaching a clear tag, Calico will briefly pause, then remove any text on screen, and continue with the rest of the passage.
 
 ### #restart
 
