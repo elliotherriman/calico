@@ -41,19 +41,27 @@ All the events contained in the core Calico engine. I'll try to fill in descript
 Events that concern your story overall, and its inner and outer divs.
 
 **Name**: "story ready"
+<br>
 **Arguments**: story
+<br>
 **Target**: `outerdiv`
 
 **Name**: "story clearing"
+<br>
 **Arguments**: story, delay, howMany
+<br>
 **Target**: `outerdiv`
 
 **Name**: "story restarting"
+<br>
 **Arguments**: story
+<br>
 **Target**: `outerdiv`
 
 **Name**: "story setheight"
+<br>
 **Arguments**: story, old, new
+<br>
 **Target**: `outerdiv`
 
 ### Passage Events
@@ -61,27 +69,39 @@ Events that concern your story overall, and its inner and outer divs.
 Events that concern the current ink passage — all text and data from the start of the story or the player's last input, until the end of the story, or the next available choice.
 
 **Name**: "passage start"
+<br>
 **Arguments**: story
+<br>
 **Target**: `outerdiv`
 
 **Name**: "passage line"
+<br>
 **Arguments**: story, line
+<br>
 **Target**: `outerdiv`
 
 **Name**: "passage line element"
+<br>
 **Arguments**: story, element, line
+<br>
 **Target**: `outerdiv`
 
 **Name**: "passage choice"
+<br>
 **Arguments**: story, choice
+<br>
 **Target**: `outerdiv`
 
 **Name**: "passage choice element"
+<br>
 **Arguments**: story, choice, element
+<br>
 **Target**: `outerdiv`
 
 **Name**: "passage end"
+<br>
 **Arguments**: story, choice
+<br>
 **Target**: `outerdiv`
 
 ### Queue Events
@@ -89,19 +109,27 @@ Events that concern the current ink passage — all text and data from the star
 Events that concern the queue of elements to be rendered.
 
 **Name**: "queue clear"
+<br>
 **Arguments**: queue, old
+<br>
 **Target**: `outerdiv`
 
 **Name**: "queue setdelay"
+<br>
 **Arguments**: new, old, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "queue setlinebyline"
+<br>
 **Arguments**: value, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "queue push"
+<br>
 **Arguments**: element, queue
+<br>
 **Target**: `outerdiv`
 
 ### Element Events
@@ -109,35 +137,51 @@ Events that concern the queue of elements to be rendered.
 Events that concern individual lines of text, images, and other HTML elements.
 
 **Name**: "element addclass"
+<br>
 **Arguments**: element, class, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "element adddelay"
+<br>
 **Arguments**: element, delay, story, queue
+<br>
 **Target**: `window`
 
 **Name**: "element setproperty"
+<br>
 **Arguments**: element, story, property, new, old, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "element added"
+<br>
 **Arguments**: element, story, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "element show"
+<br>
 **Arguments**: element, story, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "element rendered"
+<br>
 **Arguments**: element, story, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "element hide"
+<br>
 **Arguments**: element, story, queue
+<br>
 **Target**: `outerdiv`
 
 **Name**: "element remove"
+<br>
 **Arguments**: element, story, queue
+<br>
 **Target**: `outerdiv`
 
 ### Render Events
@@ -145,15 +189,21 @@ Events that concern individual lines of text, images, and other HTML elements.
 Events that concern the render process, performed by the queue.
 
 **Name**: "render start"
+<br>
 **Arguments**: story, queue, target
+<br>
 **Target**: `outerdiv`
 
 **Name**: "render finished"
+<br>
 **Arguments**: story, queue, target
+<br>
 **Target**: `outerdiv`
 
 **Name**: "render interrupted"
+<br>
 **Arguments**: story, queue, index, target
+<br>
 **Target**: `outerdiv`
 
 ### Tags Events
@@ -161,23 +211,33 @@ Events that concern the render process, performed by the queue.
 Events that concern ink tags.
 
 **Name**: "tags add"
+<br>
 **Arguments**: name, function
+<br>
 **Target**: `window`
 
 **Name**: "tags process"
+<br>
 **Arguments**: story, tag
+<br>
 **Target**: `outerdiv`
 
 **Name**: "tags matched"
+<br>
 **Arguments**: story, tag, property
+<br>
 **Target**: `outerdiv`
 
 **Name**: "tags option"
+<br>
 **Arguments**: story, variable, new, old
+<br>
 **Target**: `outerdiv`
 
 **Name**: "tags unhandled"
+<br>
 **Arguments**: tag, property
+<br>
 **Target**: `outerdiv`
 
 ### Lexer Events
@@ -185,23 +245,33 @@ Events that concern ink tags.
 Events that concern inline ink tags, and text parsing.
 
 **Name**: "lexer add tag"
+<br>
 **Arguments**: tag, function
+<br>
 **Target**: `window`
 
 **Name**: "lexer add pattern"
+<br>
 **Arguments**: pattern, function
+<br>
 **Target**: `window`
 
 **Name**: "lexer process"
+<br>
 **Arguments**: line
+<br>
 **Target**: `outerdiv`
 
 **Name**: "lexer matched tag"
+<br>
 **Arguments**: tag, arguments, function, line
+<br>
 **Target**: `outerdiv`
 
 **Name**: "lexer matched pattern"
+<br>
 **Arguments**: pattern, function, line, tags
+<br>
 **Target**: `outerdiv`
 
 ### Text Animation Events
@@ -209,11 +279,15 @@ Events that concern inline ink tags, and text parsing.
 Events that concern text animations.
 
 **Name**: "textanimation create"
+<br>
 **Arguments**: name, effect
+<br>
 **Target**: `window`
 
 **Name**: "textanimation apply"
+<br>
 **Arguments**: element, name, effect
+<br>
 **Target**: `outerdiv`
 
 ### Shortcuts Events
@@ -221,15 +295,21 @@ Events that concern text animations.
 Events that concern keyboard shortcuts.
 
 **Name**: "shortcuts add"
+<br>
 **Arguments**: string, callback, type
+<br>
 **Target**: `window`
 
 **Name**: "shortcuts remove"
+<br>
 **Arguments**: string, callback, type
+<br>
 **Target**: `window`
 
 **Name**: "shortcuts process"
+<br>
 **Arguments**: type, input, event
+<br>
 **Target**: `window`
 
 ### Window Events
@@ -237,4 +317,5 @@ Events that concern keyboard shortcuts.
 Events that concern the browser window.
 
 **Name**: "window resized"
+<br>
 **Target**: `window`
