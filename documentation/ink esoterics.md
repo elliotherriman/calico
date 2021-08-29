@@ -24,6 +24,8 @@ RESTART
 
 ## NATIVE FUNCTION CALLS
 
+These aren't actually functions, despite the name. These are operations you can use on variables and lists to modify or compare them.
+
 ```
 Add : +
 Subtract : -
@@ -66,15 +68,22 @@ Invert : LIST_INVERT
 
 ## OPERATIONS WITH PLAIN TEXT ALTERNATIVES
 
+You can use the plain text version of these operations, rather than the symbol.
+
+It's recommended that you use "not" over "!", since "!" can perform other functions in ink, and may lead to syntax errors.
+
 ```
 && : and
 || : or
 % : mod
+! : not
 ? : has
 !? : hasnt
 ```
 
 ## OTHER FUNCTIONS
+
+These must be called as functions. Will return a value.
 
 ```
 CHOICE_COUNT
