@@ -2,7 +2,11 @@ A quick reference for obscure features in ink.
 
 ## WEB PLAYER TAGS
 
-A list of tags that can be used with Inky's native web player. Capitalisation matters. Some of these tags expect a property, in the form of `#TAG: property`.
+A list of tags that can be used with Inky's native web player. 
+
+Some of these tags expect a property, in the form of `#TAG: property`.
+
+**Capitalisation matters.** These tags will not work if you don't capitalise them as they appear here.
 
 ```
 theme
