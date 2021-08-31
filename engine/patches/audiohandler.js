@@ -4,10 +4,10 @@
 
 var credits = {
 	emoji: "",
-	name: "name",
-	author: "author",
+	name: "Audio Handler",
+	author: "Green Clovers",
 	version: "1.0",
-	description: "description",
+	description: "A simple patch that allows users to use the #music and #sfx tags.",
 	licences: {
 		self: "2021",
 	}
