@@ -3,7 +3,7 @@
 // -----------------------------------
 
 var credits = {
-	emoji: "",
+	emoji: "🎧",
 	name: "Audio Handler",
 	author: "Green Clovers",
 	version: "1.0",
@@ -13,25 +13,24 @@ var credits = {
 	}
 }
 
-var options = {
-	patchname_variable: true,
-};
+var options = {};
 
 let music_player = document.createElement("audio")
 let sfx_player = document.createElement("audio")
 
 
 
-Tags.add("music", (story, property)=>{
+Tags.add("music", (story, property) =>
+	 {
 		// make sure a file name was provided
-		console.log(property)
 		if (!typeof property === "string" || !property.trim()) 
 		{
-			warn.warn("(#music) no file was provided.");
+			console.warn("(#music) no file was provided.");
 			return;
 		}
 		//If the player writes stop, stop the music. 
-		if (property.toLowerCase() === "stop"){
+		if (property.toLowerCase() === "stop")
+		{
 			music_player.pause()
 		}
 		// if the image provided isn't a URL,
@@ -46,12 +45,12 @@ Tags.add("music", (story, property)=>{
 		music_player.play()
 	});
 
-Tags.add("sfx", (story, property)=>{
-	// make sure a file name was provided
-		console.log(property)
+Tags.add("sfx", (story, property)=>
+	 {
+		// make sure a file name was provided
 		if (!typeof property === "string" || !property.trim()) 
 		{
-			warn.warn("(#sfx) no file was provided.");
+			console.warn("(#sfx) no file was provided.");
 			return;
 		}
 		
@@ -66,7 +65,7 @@ Tags.add("sfx", (story, property)=>{
 		sfx_player.loop = false;
 
 		sfx_player.play()
-});
+	});
 
 
 
@@ -74,7 +73,6 @@ Patches.add(function()
 {
 	this.outerdiv.addEventListener("story ready", (event) =>
 	{
-		console.log(story)
 		this.outerdiv.appendChild(music_player);
 		this.outerdiv.appendChild(sfx_player);
 	});
