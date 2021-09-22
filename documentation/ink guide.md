@@ -622,7 +622,7 @@ If you want to leave notes inside your ink, you can create a comment by prependi
 <summary><b>Using comments</b></summary>
 <br>
 
-Any line that starts appears after `//` won't be shown to the player.
+Any line that starts appears after `//` won't be shown to the player. Unlike tags, comments are automatically removed by the compiler, and won't show up in your exported `.json` file. 
 
 ```
 // here's some text that won't show up
@@ -634,7 +634,5 @@ This applies to instances of `//` anywhere in a line.
 ```
 And here's some text *will* show up... // and a comment that won't
 ```
-
-Comments won't be included when ink compiles your story to a `.JSON` file, so feel free to swear.
 
 </details></p>
