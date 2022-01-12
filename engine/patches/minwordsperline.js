@@ -1,6 +1,10 @@
 // -----------------------------------
 // minimum words per line
 // -----------------------------------
+// ensures that if a line would a widow make (character from overwatch),
+// or an orphan make (a single word on the final line of a multi-line
+// paragrhaph), it no longer does that.
+
 // ensures that if a line would break (i.e. what happens when you hit enter in
 // a text editor), it will always have more than one word on the second line.
 //
@@ -45,35 +49,71 @@ function getRegex(length)
 	}
 }
 
-function applyMinLength(story, line)
-{		
-	// if there's any text that also includes a space
-	if (line.text && line.text.trim().includes(" "))
-	{
-		// figure out how long we want to ensure the last line will be
-		let length = story.options.minwordsperline_length;
-	
-		// and if it's different to our previously recorded length,
-		if (length != currentLength)
-		{
-			// we recreate our regex, and set the new currentLength
-			rgx = getRegex(length);
-		}
+function noOrphans(textItems, length) {
+	// Find the second to last word
+	// Stick a span right before the second to last word
+	textItems[textItems.length - 2] = `<span style='white-space: nowrap'>` + textItems[textItems.length - 2];
+	// Stick a closing span right after the last word
+	targetWord[textItems.length - 1] = targetWord[textItems.length - 1] + `</span>`;
 
-		// then finally we match the last X words and wrap it in a span
-		// that won't break across lines
-		let match = line.text.match(rgx);
-		if (match && match[1])
-		{
-			let replacement = "<span style='white-space: nowrap'>" + match[1] + "</span>";
-			if (match[1].trim().startsWith("</span>"))
-			{
-				match[1] = match[1].replace(/<\/span>/, "");
-				replacement = "</span>" + replacement;
-			}
-			line.text = line.text.replace(match[1], replacement);
-		}
+	return textItems;
+}
+
+function applyMinLength(story, line)
+{
+	// Rough function layout
+
+	let replacement = '';
+
+	// Split words/tags into array
+	// NOTE: This trims leading/trailing whitespace, so if you're
+	// using that intentionally then whoops
+	let textItems = line.text.trim().replace(/&nbsp;/g, ' ').split(/ (?=[^>]*(?:<|$))/);
+
+	// Check if the array is shorter than the length
+	if (textItems.length < story.options.minwordsperline_length) {
+		return;
 	}
+
+	// Maybe check if the array already has the span???????
+
+	// Run orphan function
+	textItems = noOrphans(textItems, story.options.minwordsperline_length);
+
+	// Recombine the array
+	replacement = textItems.join(' ');
+
+	// Set the line equal to the new line
+	line.text = replacement;
+
+
+	// if there's any text that also includes a space
+	// if (line.text && line.text.trim().includes(" "))
+	// {
+	// 	// figure out how long we want to ensure the last line will be
+	// 	let length = story.options.minwordsperline_length;
+	
+	// 	// and if it's different to our previously recorded length,
+	// 	if (length != currentLength)
+	// 	{
+	// 		// we recreate our regex, and set the new currentLength
+	// 		rgx = getRegex(length);
+	// 	}
+
+	// 	// then finally we match the last X words and wrap it in a span
+	// 	// that won't break across lines
+	// 	let match = line.text.match(rgx);
+	// 	if (match && match[1])
+	// 	{
+	// 		let replacement = "<span style='white-space: nowrap'>" + match[1] + "</span>";
+	// 		if (match[1].trim().startsWith("</span>"))
+	// 		{
+	// 			match[1] = match[1].replace(/<\/span>/, "");
+	// 			replacement = "</span>" + replacement;
+	// 		}
+	// 		line.text = line.text.replace(match[1], replacement);
+	// 	}
+	// }
 }
 
 Patches.add(function()
