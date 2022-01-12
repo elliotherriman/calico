@@ -37,18 +37,6 @@ var options = {
 	minwordsperline_length: 2,
 };
 
-var currentLength;
-var rgx = getRegex(options.minwordsperline_length);
-
-function getRegex(length)
-{
-	if (length > 0)
-	{
-		currentLength = length;
-		return new RegExp("((([^ ]|<[^>]+>)+ ?){1," + length + "}$)");
-	}
-}
-
 function noOrphans(textItems, length) {
 	// Find the second to last word
 	// Stick a span right before the second to last word
@@ -85,35 +73,6 @@ function applyMinLength(story, line)
 
 	// Set the line equal to the new line
 	line.text = replacement;
-
-
-	// if there's any text that also includes a space
-	// if (line.text && line.text.trim().includes(" "))
-	// {
-	// 	// figure out how long we want to ensure the last line will be
-	// 	let length = story.options.minwordsperline_length;
-	
-	// 	// and if it's different to our previously recorded length,
-	// 	if (length != currentLength)
-	// 	{
-	// 		// we recreate our regex, and set the new currentLength
-	// 		rgx = getRegex(length);
-	// 	}
-
-	// 	// then finally we match the last X words and wrap it in a span
-	// 	// that won't break across lines
-	// 	let match = line.text.match(rgx);
-	// 	if (match && match[1])
-	// 	{
-	// 		let replacement = "<span style='white-space: nowrap'>" + match[1] + "</span>";
-	// 		if (match[1].trim().startsWith("</span>"))
-	// 		{
-	// 			match[1] = match[1].replace(/<\/span>/, "");
-	// 			replacement = "</span>" + replacement;
-	// 		}
-	// 		line.text = line.text.replace(match[1], replacement);
-	// 	}
-	// }
 }
 
 Patches.add(function()
