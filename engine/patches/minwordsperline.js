@@ -40,7 +40,7 @@ var options = {
 function noOrphans(textItems, length) {
 	// Find the second to last word
 	// Stick a span right before the second to last word
-	textItems[textItems.length - 2] = `<span style='white-space: nowrap'>` + textItems[textItems.length - 2];
+	textItems[textItems.length - length] = `<span style='white-space: nowrap'>` + textItems[textItems.length - 2];
 	// Stick a closing span right after the last word
 	targetWord[textItems.length - 1] = targetWord[textItems.length - 1] + `</span>`;
 
