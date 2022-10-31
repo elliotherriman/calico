@@ -153,7 +153,7 @@ winter.options.linedelay = 600.0;
   The default location for image files. Used for tags that import images if you don't specify a folder manually.  
   Defaults to `"images/"`.
 - `defaultaudiolocation`  
-  The default location for image files. Used for tags that import audio if you don't specify a folder manually.  
+  The default location for audio files. Used for tags that import audio if you don't specify a folder manually.  
   Defaults to `"music/"`.
 - `textanimation`  
   The default text animation to use.  
