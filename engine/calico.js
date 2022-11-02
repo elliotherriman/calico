@@ -255,6 +255,8 @@ class Story
 		// otherwise, mark that the story object is now active
 		this.state = Story.states.active;
 		
+		this.ink.lastKnownPathString = this.ink.state.currentPathString;
+	
 		// notify about it
 		notify("passage start", {story: this}, this.outerdiv);
 	
