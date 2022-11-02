@@ -569,6 +569,14 @@ class Story
 		this.continue();
 	}
 
+	jumpTo(knot)
+	{
+		this.clear();
+		this.ink.ChoosePathString(knot);
+		this.state = Story.states.idle;
+		this.continue();
+	}
+
 	// resets the page's scroll position after an optional delay
 	scrollUp(smooth = true)
 	{
