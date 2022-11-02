@@ -17,7 +17,7 @@ var options = {
 	patchname_variable: true,
 };
 
-Patches.add(function()
+Patches.add(function(content)
 {
 	
 }, options, credits);
