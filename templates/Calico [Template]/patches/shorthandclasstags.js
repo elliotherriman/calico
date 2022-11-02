@@ -35,7 +35,7 @@ Patches.add(function()
 		}
 
 		// binds a function to the tag handler
-		Lexer.tag(tag, function(line, tag, property) 
+		Parser.tag(tag, function(line, tag, property) 
 				{
 					// add the tag to the class list
 					line.classes.push(tag);

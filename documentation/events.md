@@ -240,35 +240,35 @@ Events that concern ink tags.
 <br>
 **Target**: `outerdiv`
 
-### Lexer Events
+### Parser Events
 
 Events that concern inline ink tags, and text parsing.
 
-**Name**: "lexer add tag"
+**Name**: "parser add tag"
 <br>
 **Arguments**: tag, function
 <br>
 **Target**: `window`
 
-**Name**: "lexer add pattern"
+**Name**: "parser add pattern"
 <br>
 **Arguments**: pattern, function
 <br>
 **Target**: `window`
 
-**Name**: "lexer process"
+**Name**: "parser process"
 <br>
 **Arguments**: line
 <br>
 **Target**: `outerdiv`
 
-**Name**: "lexer matched tag"
+**Name**: "parser matched tag"
 <br>
 **Arguments**: tag, arguments, function, line
 <br>
 **Target**: `outerdiv`
 
-**Name**: "lexer matched pattern"
+**Name**: "parser matched pattern"
 <br>
 **Arguments**: pattern, function, line, tags
 <br>

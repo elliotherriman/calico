@@ -598,9 +598,9 @@ Some patches also support options, which by convention are separated with a "|".
 <summary><b>Styling text</b></summary>
 <br>
 
-Calico technically has two ways of processing tags. Tags added to the `Tags` class will apply before or after a line has been assembled. Tags added to the `Lexer` class will apply while a line is being assembled.
+Calico technically has two ways of processing tags. Tags added to the `Tags` class will apply before or after a line has been assembled. Tags added to the `Parser` class will apply while a line is being assembled.
 
-This makes Lexer tags really, really handy for styling text, allowing you to easily set the font, colour, and any other CSS properties for a word or line.
+This makes Parser tags really, really handy for styling text, allowing you to easily set the font, colour, and any other CSS properties for a word or line.
 
 </details></p>
 <p>

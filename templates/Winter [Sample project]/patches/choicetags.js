@@ -14,10 +14,10 @@ var credits = {
 }
 
 var options = {
-	// only include tags that are registered in the lexer class
+	// only include tags that are registered in the parser class
 	// probably unnecessary, since this is all handled for you
 	// in style.process(), but i wanted to include the option
-	choicetags_checkiflexertag: false,
+	choicetags_checkifparsertag: false,
 };
 
 Patches.add(function()

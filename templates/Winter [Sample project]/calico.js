@@ -295,7 +295,7 @@ class Story
 				{
 					if (currentText.length && currentTags.length)
 					{
-						currentText = Lexer.process(this, currentText, currentTags);
+						currentText = Parser.process(this, currentText, currentTags);
 						
 						currentTags = [];
 					}
@@ -374,7 +374,7 @@ class Story
 			// once any of the event listeners are set, otherwise
 			// it'll remove those event listeners. you can add to
 			// them with +=, but no assigning to them with =
-			choiceAnchorEl.innerHTML = Lexer.process(this, choice.text, choice.tags);
+			choiceAnchorEl.innerHTML = Parser.process(this, choice.text, choice.tags);
 	
 			// hide the weird click glove cursor until the choice is ready
 			choiceAnchorEl.style.cursor = "default";
@@ -1227,7 +1227,7 @@ class Element
 // TAGS
 // ================================================
 // class responsible for getting and processing tags,
-// (except for tags that you define in the lexer class)
+// (except for tags that you define in the parser class)
 
 class Tags
 {
@@ -1308,7 +1308,7 @@ class Tags
 					}
 				}
 			// if not, 
-			else if (!(splitTag.before in Tags.functions || splitTag.before in Lexer.tags))
+			else if (!(splitTag.before in Tags.functions || splitTag.before in Parser.tags))
 			{
 				// we notify,
 				notify("tags unhandled", {tag: splitTag.before, property: splitTag.after}, story.outerdiv);
@@ -1543,53 +1543,53 @@ Tags.add("linebyline",
 		});
 
 // ================================================
-// LEXER
+// PARSER
 // ================================================
 // class to process the text and tags of each line, and execute functions that 
 // alter that text, or call functions elsewhere, depending on what it finds
-// this might be more of a parser than a lexer but i like the word lexer more 
+// this might be more of a parser than a parser but i like the word parser more 
 
-class Lexer
+class Parser
 {
 	// a list of tags and their associate functions
 	static get tags () 
 	{ 
-		if (!Lexer._tags) Lexer._tags = {};
-		return Lexer._tags;
+		if (!Parser._tags) Parser._tags = {};
+		return Parser._tags;
 	};
 	
 	// a list of patterns and their associate functions
 	static get patterns () 
 	{ 
-		if (!Lexer._patterns) Lexer._patterns = [];
-		return Lexer._patterns;
+		if (!Parser._patterns) Parser._patterns = [];
+		return Parser._patterns;
 	};
 
 	static get element ()
 	{
-		if (!Lexer._element) Lexer._element = document.createElement("span");
-		return Lexer._element;
+		if (!Parser._element) Parser._element = document.createElement("span");
+		return Parser._element;
 	}
 	
 	static set element (value)
 	{
-		Lexer._element = value;
+		Parser._element = value;
 	}
 
 	// in the same style as the tags class, this will bind a tag to our 
-	// lexer class, that'll execute the callback if a line contains that tag
+	// parser class, that'll execute the callback if a line contains that tag
 	static tag(tag, callback)
 	{
-		notify("lexer add tag", {tag: tag, function: callback});
-		Lexer.tags[tag] = callback;
+		notify("parser add tag", {tag: tag, function: callback});
+		Parser.tags[tag] = callback;
 	}
 
 	// binds a function to be executed if our line contains the given pattern
 	// that pattern can either be some text, or a regular expression
 	static pattern(pattern, callback)
 	{
-		notify("lexer add pattern", {pattern: pattern, function: callback});
-		Lexer.patterns.push({matcher: pattern, callback: callback});
+		notify("parser add pattern", {pattern: pattern, function: callback});
+		Parser.patterns.push({matcher: pattern, callback: callback});
 	}
 
 	// process a string or an element, applying tags and patterns, before
@@ -1603,10 +1603,10 @@ class Lexer
 		var line = {text: text, tags: tags, classes: []}
 		
 		// notify, you know the drill
-		notify("lexer process", {line: line}, story.outerdiv);
+		notify("parser process", {line: line}, story.outerdiv);
 
 		// if we submitted tags, and tags exist to style with,
-		if (line.tags.length && Object.keys(Lexer.tags).length)
+		if (line.tags.length && Object.keys(Parser.tags).length)
 		{
 			// process each
 			line.tags.forEach(function(tag)
@@ -1615,22 +1615,22 @@ class Lexer
 				tag = splitAtCharacter(tag, ":");
 
 				// if the tag exists in our tags,
-				if (tag.before in Lexer.tags)
+				if (tag.before in Parser.tags)
 				{
 					// notify about the tag and function
-					notify("lexer matched tag", {tag: tag.before, arguments: tag.after, function: Lexer.tags[tag.before], line: line}, story.outerdiv);
+					notify("parser matched tag", {tag: tag.before, arguments: tag.after, function: Parser.tags[tag.before], line: line}, story.outerdiv);
 					
 					// then we process our line with the tag
-					Lexer.tags[tag.before](line, tag.before, tag.after);
+					Parser.tags[tag.before](line, tag.before, tag.after);
 				}
 			});
 		}
 
 		// if the element has text inside, and there are patterns to match with,
-		if (line.text && Lexer.patterns.length)
+		if (line.text && Parser.patterns.length)
 		{
 			// go through them all,
-			Lexer.patterns.forEach(function(pattern)
+			Parser.patterns.forEach(function(pattern)
 			{
 				// and... okay this is a long line, but we're checking if we 
 				// should execute the pattern's function by checking if it
@@ -1638,7 +1638,7 @@ class Lexer
 				if (typeof pattern.matcher === "string" && line.text.includes(pattern.matcher) || pattern.matcher == RegExp(pattern.matcher) && line.text.match(pattern.matcher))
 				{
 					// notify here
-					notify("lexer matched pattern", {pattern: pattern.before, function: Lexer.tags[pattern.before], line: line, tags: line.tags}, story.outerdiv);
+					notify("parser matched pattern", {pattern: pattern.before, function: Parser.tags[pattern.before], line: line, tags: line.tags}, story.outerdiv);
 
 					// if so, we update the element
 					pattern.callback(line);
@@ -1653,20 +1653,20 @@ class Lexer
 			// we grab a reusable element so we don't have to create
 			// like four new ones every line,
 			// and reset its class list 
-			Lexer.element.classList = [];
+			Parser.element.classList = [];
 			
 			// then we set the contents to our string
-			Lexer.element.innerHTML = line.text;
+			Parser.element.innerHTML = line.text;
 			
 			// aaaand add all the classes we found
-			Lexer.element.classList.add(...line.classes);
+			Parser.element.classList.add(...line.classes);
 
 			// then we set the line's text to that
-			line.text = Lexer.element.outerHTML;
+			line.text = Parser.element.outerHTML;
 		}
 		
 		// finally, notify,
-		notify("lexer done", {line: line}, story.outerdiv);
+		notify("parser done", {line: line}, story.outerdiv);
 		
 		// and return the results
 		return line.text;
