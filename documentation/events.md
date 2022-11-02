@@ -6,7 +6,9 @@ Calico offers a large number of custom events that you can use to tweak the engi
 
 To listen for an event, you can use `addEventListener`, and any other related Javascript functions, on the expected DOM target.
 
-By default, events will be sent to the `window` object, but most events manually override this to target their parent story's `outerdiv`. 
+By default, events will be sent to the `window` object, but most events manually override this to target their parent story's `outerdiv`.
+
+If your code isn't working, make sure you're using the right target.
 
 As long as your code doesn't contain any asynchronous code, Calico will wait until your code has finished execution before continuing.
 
