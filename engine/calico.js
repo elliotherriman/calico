@@ -2139,7 +2139,7 @@ function credit(credits)
 		}
 		else
 		{
-			throwIntoVoid(console.log, item);;
+			throwIntoVoid(console.log, credits.licences[type][item]);
 		}
 		if (type != "self" || licenceTypes > 1)
 		{
