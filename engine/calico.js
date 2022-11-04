@@ -136,12 +136,33 @@ class Story
 	// ink file, or that raw text parsed into a javascript object
 	loadInk(input)
 	{
-		// if we tried loading an ink file, thuogh,
+		// if we tried loading an ink file,
 		if (input.endsWith(".ink"))
 		{ 
-			// we'll politely crash the engine, 
-			throw throwIntoVoid(console.error, "Calico doesn't support loading ink files directly. You'll need to convert it to a \".json\" or \".js\" file by using the Inky editor, or via the command line with Inklecate.");
-			// since we can't do anything with that (yet)
+			// WE CAN DO THIS NOW
+			return new Promise((resolve, reject) => 
+			{
+				// we open up the file,
+				fetch(input)
+				// read that file's contents,
+				.then((response) => { return response.text(); })
+				// and with that text,
+				.then((storyContent) => 
+				{
+					// (unless something went wrong,
+					if (!storyContent)
+					{
+						// (in which case we'll throw an error about here,)
+						throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
+					}
+					
+					// then we can use it to create the story object
+					this.ink = new inkjs.Compiler(storyContent).Compile();
+				
+					// and return the compiled ink itself in case we need that
+					resolve(this.ink.ToJson());
+				});
+			});
 		}
 		// if we've been handed a string, it might be the story data, or it 
 		// might be a file name that we need to load
