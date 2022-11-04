@@ -286,12 +286,36 @@ class Story
 			// define item iterator here so we don't 
 			// have to recreate it every time
 			let item;
+			let stream = this.ink.state.outputStream;
 
 			// start by going through each item in the stream (backwards)
-			for (var i = 0; i < this.ink.state.outputStream.length; i++) 
+			for (var i = 0; i < stream.length; i++) 
 			{
 				// store the item for easy reference
-				item = this.ink.state.outputStream[i];
+				item = stream[i];
+
+				if (item._commandType == 24)
+				{
+					let result = this.searchStreamForTag(stream, i);
+					i = result.i;
+					let currentTag = result.currentTag;
+
+					if (currentTag == "unstyled")
+					{
+						line.text += currentText;
+						currentText = "";
+					}
+					else if (!currentText.trim())
+					{
+						// if so, we sort away our tags
+						line.tags.before.push(currentTag);
+					}
+					else
+					{
+						line.tags.after.push(currentTag);
+						currentTags.push(currentTag);
+					}
+				}
 				// if it's text,
 				if (item.value)
 				{
@@ -303,25 +327,6 @@ class Story
 					}
 					
 					currentText += item.value;
-				}
-				// otherwise, if it's a tag
-				else if (item.text)
-				{
-					if (item.text == "unstyled")
-					{
-						line.text += currentText;
-						currentText = "";
-					}
-					else if (!currentText.trim())
-					{
-						// if so, we sort away our tags
-						line.tags.before.push(item.text);
-					}
-					else
-					{
-						line.tags.after.push(item.text);
-						currentTags.push(item.text);
-					}
 				}
 			}
 
@@ -432,6 +437,29 @@ class Story
 		this.state = Story.states.waiting;
 	}
 
+	searchStreamForTag(stream, i)
+	{
+		let currentTag = "";
+		let item;
+
+		for (i + 1; i < stream.length; i++) 
+		{
+			item = stream[i];
+
+			if (item._commandType == 25)
+			{
+				break;
+			}
+
+			if (item.value)
+			{
+				currentTag += item.value;
+			}
+		}
+
+		return {currentTag: currentTag, i: i};
+	}
+
 	// called once the player chooses a choice, to process that choice
 	// and clean everything up for the next loop
 	choose(choice, choiceAnchorEl) 
@@ -486,13 +514,25 @@ class Story
 	// choices and then having to awkwardly wait and then clear the rest
 	lookAheadAndClear(choice)
 	{
-		for (var item of this.ink.PointerAtPath(choice.targetPath).container._content)
+		let stream = this.ink.PointerAtPath(choice.targetPath).container._content;
+		let item;
+
+		for (var i = 0; i < stream.length; i++)
 		{
-			if (item.text == "clear")
+			item = stream[i];
+
+			if (item._commandType == 24)
 			{
-				this.clear();
-				this.queue.reset(0);
-				return;
+				let result = this.searchStreamForTag(stream, i);
+				
+				if (result.currentTag == "clear")
+				{
+					this.clear();
+					this.queue.reset(0);
+					return;
+				}
+
+				i = result.i;
 			}
 		}
 		this.removeElements(":scope > .choice");
@@ -2434,6 +2474,7 @@ function notify(name, details = {}, target = window)
 	// on a local server, to ensure you don't accidentally
 	// enable them in the live build, since spitting out
 	// hundreds of debug messages can cause occasional frame drops
+
 	if (options.debug && (location.hostname == "localhost" || !location.hostname))
 	{
 		// if you're testing animations or anything you need smooth

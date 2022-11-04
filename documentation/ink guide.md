@@ -585,7 +585,7 @@ Some patches include tags that support multiple values, like so--
 #tag: value, value2, value3
 ```
 
-Some patches also support options, which by convention are separated with a "|". For example, in `musicplayer.js`, you can apply a custom `fadein` value by supplying it as an option.
+Some patches also support tag options, which by convention are separated with a ">>". For example, in `musicplayer.js`, you can apply a custom `fadein` value by supplying it as an option.
 
 ```
 #play: file | fadein: 1000
