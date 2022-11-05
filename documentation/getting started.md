@@ -56,28 +56,26 @@ If you compress these files into a zip, upload that zip as an HTML project to it
 
 `calico.js` is the engine itself. It's responsible for taking all the text, tags, and choices from `ink.js` and rendering them to the webpage. It also provides a bunch of extra functionality, allowing you to bind custom tags, keyboard shortcuts, and so on and so forth.
 
-Finally, `project.js` is where everything exclusive to your project exists. This is where you import your ink, change settings, and import patches.
+Finally, `project.js` is where everything exclusive to your project exists. This is where you import your ink, change settings, and import patches. You may want to rename this file — for example, Winter, the sample project included with Calico, instead uses a file called `winter.js`. If you choose to rename this (or any other Javascript file within this folder), you'll need to edit `index.html` to match.
 
 ## Creating a new project
 
-A story written in ink is usually stored in a file that ends with the extension `.ink`. Unfortunately, this needs to be compiled into a `.json` file before it can be run by Calico. You can do so by using Inky, the command line tool Inklecate, or [Catmint](https://elliotherriman.itch.io/catmint).
+A story written in ink is usually stored in a file that ends with the extension `.ink`. It may also be compiled into a `.json` file via Inky, the command line tool Inklecate, or [Catmint](https://elliotherriman.itch.io/catmint).
 
-Assuming you're using Catmint, you can place your `.ink` files inside the unzipped Calico template folder, and open up `index.html` in Catmint. As long as your `.html` is open in Catmint, it will automatically compile up-to-date `.json` files every time an `.ink` file inside that folder is modified.
-
-If you're using Inky instead, make sure you export your story via "File", then "Export to JSON...", and place the resulting JSON file inside the Calico folder. If you use "Export for web...", Inky will compile your story inside a `.js` file, rather than a `.json`, and also produce a folder that looks extremely (and I'm sure confusingly) similar to Calico's template.
+Originally, Calico could only import `.json` files. As of version 2.0, however, Calico can compile your ink for you!
 
 `project.js` is set up as a basic template, which means near the bottom of the file, you should find a line like...
 
 ```js
-var story = new Story("story.json");
+var story = new Story("story.ink");
 ```
 
-This line alone is technically a complete project file. It will take `story.json`, and attempt to run it as a story.
+This line alone is technically a complete project file. It will take `story.ink`, compile it, and attempt to run it as a story.
 
-However, since you're probably working with a `.json` file that isn't called "story", you can simply reword that line to import a different file, like so.
+However, since you're probably working with a `.ink` file that isn't called "story", you can simply reword that line to import a different file, like so.
 
 ```js
-var story = new Story("winter.json");
+var story = new Story("winter.ink");
 ```
 
 You can rename `var story` to `var winter`, or anything else, just as long as that second word doesn't have any spaces in it. I'd recommend you don't, though, as it can interfere with the engine.
@@ -158,6 +156,10 @@ winter.options.linedelay = 600.0;
 - `textanimation`  
   The default text animation to use.  
   Defaults to `"fade"`.
+- `debug`
+  Whether Calico should print debug messages to the browser console. If you're having any problems with the code or your patches, this may help you identify where things are going wrong.
+  As a safeguard, Calico won't print debug messages if your game is running through a website like itch.io (specifically, if `window.location.protocol` isn't `"file:"`).
+  Defaults to `false`.
 
 </details>
 
@@ -256,6 +258,10 @@ If nothing comes up... well, that's a little harder. First, make sure that Catmi
 // import "./patches/preload.js";
 ```
 
+Hopefully, via process of elimination, you can figure out what's gone wrong.
+
+I'm [here](https://twitter.com/elliotherriman) on Twitter if you run into any problems at all, or have any questions, or just want to show me what you made.
+
 ## Uploading your game to itch.io
 
 You're done? Hell yeah, okay.
@@ -267,9 +273,3 @@ Create an account on itch if you haven't already, then head [here](https://itch.
 Change "Kind of project" to "HTML", and upload your newly zipped up project. Under "Embed options", change "Embed in page" to "Click to launch in fullscreen". That's not mandatory, but it looks and plays much better, I promise. You can probably select "Mobile friendly", too.
 
 Then add a description, as many tags as you can think of (particularly "calico"! I want to find your games!), and save your project as a draft. Or as restricted, with a password, if you want to have friends test it. If you don't, though, at least make sure *you* play through your whole story on itch at least once before you make it public. You can always update your game later, it's not hard, but I've always found a couple of problems by taking the time to check.
-
-## Final thoughts
-
-I can feel myself getting less eloquent as I type, so I'm going to stop here. I'm going to come back and add more information on creating custom tags, shortcuts, text animations, patches, all of that noise. But hopefully this is enough to get you all started.
-
-I'm [here](https://twitter.com/elliotherriman) on Twitter if you run into any problems at all, or have any questions, or just want to show me what you made.
