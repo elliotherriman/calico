@@ -661,7 +661,7 @@ Like a memory of being touched, or a whisper of a breeze.
 * [And then the shadow takes over again, and I black out.] #clear
 -
 
-#stop | duration: 150
+#stop >> duration: 150
 
 -> actTwo
 
@@ -669,7 +669,7 @@ Like a memory of being touched, or a whisper of a breeze.
 
 #delay: 2500
 
-#play: act2 | delay: 1500
+#play: act2 >> delay: 1500
 
 * [ACT TWO]
 -
@@ -1000,7 +1000,7 @@ So I find the words.
 
 VAR sayNothing = 0
 
-#stop | duration: 250
+#stop >> duration: 250
 
 * [ACT THREE]
 -
@@ -1422,7 +1422,7 @@ She grasps my hand gently again, and guides it higher to her eye socket.
 
 == actFour 
 
-#play: act4 | delay: 500
+#play: act4 >> delay: 500
 
 * [ACT FOUR]
 -

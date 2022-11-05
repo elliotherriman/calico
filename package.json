@@ -1,6 +1,6 @@
 {
 	"name": "Calico",
-	"version": "1.0.4",
+	"version": "2.0.0",
 	"description": "An interactive fiction engine for the web",
 	"scripts": {
 		"build": "./build.sh"

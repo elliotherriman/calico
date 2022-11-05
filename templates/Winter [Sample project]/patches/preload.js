@@ -6,8 +6,6 @@
 @description
 Waits until everything's downloaded before kicking off the story. Comes with a loading bar. Extremely helpful for stories that use images and audio.
 
-// todo
-Notifies after each file has loaded, and after all files have loaded.
 **/
 
 var credits = {

@@ -65,7 +65,7 @@ var options =
 credit({
 	emoji: "🐈",
 	name: "Calico",
-	version: "1.0.4",
+	version: "2.0.0",
 	description: ["An interactive fiction engine built from patchwork and ink stains.", "Want to write a game like this one? Check out the project at https://elliotherriman.itch.io/calico.", "Trans rights are human rights. 🏳️‍⚧✨️"],
 	licences: {
 		self: "2021 Elliot Herriman",
@@ -136,12 +136,33 @@ class Story
 	// ink file, or that raw text parsed into a javascript object
 	loadInk(input)
 	{
-		// if we tried loading an ink file, thuogh,
+		// if we tried loading an ink file,
 		if (input.endsWith(".ink"))
 		{ 
-			// we'll politely crash the engine, 
-			throw throwIntoVoid(console.error, "Calico doesn't support loading ink files directly. You'll need to convert it to a \".json\" or \".js\" file by using the Inky editor, or via the command line with Inklecate.");
-			// since we can't do anything with that (yet)
+			// WE CAN DO THIS NOW
+			return new Promise((resolve, reject) => 
+			{
+				// we open up the file,
+				fetch(input)
+				// read that file's contents,
+				.then((response) => { return response.text(); })
+				// and with that text,
+				.then((storyContent) => 
+				{
+					// (unless something went wrong,
+					if (!storyContent)
+					{
+						// (in which case we'll throw an error about here,)
+						throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
+					}
+					
+					// then we can use it to create the story object
+					this.ink = new inkjs.Compiler(storyContent).Compile();
+				
+					// and return the compiled ink itself in case we need that
+					resolve(this.ink.ToJson());
+				});
+			});
 		}
 		// if we've been handed a string, it might be the story data, or it 
 		// might be a file name that we need to load
@@ -255,6 +276,8 @@ class Story
 		// otherwise, mark that the story object is now active
 		this.state = Story.states.active;
 		
+		this.ink.lastKnownPathString = this.ink.state.currentPathString;
+	
 		// notify about it
 		notify("passage start", {story: this}, this.outerdiv);
 	
@@ -284,12 +307,36 @@ class Story
 			// define item iterator here so we don't 
 			// have to recreate it every time
 			let item;
+			let stream = this.ink.state.outputStream;
 
 			// start by going through each item in the stream (backwards)
-			for (var i = 0; i < this.ink.state.outputStream.length; i++) 
+			for (var i = 0; i < stream.length; i++) 
 			{
 				// store the item for easy reference
-				item = this.ink.state.outputStream[i];
+				item = stream[i];
+
+				if (item._commandType == 24)
+				{
+					let result = this.searchStreamForTag(stream, i);
+					i = result.i;
+					let currentTag = result.currentTag;
+
+					if (currentTag == "unstyled")
+					{
+						line.text += currentText;
+						currentText = "";
+					}
+					else if (!currentText.trim())
+					{
+						// if so, we sort away our tags
+						line.tags.before.push(currentTag);
+					}
+					else
+					{
+						line.tags.after.push(currentTag);
+						currentTags.push(currentTag);
+					}
+				}
 				// if it's text,
 				if (item.value)
 				{
@@ -301,25 +348,6 @@ class Story
 					}
 					
 					currentText += item.value;
-				}
-				// otherwise, if it's a tag
-				else if (item.text)
-				{
-					if (item.text == "unstyled")
-					{
-						line.text += currentText;
-						currentText = "";
-					}
-					else if (!currentText.trim())
-					{
-						// if so, we sort away our tags
-						line.tags.before.push(item.text);
-					}
-					else
-					{
-						line.tags.after.push(item.text);
-						currentTags.push(item.text);
-					}
 				}
 			}
 
@@ -430,6 +458,29 @@ class Story
 		this.state = Story.states.waiting;
 	}
 
+	searchStreamForTag(stream, i)
+	{
+		let currentTag = "";
+		let item;
+
+		for (i + 1; i < stream.length; i++) 
+		{
+			item = stream[i];
+
+			if (item._commandType == 25)
+			{
+				break;
+			}
+
+			if (item.value)
+			{
+				currentTag += item.value;
+			}
+		}
+
+		return {currentTag: currentTag, i: i};
+	}
+
 	// called once the player chooses a choice, to process that choice
 	// and clean everything up for the next loop
 	choose(choice, choiceAnchorEl) 
@@ -484,13 +535,25 @@ class Story
 	// choices and then having to awkwardly wait and then clear the rest
 	lookAheadAndClear(choice)
 	{
-		for (var item of this.ink.PointerAtPath(choice.targetPath).container._content)
+		let stream = this.ink.PointerAtPath(choice.targetPath).container._content;
+		let item;
+
+		for (var i = 0; i < stream.length; i++)
 		{
-			if (item.text == "clear")
+			item = stream[i];
+
+			if (item._commandType == 24)
 			{
-				this.clear();
-				this.queue.reset(0);
-				return;
+				let result = this.searchStreamForTag(stream, i);
+				
+				if (result.currentTag == "clear")
+				{
+					this.clear();
+					this.queue.reset(0);
+					return;
+				}
+
+				i = result.i;
 			}
 		}
 		this.removeElements(":scope > .choice");
@@ -564,6 +627,14 @@ class Story
 		this.ink.ResetState();
 		
 		// and start it from the beginning
+		this.continue();
+	}
+
+	jumpTo(knot)
+	{
+		this.clear();
+		this.ink.ChoosePathString(knot);
+		this.state = Story.states.idle;
 		this.continue();
 	}
 
@@ -1547,7 +1618,6 @@ Tags.add("linebyline",
 // ================================================
 // class to process the text and tags of each line, and execute functions that 
 // alter that text, or call functions elsewhere, depending on what it finds
-// this might be more of a parser than a parser but i like the word parser more 
 
 class Parser
 {
@@ -1863,7 +1933,25 @@ class ExternalFunctions
 }
 
 // set a simple flag to check if we're on a mobile browser
-window.isMobile = ("ontouchstart" in window);
+window.isMobile = (() => {
+	var result = false;
+	if (window.PointerEvent && ('maxTouchPoints' in navigator)) {
+	  // if Pointer Events are supported, just check maxTouchPoints
+	  if (navigator.maxTouchPoints > 0) {
+		result = true;
+	  }
+	} else {
+	  // no Pointer Events...
+	  if (window.matchMedia && window.matchMedia("(any-pointer:coarse)").matches) {
+		// check for any-pointer:coarse which mostly means touchscreen
+		result = true;
+	  } else if (window.TouchEvent || ('ontouchstart' in window)) {
+		// last resort - check for exposed touch events API / event handler
+		result = true;
+	  }
+	}
+	return result;
+  })();
 ExternalFunctions.add("isMobile", () => { return window.isMobile });
 
 // ================================================
@@ -2056,7 +2144,7 @@ class Patches
 // this unless they know what they're doing
 function credit(credits)
 {
-	const licences = {mit: MIT, self: self}
+	const licences = {mit: MIT, isc: ISC, self: self}
 
 	if (credits && credits.name)
 	{
@@ -2112,7 +2200,7 @@ function credit(credits)
 		}
 		else
 		{
-			throwIntoVoid(console.log, item);;
+			throwIntoVoid(console.log, credits.licences[type][item]);
 		}
 		if (type != "self" || licenceTypes > 1)
 		{
@@ -2142,6 +2230,13 @@ function credit(credits)
 		if (!text) return;
 
 		return 'Copyright (c) ' + text + '\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.'
+	}
+
+	function ISC(text)
+	{
+		if (!text) return;
+
+		return 'Copyright (c) ' + text + '\n\nPermission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITHREGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY ANDFITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSSOF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHERTORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OFTHIS SOFTWARE.'		
 	}
 }
 
@@ -2400,7 +2495,8 @@ function notify(name, details = {}, target = window)
 	// on a local server, to ensure you don't accidentally
 	// enable them in the live build, since spitting out
 	// hundreds of debug messages can cause occasional frame drops
-	if (options.debug && (location.hostname == "localhost" || !location.hostname))
+
+	if (options.debug && (window.location.protocol=="file:"))
 	{
 		// if you're testing animations or anything you need smooth
 		// or fast, it might be worth temporarily commenting out

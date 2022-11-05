@@ -6,7 +6,7 @@ var credits =
 {
 	emoji: "🐁",
 	name: "Drag to scroll",
-	version: "1.0",
+	version: "1.1",
 	description: ["Click and drag the page to scroll."],
 	licences: {
 		self: "2021 Elliot Herriman",
@@ -15,6 +15,7 @@ var credits =
 
 var options = 
 {
+	dragtoscroll_loadatstart: true,
 	// if false, will prevent dragging by scrolling vertically
 	dragtoscroll_vertical: true,
 	// if false, will prevent dragging by scrolling horizontally
@@ -24,18 +25,15 @@ var options =
 	dragtoscroll_horizontalmodifier: 0.9,
 }
 
-// where the mouse was at the start of the scroll
-var mouseStartPos;
-
 // fired when the player clicks, telling the page to allow drag scrolling
-function dragMouseClick(story, event) 
+function dragMouseClick(target, options, event) 
 {
 	// set initial positions
-	var divStartPos = {x: story.outerdiv.scrollLeft, y: story.outerdiv.scrollTop};
-	mouseStartPos = {x: event.clientX, y: event.clientY};
+	var divStartPos = {x: target.scrollLeft, y: target.scrollTop};
+	target.mouseStartPos = {x: event.clientX, y: event.clientY};
 
 	// define the function here so we can remove it later
-	var dragMouse = dragMouseMove.bind(story, divStartPos);
+	var dragMouse = dragMouseMove.bind(null, target, options, divStartPos);
 
 	// update things when we move the mouse
 	document.addEventListener('mousemove', dragMouse);
@@ -48,32 +46,42 @@ function dragMouseClick(story, event)
 
 // update scroll position each time the mouse moves
 // removed once the mouse is unclicked
-function dragMouseMove(divStartPos, event) 
+function dragMouseMove(target, options, divStartPos, event) 
 {  
 	if (!event.buttons == 1)
 	{
-		document.removeEventListener('mousemove', dragMouseMove);
+		target.removeEventListener('mousemove', dragMouseMove);
 		return;
 	}
 
-	if (this.options.dragtoscroll_vertical) 
+	if (options.dragtoscroll_vertical) 
 	{
-		this.outerdiv.scrollTop = (divStartPos.y - this.options.dragtoscroll_verticalmodifier * (event.clientY - mouseStartPos.y));
+		target.scrollTop = (divStartPos.y - options.dragtoscroll_verticalmodifier * (event.clientY - target.mouseStartPos.y));
 	}
 	
-	if (this.options.dragtoscroll_horizontal)
+	if (options.dragtoscroll_horizontal)
 	{
-		this.outerdiv.scrollLeft = (divStartPos.x - this.options.dragtoscroll_horizontalmodifier * (event.clientX - mouseStartPos.x));
+		target.scrollLeft = (divStartPos.x - options.dragtoscroll_horizontalmodifier * (event.clientX - target.mouseStartPos.x));
 	}
 };
 
+function Bind(target, options)
+{
+	target.mouseStartPos = {};
+
+	// bind handler for when you click 
+	target.addEventListener('mousedown', (event) =>
+	{
+		dragMouseClick(target, options, event) 
+	});
+}
+
 Patches.add(function()
 {
-	// bind handler for when you click 
-	document.addEventListener('mousedown', (event) =>
-	{
-		dragMouseClick(this, event) 
-	});
+	if (!this.options.dragtoscroll_loadatstart) return;
+
+	Bind(this.outerdiv, this.options);
+	
 }, options, credits);
 
-export default {options: options, credits: credits};
+export default {options: options, credits: credits, bind: Bind};

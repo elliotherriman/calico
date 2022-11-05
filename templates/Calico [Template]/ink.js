@@ -1,7003 +1,13513 @@
-(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
-  typeof define === 'function' && define.amd ? define(['exports'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.inkjs = {}));
-}(this, (function (exports) { 'use strict';
-
-  class Path {
-      constructor() {
-          this._components = [];
-          this._componentsString = null;
-          this._isRelative = false;
-          if (typeof arguments[0] == "string") {
-              let componentsString = arguments[0];
-              this.componentsString = componentsString;
-          }
-          else if (arguments[0] instanceof Path.Component &&
-              arguments[1] instanceof Path) {
-              let head = arguments[0];
-              let tail = arguments[1];
-              this._components.push(head);
-              this._components = this._components.concat(tail._components);
-          }
-          else if (arguments[0] instanceof Array) {
-              let head = arguments[0];
-              let relative = !!arguments[1];
-              this._components = this._components.concat(head);
-              this._isRelative = relative;
-          }
-      }
-      get isRelative() {
-          return this._isRelative;
-      }
-      get componentCount() {
-          return this._components.length;
-      }
-      get head() {
-          if (this._components.length > 0) {
-              return this._components[0];
-          }
-          else {
-              return null;
-          }
-      }
-      get tail() {
-          if (this._components.length >= 2) {
-              // careful, the original code uses length-1 here. This is because the second argument of
-              // List.GetRange is a number of elements to extract, wherease Array.slice uses an index
-              let tailComps = this._components.slice(1, this._components.length);
-              return new Path(tailComps);
-          }
-          else {
-              return Path.self;
-          }
-      }
-      get length() {
-          return this._components.length;
-      }
-      get lastComponent() {
-          let lastComponentIdx = this._components.length - 1;
-          if (lastComponentIdx >= 0) {
-              return this._components[lastComponentIdx];
-          }
-          else {
-              return null;
-          }
-      }
-      get containsNamedComponent() {
-          for (let i = 0, l = this._components.length; i < l; i++) {
-              if (!this._components[i].isIndex) {
-                  return true;
-              }
-          }
-          return false;
-      }
-      static get self() {
-          let path = new Path();
-          path._isRelative = true;
-          return path;
-      }
-      GetComponent(index) {
-          return this._components[index];
-      }
-      PathByAppendingPath(pathToAppend) {
-          let p = new Path();
-          let upwardMoves = 0;
-          for (let i = 0; i < pathToAppend._components.length; ++i) {
-              if (pathToAppend._components[i].isParent) {
-                  upwardMoves++;
-              }
-              else {
-                  break;
-              }
-          }
-          for (let i = 0; i < this._components.length - upwardMoves; ++i) {
-              p._components.push(this._components[i]);
-          }
-          for (let i = upwardMoves; i < pathToAppend._components.length; ++i) {
-              p._components.push(pathToAppend._components[i]);
-          }
-          return p;
-      }
-      get componentsString() {
-          if (this._componentsString == null) {
-              this._componentsString = this._components.join(".");
-              if (this.isRelative)
-                  this._componentsString = "." + this._componentsString;
-          }
-          return this._componentsString;
-      }
-      set componentsString(value) {
-          this._components.length = 0;
-          this._componentsString = value;
-          if (this._componentsString == null || this._componentsString == "")
-              return;
-          if (this._componentsString[0] == ".") {
-              this._isRelative = true;
-              this._componentsString = this._componentsString.substring(1);
-          }
-          let componentStrings = this._componentsString.split(".");
-          for (let str of componentStrings) {
-              // we need to distinguish between named components that start with a number, eg "42somewhere", and indexed components
-              // the normal parseInt won't do for the detection because it's too relaxed.
-              // see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt
-              if (/^(\-|\+)?([0-9]+|Infinity)$/.test(str)) {
-                  this._components.push(new Path.Component(parseInt(str)));
-              }
-              else {
-                  this._components.push(new Path.Component(str));
-              }
-          }
-      }
-      toString() {
-          return this.componentsString;
-      }
-      Equals(otherPath) {
-          if (otherPath == null)
-              return false;
-          if (otherPath._components.length != this._components.length)
-              return false;
-          if (otherPath.isRelative != this.isRelative)
-              return false;
-          // the original code uses SequenceEqual here, so we need to iterate over the components manually.
-          for (let i = 0, l = otherPath._components.length; i < l; i++) {
-              // it's not quite clear whether this test should use Equals or a simple == operator,
-              // see https://github.com/y-lohse/inkjs/issues/22
-              if (!otherPath._components[i].Equals(this._components[i]))
-                  return false;
-          }
-          return true;
-      }
-      PathByAppendingComponent(c) {
-          let p = new Path();
-          p._components.push(...this._components);
-          p._components.push(c);
-          return p;
-      }
-  }
-  Path.parentId = "^";
-  (function (Path) {
-      class Component {
-          constructor(indexOrName) {
-              this.index = -1;
-              this.name = null;
-              if (typeof indexOrName == "string") {
-                  this.name = indexOrName;
-              }
-              else {
-                  this.index = indexOrName;
-              }
-          }
-          get isIndex() {
-              return this.index >= 0;
-          }
-          get isParent() {
-              return this.name == Path.parentId;
-          }
-          static ToParent() {
-              return new Component(Path.parentId);
-          }
-          toString() {
-              if (this.isIndex) {
-                  return this.index.toString();
-              }
-              else {
-                  return this.name;
-              }
-          }
-          Equals(otherComp) {
-              if (otherComp != null && otherComp.isIndex == this.isIndex) {
-                  if (this.isIndex) {
-                      return this.index == otherComp.index;
-                  }
-                  else {
-                      return this.name == otherComp.name;
-                  }
-              }
-              return false;
-          }
-      }
-      Path.Component = Component;
-  })(Path || (Path = {}));
-
-  var Debug;
-  (function (Debug) {
-      function AssertType(variable, type, message) {
-          Assert(variable instanceof type, message);
-      }
-      Debug.AssertType = AssertType;
-      function Assert(condition, message) {
-          if (!condition) {
-              if (typeof message !== "undefined") {
-                  console.warn(message);
-              }
-              if (console.trace) {
-                  console.trace();
-              }
-              throw new Error("");
-          }
-      }
-      Debug.Assert = Assert;
-  })(Debug || (Debug = {}));
-
-  function asOrNull(obj, type) {
-      if (obj instanceof type) {
-          return unsafeTypeAssertion(obj);
-      }
-      else {
-          return null;
-      }
-  }
-  function asOrThrows(obj, type) {
-      if (obj instanceof type) {
-          return unsafeTypeAssertion(obj);
-      }
-      else {
-          throw new Error(`${obj} is not of type ${type}`);
-      }
-  }
-  function asBooleanOrThrows(obj) {
-      if (typeof obj === "boolean") {
-          return obj;
-      }
-      else {
-          throw new Error(`${obj} is not a boolean`);
-      }
-  }
-  // So here, in the reference implementation, contentObj is casted to an INamedContent
-  // but here we use js-style duck typing: if it implements the same props as the interface,
-  // we treat it as valid.
-  function asINamedContentOrNull(obj) {
-      if (obj.hasValidName && obj.name) {
-          return obj;
-      }
-      return null;
-  }
-  function nullIfUndefined(obj) {
-      if (typeof obj === "undefined") {
-          return null;
-      }
-      return obj;
-  }
-  function isEquatable(type) {
-      return typeof type === "object" && typeof type.Equals === "function";
-  }
-  function unsafeTypeAssertion(obj, type) {
-      return obj;
-  }
-
-  /**
-   * In the original C# code, a SystemException would be thrown when passing
-   * null to methods expected a valid instance. Javascript has no such
-   * concept, but TypeScript will not allow `null` to be passed to methods
-   * explicitely requiring a valid type.
-   *
-   * Whenever TypeScript complain about the possibility of a `null` value,
-   * check the offending value and it it's null, throw this exception using
-   * `throwNullException(name: string)`.
-   */
-  class NullException extends Error {
-  }
-  /**
-   * Throw a NullException.
-   *
-   * @param name a short description of the offending value (often its name within the code).
-   */
-  function throwNullException(name) {
-      throw new NullException(`${name} is null or undefined`);
-  }
-
-  class InkObject {
-      constructor() {
-          this.parent = null;
-          this._debugMetadata = null;
-          this._path = null;
-      }
-      get debugMetadata() {
-          if (this._debugMetadata === null) {
-              if (this.parent) {
-                  return this.parent.debugMetadata;
-              }
-          }
-          return this._debugMetadata;
-      }
-      set debugMetadata(value) {
-          this._debugMetadata = value;
-      }
-      get ownDebugMetadata() {
-          return this._debugMetadata;
-      }
-      DebugLineNumberOfPath(path) {
-          if (path === null)
-              return null;
-          // Try to get a line number from debug metadata
-          let root = this.rootContentContainer;
-          if (root) {
-              let targetContent = root.ContentAtPath(path).obj;
-              if (targetContent) {
-                  let dm = targetContent.debugMetadata;
-                  if (dm !== null) {
-                      return dm.startLineNumber;
-                  }
-              }
-          }
-          return null;
-      }
-      get path() {
-          if (this._path == null) {
-              if (this.parent == null) {
-                  this._path = new Path();
-              }
-              else {
-                  let comps = [];
-                  let child = this;
-                  let container = asOrNull(child.parent, Container);
-                  while (container !== null) {
-                      let namedChild = asINamedContentOrNull(child);
-                      if (namedChild != null && namedChild.hasValidName) {
-                          comps.unshift(new Path.Component(namedChild.name));
-                      }
-                      else {
-                          comps.unshift(new Path.Component(container.content.indexOf(child)));
-                      }
-                      child = container;
-                      container = asOrNull(container.parent, Container);
-                  }
-                  this._path = new Path(comps);
-              }
-          }
-          return this._path;
-      }
-      ResolvePath(path) {
-          if (path === null)
-              return throwNullException("path");
-          if (path.isRelative) {
-              let nearestContainer = asOrNull(this, Container);
-              if (nearestContainer === null) {
-                  Debug.Assert(this.parent !== null, "Can't resolve relative path because we don't have a parent");
-                  nearestContainer = asOrNull(this.parent, Container);
-                  Debug.Assert(nearestContainer !== null, "Expected parent to be a container");
-                  Debug.Assert(path.GetComponent(0).isParent);
-                  path = path.tail;
-              }
-              if (nearestContainer === null) {
-                  return throwNullException("nearestContainer");
-              }
-              return nearestContainer.ContentAtPath(path);
-          }
-          else {
-              let contentContainer = this.rootContentContainer;
-              if (contentContainer === null) {
-                  return throwNullException("contentContainer");
-              }
-              return contentContainer.ContentAtPath(path);
-          }
-      }
-      ConvertPathToRelative(globalPath) {
-          let ownPath = this.path;
-          let minPathLength = Math.min(globalPath.length, ownPath.length);
-          let lastSharedPathCompIndex = -1;
-          for (let i = 0; i < minPathLength; ++i) {
-              let ownComp = ownPath.GetComponent(i);
-              let otherComp = globalPath.GetComponent(i);
-              if (ownComp.Equals(otherComp)) {
-                  lastSharedPathCompIndex = i;
-              }
-              else {
-                  break;
-              }
-          }
-          // No shared path components, so just use global path
-          if (lastSharedPathCompIndex == -1)
-              return globalPath;
-          let numUpwardsMoves = ownPath.componentCount - 1 - lastSharedPathCompIndex;
-          let newPathComps = [];
-          for (let up = 0; up < numUpwardsMoves; ++up)
-              newPathComps.push(Path.Component.ToParent());
-          for (let down = lastSharedPathCompIndex + 1; down < globalPath.componentCount; ++down)
-              newPathComps.push(globalPath.GetComponent(down));
-          let relativePath = new Path(newPathComps, true);
-          return relativePath;
-      }
-      CompactPathString(otherPath) {
-          let globalPathStr = null;
-          let relativePathStr = null;
-          if (otherPath.isRelative) {
-              relativePathStr = otherPath.componentsString;
-              globalPathStr = this.path.PathByAppendingPath(otherPath).componentsString;
-          }
-          else {
-              let relativePath = this.ConvertPathToRelative(otherPath);
-              relativePathStr = relativePath.componentsString;
-              globalPathStr = otherPath.componentsString;
-          }
-          if (relativePathStr.length < globalPathStr.length)
-              return relativePathStr;
-          else
-              return globalPathStr;
-      }
-      get rootContentContainer() {
-          let ancestor = this;
-          while (ancestor.parent) {
-              ancestor = ancestor.parent;
-          }
-          return asOrNull(ancestor, Container);
-      }
-      Copy() {
-          throw Error("Not Implemented: Doesn't support copying");
-      }
-      // SetChild works slightly diferently in the js implementation.
-      // Since we can't pass an objets property by reference, we instead pass
-      // the object and the property string.
-      // TODO: This method can probably be rewritten with type-safety in mind.
-      SetChild(obj, prop, value) {
-          if (obj[prop])
-              obj[prop] = null;
-          obj[prop] = value;
-          if (obj[prop])
-              obj[prop].parent = this;
-      }
-  }
-
-  class StringBuilder {
-      constructor(str) {
-          str = typeof str !== "undefined" ? str.toString() : "";
-          this.string = str;
-      }
-      get Length() {
-          return this.string.length;
-      }
-      Append(str) {
-          if (str !== null) {
-              this.string += str;
-          }
-      }
-      AppendLine(str) {
-          if (typeof str !== "undefined")
-              this.Append(str);
-          this.string += "\n";
-      }
-      AppendFormat(format, ...args) {
-          // taken from http://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format
-          this.string += format.replace(/{(\d+)}/g, (match, num) => typeof args[num] != "undefined" ? args[num] : match);
-      }
-      toString() {
-          return this.string;
-      }
-  }
-
-  class InkListItem {
-      constructor() {
-          // InkListItem is a struct
-          this.originName = null;
-          this.itemName = null;
-          if (typeof arguments[1] !== "undefined") {
-              let originName = arguments[0];
-              let itemName = arguments[1];
-              this.originName = originName;
-              this.itemName = itemName;
-          }
-          else if (arguments[0]) {
-              let fullName = arguments[0];
-              let nameParts = fullName.toString().split(".");
-              this.originName = nameParts[0];
-              this.itemName = nameParts[1];
-          }
-      }
-      static get Null() {
-          return new InkListItem(null, null);
-      }
-      get isNull() {
-          return this.originName == null && this.itemName == null;
-      }
-      get fullName() {
-          return ((this.originName !== null ? this.originName : "?") + "." + this.itemName);
-      }
-      toString() {
-          return this.fullName;
-      }
-      Equals(obj) {
-          if (obj instanceof InkListItem) {
-              let otherItem = obj;
-              return (otherItem.itemName == this.itemName &&
-                  otherItem.originName == this.originName);
-          }
-          return false;
-      }
-      // These methods did not exist in the original C# code. Their purpose is to
-      // make `InkListItem` mimics the value-type semantics of the original
-      // struct. Please refer to the end of this file, for a more in-depth
-      // explanation.
-      /**
-       * Returns a shallow clone of the current instance.
-       */
-      copy() {
-          return new InkListItem(this.originName, this.itemName);
-      }
-      /**
-       * Returns a `SerializedInkListItem` representing the current
-       * instance. The result is intended to be used as a key inside a Map.
-       */
-      serialized() {
-          // We are simply using a JSON representation as a value-typed key.
-          return JSON.stringify({
-              originName: this.originName,
-              itemName: this.itemName,
-          });
-      }
-      /**
-       * Reconstructs a `InkListItem` from the given SerializedInkListItem.
-       */
-      static fromSerializedKey(key) {
-          let obj = JSON.parse(key);
-          if (!InkListItem.isLikeInkListItem(obj))
-              return InkListItem.Null;
-          let inkListItem = obj;
-          return new InkListItem(inkListItem.originName, inkListItem.itemName);
-      }
-      /**
-       * Determines whether the given item is sufficiently `InkListItem`-like
-       * to be used as a template when reconstructing the InkListItem.
-       */
-      static isLikeInkListItem(item) {
-          if (typeof item !== "object")
-              return false;
-          if (!item.hasOwnProperty("originName") || !item.hasOwnProperty("itemName"))
-              return false;
-          if (typeof item.originName !== "string" && typeof item.originName !== null)
-              return false;
-          if (typeof item.itemName !== "string" && typeof item.itemName !== null)
-              return false;
-          return true;
-      }
-  }
-  class InkList extends Map {
-      constructor() {
-          // Trying to be smart here, this emulates the constructor inheritance found
-          // in the original code, but only if otherList is an InkList. IIFE FTW.
-          super((() => {
-              if (arguments[0] instanceof InkList) {
-                  return arguments[0];
-              }
-              else {
-                  return [];
-              }
-          })());
-          this.origins = null;
-          this._originNames = [];
-          if (arguments[0] instanceof InkList) {
-              let otherList = arguments[0];
-              this._originNames = otherList.originNames;
-              if (otherList.origins !== null) {
-                  this.origins = otherList.origins.slice();
-              }
-          }
-          else if (typeof arguments[0] === "string") {
-              let singleOriginListName = arguments[0];
-              let originStory = arguments[1];
-              this.SetInitialOriginName(singleOriginListName);
-              if (originStory.listDefinitions === null) {
-                  return throwNullException("originStory.listDefinitions");
-              }
-              let def = originStory.listDefinitions.TryListGetDefinition(singleOriginListName, null);
-              if (def.exists) {
-                  // Throwing now, because if the value is `null` it will
-                  // eventually throw down the line.
-                  if (def.result === null) {
-                      return throwNullException("def.result");
-                  }
-                  this.origins = [def.result];
-              }
-              else {
-                  throw new Error("InkList origin could not be found in story when constructing new list: " +
-                      singleOriginListName);
-              }
-          }
-          else if (typeof arguments[0] === "object" &&
-              arguments[0].hasOwnProperty("Key") &&
-              arguments[0].hasOwnProperty("Value")) {
-              let singleElement = arguments[0];
-              this.Add(singleElement.Key, singleElement.Value);
-          }
-      }
-      static FromString(myListItem, originStory) {
-          var _a;
-          let listValue = (_a = originStory.listDefinitions) === null || _a === void 0 ? void 0 : _a.FindSingleItemListWithName(myListItem);
-          if (listValue) {
-              if (listValue.value === null) {
-                  return throwNullException("listValue.value");
-              }
-              return new InkList(listValue.value);
-          }
-          else {
-              throw new Error("Could not find the InkListItem from the string '" +
-                  myListItem +
-                  "' to create an InkList because it doesn't exist in the original list definition in ink.");
-          }
-      }
-      AddItem(itemOrItemName) {
-          if (itemOrItemName instanceof InkListItem) {
-              let item = itemOrItemName;
-              if (item.originName == null) {
-                  this.AddItem(item.itemName);
-                  return;
-              }
-              if (this.origins === null)
-                  return throwNullException("this.origins");
-              for (let origin of this.origins) {
-                  if (origin.name == item.originName) {
-                      let intVal = origin.TryGetValueForItem(item, 0);
-                      if (intVal.exists) {
-                          this.Add(item, intVal.result);
-                          return;
-                      }
-                      else {
-                          throw new Error("Could not add the item " +
-                              item +
-                              " to this list because it doesn't exist in the original list definition in ink.");
-                      }
-                  }
-              }
-              throw new Error("Failed to add item to list because the item was from a new list definition that wasn't previously known to this list. Only items from previously known lists can be used, so that the int value can be found.");
-          }
-          else {
-              let itemName = itemOrItemName;
-              let foundListDef = null;
-              if (this.origins === null)
-                  return throwNullException("this.origins");
-              for (let origin of this.origins) {
-                  if (itemName === null)
-                      return throwNullException("itemName");
-                  if (origin.ContainsItemWithName(itemName)) {
-                      if (foundListDef != null) {
-                          throw new Error("Could not add the item " +
-                              itemName +
-                              " to this list because it could come from either " +
-                              origin.name +
-                              " or " +
-                              foundListDef.name);
-                      }
-                      else {
-                          foundListDef = origin;
-                      }
-                  }
-              }
-              if (foundListDef == null)
-                  throw new Error("Could not add the item " +
-                      itemName +
-                      " to this list because it isn't known to any list definitions previously associated with this list.");
-              let item = new InkListItem(foundListDef.name, itemName);
-              let itemVal = foundListDef.ValueForItem(item);
-              this.Add(item, itemVal);
-          }
-      }
-      ContainsItemNamed(itemName) {
-          for (let [key] of this) {
-              let item = InkListItem.fromSerializedKey(key);
-              if (item.itemName == itemName)
-                  return true;
-          }
-          return false;
-      }
-      ContainsKey(key) {
-          return this.has(key.serialized());
-      }
-      Add(key, value) {
-          let serializedKey = key.serialized();
-          if (this.has(serializedKey)) {
-              // Throw an exception to match the C# behavior.
-              throw new Error(`The Map already contains an entry for ${key}`);
-          }
-          this.set(serializedKey, value);
-      }
-      Remove(key) {
-          return this.delete(key.serialized());
-      }
-      get Count() {
-          return this.size;
-      }
-      get originOfMaxItem() {
-          if (this.origins == null)
-              return null;
-          let maxOriginName = this.maxItem.Key.originName;
-          let result = null;
-          this.origins.every((origin) => {
-              if (origin.name == maxOriginName) {
-                  result = origin;
-                  return false;
-              }
-              else
-                  return true;
-          });
-          return result;
-      }
-      get originNames() {
-          if (this.Count > 0) {
-              if (this._originNames == null && this.Count > 0)
-                  this._originNames = [];
-              else {
-                  if (!this._originNames)
-                      this._originNames = [];
-                  this._originNames.length = 0;
-              }
-              for (let [key] of this) {
-                  let item = InkListItem.fromSerializedKey(key);
-                  if (item.originName === null)
-                      return throwNullException("item.originName");
-                  this._originNames.push(item.originName);
-              }
-          }
-          return this._originNames;
-      }
-      SetInitialOriginName(initialOriginName) {
-          this._originNames = [initialOriginName];
-      }
-      SetInitialOriginNames(initialOriginNames) {
-          if (initialOriginNames == null)
-              this._originNames = null;
-          else
-              this._originNames = initialOriginNames.slice(); // store a copy
-      }
-      get maxItem() {
-          let max = {
-              Key: InkListItem.Null,
-              Value: 0,
-          };
-          for (let [key, value] of this) {
-              let item = InkListItem.fromSerializedKey(key);
-              if (max.Key.isNull || value > max.Value)
-                  max = { Key: item, Value: value };
-          }
-          return max;
-      }
-      get minItem() {
-          let min = {
-              Key: InkListItem.Null,
-              Value: 0,
-          };
-          for (let [key, value] of this) {
-              let item = InkListItem.fromSerializedKey(key);
-              if (min.Key.isNull || value < min.Value) {
-                  min = { Key: item, Value: value };
-              }
-          }
-          return min;
-      }
-      get inverse() {
-          let list = new InkList();
-          if (this.origins != null) {
-              for (let origin of this.origins) {
-                  for (let [key, value] of origin.items) {
-                      let item = InkListItem.fromSerializedKey(key);
-                      if (!this.ContainsKey(item))
-                          list.Add(item, value);
-                  }
-              }
-          }
-          return list;
-      }
-      get all() {
-          let list = new InkList();
-          if (this.origins != null) {
-              for (let origin of this.origins) {
-                  for (let [key, value] of origin.items) {
-                      let item = InkListItem.fromSerializedKey(key);
-                      list.set(item.serialized(), value);
-                  }
-              }
-          }
-          return list;
-      }
-      Union(otherList) {
-          let union = new InkList(this);
-          for (let [key, value] of otherList) {
-              union.set(key, value);
-          }
-          return union;
-      }
-      Intersect(otherList) {
-          let intersection = new InkList();
-          for (let [key, value] of this) {
-              if (otherList.has(key))
-                  intersection.set(key, value);
-          }
-          return intersection;
-      }
-      Without(listToRemove) {
-          let result = new InkList(this);
-          for (let [key] of listToRemove) {
-              result.delete(key);
-          }
-          return result;
-      }
-      Contains(otherList) {
-          for (let [key] of otherList) {
-              if (!this.has(key))
-                  return false;
-          }
-          return true;
-      }
-      GreaterThan(otherList) {
-          if (this.Count == 0)
-              return false;
-          if (otherList.Count == 0)
-              return true;
-          return this.minItem.Value > otherList.maxItem.Value;
-      }
-      GreaterThanOrEquals(otherList) {
-          if (this.Count == 0)
-              return false;
-          if (otherList.Count == 0)
-              return true;
-          return (this.minItem.Value >= otherList.minItem.Value &&
-              this.maxItem.Value >= otherList.maxItem.Value);
-      }
-      LessThan(otherList) {
-          if (otherList.Count == 0)
-              return false;
-          if (this.Count == 0)
-              return true;
-          return this.maxItem.Value < otherList.minItem.Value;
-      }
-      LessThanOrEquals(otherList) {
-          if (otherList.Count == 0)
-              return false;
-          if (this.Count == 0)
-              return true;
-          return (this.maxItem.Value <= otherList.maxItem.Value &&
-              this.minItem.Value <= otherList.minItem.Value);
-      }
-      MaxAsList() {
-          if (this.Count > 0)
-              return new InkList(this.maxItem);
-          else
-              return new InkList();
-      }
-      MinAsList() {
-          if (this.Count > 0)
-              return new InkList(this.minItem);
-          else
-              return new InkList();
-      }
-      ListWithSubRange(minBound, maxBound) {
-          if (this.Count == 0)
-              return new InkList();
-          let ordered = this.orderedItems;
-          let minValue = 0;
-          let maxValue = Number.MAX_SAFE_INTEGER;
-          if (Number.isInteger(minBound)) {
-              minValue = minBound;
-          }
-          else {
-              if (minBound instanceof InkList && minBound.Count > 0)
-                  minValue = minBound.minItem.Value;
-          }
-          if (Number.isInteger(maxBound)) {
-              maxValue = maxBound;
-          }
-          else {
-              if (minBound instanceof InkList && minBound.Count > 0)
-                  maxValue = maxBound.maxItem.Value;
-          }
-          let subList = new InkList();
-          subList.SetInitialOriginNames(this.originNames);
-          for (let item of ordered) {
-              if (item.Value >= minValue && item.Value <= maxValue) {
-                  subList.Add(item.Key, item.Value);
-              }
-          }
-          return subList;
-      }
-      Equals(otherInkList) {
-          if (otherInkList instanceof InkList === false)
-              return false;
-          if (otherInkList.Count != this.Count)
-              return false;
-          for (let [key] of this) {
-              if (!otherInkList.has(key))
-                  return false;
-          }
-          return true;
-      }
-      // GetHashCode not implemented
-      get orderedItems() {
-          // List<KeyValuePair<InkListItem, int>>
-          let ordered = new Array();
-          for (let [key, value] of this) {
-              let item = InkListItem.fromSerializedKey(key);
-              ordered.push({ Key: item, Value: value });
-          }
-          ordered.sort((x, y) => {
-              if (x.Key.originName === null) {
-                  return throwNullException("x.Key.originName");
-              }
-              if (y.Key.originName === null) {
-                  return throwNullException("y.Key.originName");
-              }
-              if (x.Value == y.Value) {
-                  return x.Key.originName.localeCompare(y.Key.originName);
-              }
-              else {
-                  // TODO: refactor this bit into a numberCompareTo method?
-                  if (x.Value < y.Value)
-                      return -1;
-                  return x.Value > y.Value ? 1 : 0;
-              }
-          });
-          return ordered;
-      }
-      toString() {
-          let ordered = this.orderedItems;
-          let sb = new StringBuilder();
-          for (let i = 0; i < ordered.length; i++) {
-              if (i > 0)
-                  sb.Append(", ");
-              let item = ordered[i].Key;
-              if (item.itemName === null)
-                  return throwNullException("item.itemName");
-              sb.Append(item.itemName);
-          }
-          return sb.toString();
-      }
-      // casting a InkList to a Number, for somereason, actually gives a number.
-      // This messes up the type detection when creating a Value from a InkList.
-      // Returning NaN here prevents that.
-      valueOf() {
-          return NaN;
-      }
-  }
-
-  class StoryException extends Error {
-      constructor(message) {
-          super(message);
-          this.useEndLineNumber = false;
-          this.message = message;
-          this.name = "StoryException";
-      }
-  }
-
-  function tryGetValueFromMap(map, key, 
-  /* out */ value) {
-      if (map === null) {
-          return { result: value, exists: false };
-      }
-      let val = map.get(key);
-      if (typeof val === "undefined") {
-          return { result: value, exists: false };
-      }
-      else {
-          return { result: val, exists: true };
-      }
-  }
-  function tryParseInt(value, 
-  /* out */ defaultValue = 0) {
-      let val = parseInt(value);
-      if (!Number.isNaN(val)) {
-          return { result: val, exists: true };
-      }
-      else {
-          return { result: defaultValue, exists: false };
-      }
-  }
-  function tryParseFloat(value, 
-  /* out */ defaultValue = 0) {
-      let val = parseFloat(value);
-      if (!Number.isNaN(val)) {
-          return { result: val, exists: true };
-      }
-      else {
-          return { result: defaultValue, exists: false };
-      }
-  }
-
-  class AbstractValue extends InkObject {
-      static Create(val, preferredNumberType) {
-          // This code doesn't exist in upstream and is simply here to enforce
-          // the creation of the proper number value.
-          // If `preferredNumberType` is not provided or if value doesn't match
-          // `preferredNumberType`, this conditional does nothing.
-          if (preferredNumberType) {
-              if (preferredNumberType === ValueType.Int &&
-                  Number.isInteger(Number(val))) {
-                  return new IntValue(Number(val));
-              }
-              else if (preferredNumberType === ValueType.Float &&
-                  !isNaN(val)) {
-                  return new FloatValue(Number(val));
-              }
-          }
-          if (typeof val === "boolean") {
-              return new BoolValue(Boolean(val));
-          }
-          // https://github.com/y-lohse/inkjs/issues/425
-          // Changed condition sequence, because Number('') is
-          // parsed to 0, which made setting string to empty
-          // impossible
-          if (typeof val === "string") {
-              return new StringValue(String(val));
-          }
-          else if (Number.isInteger(Number(val))) {
-              return new IntValue(Number(val));
-          }
-          else if (!isNaN(val)) {
-              return new FloatValue(Number(val));
-          }
-          else if (val instanceof Path) {
-              return new DivertTargetValue(asOrThrows(val, Path));
-          }
-          else if (val instanceof InkList) {
-              return new ListValue(asOrThrows(val, InkList));
-          }
-          return null;
-      }
-      Copy() {
-          return asOrThrows(AbstractValue.Create(this), InkObject);
-      }
-      BadCastException(targetType) {
-          return new StoryException("Can't cast " +
-              this.valueObject +
-              " from " +
-              this.valueType +
-              " to " +
-              targetType);
-      }
-  }
-  class Value extends AbstractValue {
-      constructor(val) {
-          super();
-          this.value = val;
-      }
-      get valueObject() {
-          return this.value;
-      }
-      toString() {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          return this.value.toString();
-      }
-  }
-  class BoolValue extends Value {
-      constructor(val) {
-          super(val || false);
-      }
-      get isTruthy() {
-          return Boolean(this.value);
-      }
-      get valueType() {
-          return ValueType.Bool;
-      }
-      Cast(newType) {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          if (newType == this.valueType) {
-              return this;
-          }
-          if (newType == ValueType.Int) {
-              return new IntValue(this.value ? 1 : 0);
-          }
-          if (newType == ValueType.Float) {
-              return new FloatValue(this.value ? 1.0 : 0.0);
-          }
-          if (newType == ValueType.String) {
-              return new StringValue(this.value ? "true" : "false");
-          }
-          throw this.BadCastException(newType);
-      }
-      toString() {
-          return this.value ? "true" : "false";
-      }
-  }
-  class IntValue extends Value {
-      constructor(val) {
-          super(val || 0);
-      }
-      get isTruthy() {
-          return this.value != 0;
-      }
-      get valueType() {
-          return ValueType.Int;
-      }
-      Cast(newType) {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          if (newType == this.valueType) {
-              return this;
-          }
-          if (newType == ValueType.Bool) {
-              return new BoolValue(this.value === 0 ? false : true);
-          }
-          if (newType == ValueType.Float) {
-              return new FloatValue(this.value);
-          }
-          if (newType == ValueType.String) {
-              return new StringValue("" + this.value);
-          }
-          throw this.BadCastException(newType);
-      }
-  }
-  class FloatValue extends Value {
-      constructor(val) {
-          super(val || 0.0);
-      }
-      get isTruthy() {
-          return this.value != 0.0;
-      }
-      get valueType() {
-          return ValueType.Float;
-      }
-      Cast(newType) {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          if (newType == this.valueType) {
-              return this;
-          }
-          if (newType == ValueType.Bool) {
-              return new BoolValue(this.value === 0.0 ? false : true);
-          }
-          if (newType == ValueType.Int) {
-              return new IntValue(this.value);
-          }
-          if (newType == ValueType.String) {
-              return new StringValue("" + this.value);
-          }
-          throw this.BadCastException(newType);
-      }
-  }
-  class StringValue extends Value {
-      constructor(val) {
-          super(val || "");
-          this._isNewline = this.value == "\n";
-          this._isInlineWhitespace = true;
-          if (this.value === null)
-              return throwNullException("Value.value");
-          if (this.value.length > 0) {
-              this.value.split("").every((c) => {
-                  if (c != " " && c != "\t") {
-                      this._isInlineWhitespace = false;
-                      return false;
-                  }
-                  return true;
-              });
-          }
-      }
-      get valueType() {
-          return ValueType.String;
-      }
-      get isTruthy() {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          return this.value.length > 0;
-      }
-      get isNewline() {
-          return this._isNewline;
-      }
-      get isInlineWhitespace() {
-          return this._isInlineWhitespace;
-      }
-      get isNonWhitespace() {
-          return !this.isNewline && !this.isInlineWhitespace;
-      }
-      Cast(newType) {
-          if (newType == this.valueType) {
-              return this;
-          }
-          if (newType == ValueType.Int) {
-              let parsedInt = tryParseInt(this.value);
-              if (parsedInt.exists) {
-                  return new IntValue(parsedInt.result);
-              }
-              else {
-                  throw this.BadCastException(newType);
-              }
-          }
-          if (newType == ValueType.Float) {
-              let parsedFloat = tryParseFloat(this.value);
-              if (parsedFloat.exists) {
-                  return new FloatValue(parsedFloat.result);
-              }
-              else {
-                  throw this.BadCastException(newType);
-              }
-          }
-          throw this.BadCastException(newType);
-      }
-  }
-  class DivertTargetValue extends Value {
-      constructor(targetPath) {
-          super(targetPath);
-      }
-      get valueType() {
-          return ValueType.DivertTarget;
-      }
-      get targetPath() {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          return this.value;
-      }
-      set targetPath(value) {
-          this.value = value;
-      }
-      get isTruthy() {
-          throw new Error("Shouldn't be checking the truthiness of a divert target");
-      }
-      Cast(newType) {
-          if (newType == this.valueType)
-              return this;
-          throw this.BadCastException(newType);
-      }
-      toString() {
-          return "DivertTargetValue(" + this.targetPath + ")";
-      }
-  }
-  class VariablePointerValue extends Value {
-      constructor(variableName, contextIndex = -1) {
-          super(variableName);
-          this._contextIndex = contextIndex;
-      }
-      get contextIndex() {
-          return this._contextIndex;
-      }
-      set contextIndex(value) {
-          this._contextIndex = value;
-      }
-      get variableName() {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          return this.value;
-      }
-      set variableName(value) {
-          this.value = value;
-      }
-      get valueType() {
-          return ValueType.VariablePointer;
-      }
-      get isTruthy() {
-          throw new Error("Shouldn't be checking the truthiness of a variable pointer");
-      }
-      Cast(newType) {
-          if (newType == this.valueType)
-              return this;
-          throw this.BadCastException(newType);
-      }
-      toString() {
-          return "VariablePointerValue(" + this.variableName + ")";
-      }
-      Copy() {
-          return new VariablePointerValue(this.variableName, this.contextIndex);
-      }
-  }
-  class ListValue extends Value {
-      get isTruthy() {
-          if (this.value === null) {
-              return throwNullException("this.value");
-          }
-          return this.value.Count > 0;
-      }
-      get valueType() {
-          return ValueType.List;
-      }
-      Cast(newType) {
-          if (this.value === null)
-              return throwNullException("Value.value");
-          if (newType == ValueType.Int) {
-              let max = this.value.maxItem;
-              if (max.Key.isNull)
-                  return new IntValue(0);
-              else
-                  return new IntValue(max.Value);
-          }
-          else if (newType == ValueType.Float) {
-              let max = this.value.maxItem;
-              if (max.Key.isNull)
-                  return new FloatValue(0.0);
-              else
-                  return new FloatValue(max.Value);
-          }
-          else if (newType == ValueType.String) {
-              let max = this.value.maxItem;
-              if (max.Key.isNull)
-                  return new StringValue("");
-              else {
-                  return new StringValue(max.Key.toString());
-              }
-          }
-          if (newType == this.valueType)
-              return this;
-          throw this.BadCastException(newType);
-      }
-      constructor(listOrSingleItem, singleValue) {
-          super(null);
-          if (!listOrSingleItem && !singleValue) {
-              this.value = new InkList();
-          }
-          else if (listOrSingleItem instanceof InkList) {
-              this.value = new InkList(listOrSingleItem);
-          }
-          else if (listOrSingleItem instanceof InkListItem &&
-              typeof singleValue === "number") {
-              this.value = new InkList({
-                  Key: listOrSingleItem,
-                  Value: singleValue,
-              });
-          }
-      }
-      static RetainListOriginsForAssignment(oldValue, newValue) {
-          let oldList = asOrNull(oldValue, ListValue);
-          let newList = asOrNull(newValue, ListValue);
-          if (newList && newList.value === null)
-              return throwNullException("newList.value");
-          if (oldList && oldList.value === null)
-              return throwNullException("oldList.value");
-          // When assigning the empty list, try to retain any initial origin names
-          if (oldList && newList && newList.value.Count == 0)
-              newList.value.SetInitialOriginNames(oldList.value.originNames);
-      }
-  }
-  var ValueType;
-  (function (ValueType) {
-      ValueType[ValueType["Bool"] = -1] = "Bool";
-      ValueType[ValueType["Int"] = 0] = "Int";
-      ValueType[ValueType["Float"] = 1] = "Float";
-      ValueType[ValueType["List"] = 2] = "List";
-      ValueType[ValueType["String"] = 3] = "String";
-      ValueType[ValueType["DivertTarget"] = 4] = "DivertTarget";
-      ValueType[ValueType["VariablePointer"] = 5] = "VariablePointer";
-  })(ValueType || (ValueType = {}));
-
-  class SearchResult {
-      constructor() {
-          this.obj = null;
-          this.approximate = false;
-      }
-      get correctObj() {
-          return this.approximate ? null : this.obj;
-      }
-      get container() {
-          return this.obj instanceof Container ? this.obj : null;
-      }
-      copy() {
-          let searchResult = new SearchResult();
-          searchResult.obj = this.obj;
-          searchResult.approximate = this.approximate;
-          return searchResult;
-      }
-  }
-
-  class Container extends InkObject {
-      constructor() {
-          super(...arguments);
-          this.name = "";
-          this._content = [];
-          this.namedContent = new Map();
-          this.visitsShouldBeCounted = false;
-          this.turnIndexShouldBeCounted = false;
-          this.countingAtStartOnly = false;
-          this._pathToFirstLeafContent = null;
-      }
-      get hasValidName() {
-          return this.name != null && this.name.length > 0;
-      }
-      get content() {
-          return this._content;
-      }
-      set content(value) {
-          this.AddContent(value);
-      }
-      get namedOnlyContent() {
-          let namedOnlyContentDict = new Map();
-          for (let [key, value] of this.namedContent) {
-              let inkObject = asOrThrows(value, InkObject);
-              namedOnlyContentDict.set(key, inkObject);
-          }
-          for (let c of this.content) {
-              let named = asINamedContentOrNull(c);
-              if (named != null && named.hasValidName) {
-                  namedOnlyContentDict.delete(named.name);
-              }
-          }
-          if (namedOnlyContentDict.size == 0)
-              namedOnlyContentDict = null;
-          return namedOnlyContentDict;
-      }
-      set namedOnlyContent(value) {
-          let existingNamedOnly = this.namedOnlyContent;
-          if (existingNamedOnly != null) {
-              for (let [key] of existingNamedOnly) {
-                  this.namedContent.delete(key);
-              }
-          }
-          if (value == null)
-              return;
-          for (let [, val] of value) {
-              let named = asINamedContentOrNull(val);
-              if (named != null)
-                  this.AddToNamedContentOnly(named);
-          }
-      }
-      get countFlags() {
-          let flags = 0;
-          if (this.visitsShouldBeCounted)
-              flags |= Container.CountFlags.Visits;
-          if (this.turnIndexShouldBeCounted)
-              flags |= Container.CountFlags.Turns;
-          if (this.countingAtStartOnly)
-              flags |= Container.CountFlags.CountStartOnly;
-          if (flags == Container.CountFlags.CountStartOnly) {
-              flags = 0;
-          }
-          return flags;
-      }
-      set countFlags(value) {
-          let flag = value;
-          if ((flag & Container.CountFlags.Visits) > 0)
-              this.visitsShouldBeCounted = true;
-          if ((flag & Container.CountFlags.Turns) > 0)
-              this.turnIndexShouldBeCounted = true;
-          if ((flag & Container.CountFlags.CountStartOnly) > 0)
-              this.countingAtStartOnly = true;
-      }
-      get pathToFirstLeafContent() {
-          if (this._pathToFirstLeafContent == null)
-              this._pathToFirstLeafContent = this.path.PathByAppendingPath(this.internalPathToFirstLeafContent);
-          return this._pathToFirstLeafContent;
-      }
-      get internalPathToFirstLeafContent() {
-          let components = [];
-          let container = this;
-          while (container instanceof Container) {
-              if (container.content.length > 0) {
-                  components.push(new Path.Component(0));
-                  container = container.content[0];
-              }
-          }
-          return new Path(components);
-      }
-      AddContent(contentObjOrList) {
-          if (contentObjOrList instanceof Array) {
-              let contentList = contentObjOrList;
-              for (let c of contentList) {
-                  this.AddContent(c);
-              }
-          }
-          else {
-              let contentObj = contentObjOrList;
-              this._content.push(contentObj);
-              if (contentObj.parent) {
-                  throw new Error("content is already in " + contentObj.parent);
-              }
-              contentObj.parent = this;
-              this.TryAddNamedContent(contentObj);
-          }
-      }
-      TryAddNamedContent(contentObj) {
-          let namedContentObj = asINamedContentOrNull(contentObj);
-          if (namedContentObj != null && namedContentObj.hasValidName) {
-              this.AddToNamedContentOnly(namedContentObj);
-          }
-      }
-      AddToNamedContentOnly(namedContentObj) {
-          Debug.AssertType(namedContentObj, InkObject, "Can only add Runtime.Objects to a Runtime.Container");
-          let runtimeObj = asOrThrows(namedContentObj, InkObject);
-          runtimeObj.parent = this;
-          this.namedContent.set(namedContentObj.name, namedContentObj);
-      }
-      ContentAtPath(path, partialPathStart = 0, partialPathLength = -1) {
-          if (partialPathLength == -1)
-              partialPathLength = path.length;
-          let result = new SearchResult();
-          result.approximate = false;
-          let currentContainer = this;
-          let currentObj = this;
-          for (let i = partialPathStart; i < partialPathLength; ++i) {
-              let comp = path.GetComponent(i);
-              if (currentContainer == null) {
-                  result.approximate = true;
-                  break;
-              }
-              let foundObj = currentContainer.ContentWithPathComponent(comp);
-              if (foundObj == null) {
-                  result.approximate = true;
-                  break;
-              }
-              currentObj = foundObj;
-              currentContainer = asOrNull(foundObj, Container);
-          }
-          result.obj = currentObj;
-          return result;
-      }
-      InsertContent(contentObj, index) {
-          this.content[index] = contentObj;
-          if (contentObj.parent) {
-              throw new Error("content is already in " + contentObj.parent);
-          }
-          contentObj.parent = this;
-          this.TryAddNamedContent(contentObj);
-      }
-      AddContentsOfContainer(otherContainer) {
-          this.content = this.content.concat(otherContainer.content);
-          for (let obj of otherContainer.content) {
-              obj.parent = this;
-              this.TryAddNamedContent(obj);
-          }
-      }
-      ContentWithPathComponent(component) {
-          if (component.isIndex) {
-              if (component.index >= 0 && component.index < this.content.length) {
-                  return this.content[component.index];
-              }
-              else {
-                  return null;
-              }
-          }
-          else if (component.isParent) {
-              return this.parent;
-          }
-          else {
-              if (component.name === null) {
-                  return throwNullException("component.name");
-              }
-              let foundContent = tryGetValueFromMap(this.namedContent, component.name, null);
-              if (foundContent.exists) {
-                  return asOrThrows(foundContent.result, InkObject);
-              }
-              else {
-                  return null;
-              }
-          }
-      }
-      BuildStringOfHierarchy() {
-          let sb;
-          if (arguments.length == 0) {
-              sb = new StringBuilder();
-              this.BuildStringOfHierarchy(sb, 0, null);
-              return sb.toString();
-          }
-          sb = arguments[0];
-          let indentation = arguments[1];
-          let pointedObj = arguments[2];
-          function appendIndentation() {
-              const spacesPerIndent = 4; // Truly const in the original code
-              for (let i = 0; i < spacesPerIndent * indentation; ++i) {
-                  sb.Append(" ");
-              }
-          }
-          appendIndentation();
-          sb.Append("[");
-          if (this.hasValidName) {
-              sb.AppendFormat(" ({0})", this.name);
-          }
-          if (this == pointedObj) {
-              sb.Append("  <---");
-          }
-          sb.AppendLine();
-          indentation++;
-          for (let i = 0; i < this.content.length; ++i) {
-              let obj = this.content[i];
-              if (obj instanceof Container) {
-                  let container = obj;
-                  container.BuildStringOfHierarchy(sb, indentation, pointedObj);
-              }
-              else {
-                  appendIndentation();
-                  if (obj instanceof StringValue) {
-                      sb.Append('"');
-                      sb.Append(obj.toString().replace("\n", "\\n"));
-                      sb.Append('"');
-                  }
-                  else {
-                      sb.Append(obj.toString());
-                  }
-              }
-              if (i != this.content.length - 1) {
-                  sb.Append(",");
-              }
-              if (!(obj instanceof Container) && obj == pointedObj) {
-                  sb.Append("  <---");
-              }
-              sb.AppendLine();
-          }
-          let onlyNamed = new Map();
-          for (let [key, value] of this.namedContent) {
-              if (this.content.indexOf(asOrThrows(value, InkObject)) >= 0) {
-                  continue;
-              }
-              else {
-                  onlyNamed.set(key, value);
-              }
-          }
-          if (onlyNamed.size > 0) {
-              appendIndentation();
-              sb.AppendLine("-- named: --");
-              for (let [, value] of onlyNamed) {
-                  Debug.AssertType(value, Container, "Can only print out named Containers");
-                  let container = value;
-                  container.BuildStringOfHierarchy(sb, indentation, pointedObj);
-                  sb.AppendLine();
-              }
-          }
-          indentation--;
-          appendIndentation();
-          sb.Append("]");
-      }
-  }
-  (function (Container) {
-      (function (CountFlags) {
-          CountFlags[CountFlags["Visits"] = 1] = "Visits";
-          CountFlags[CountFlags["Turns"] = 2] = "Turns";
-          CountFlags[CountFlags["CountStartOnly"] = 4] = "CountStartOnly";
-      })(Container.CountFlags || (Container.CountFlags = {}));
-  })(Container || (Container = {}));
-
-  class Glue extends InkObject {
-      toString() {
-          return "Glue";
-      }
-  }
-
-  class ControlCommand extends InkObject {
-      constructor(commandType = ControlCommand.CommandType.NotSet) {
-          super();
-          this._commandType = commandType;
-      }
-      get commandType() {
-          return this._commandType;
-      }
-      Copy() {
-          return new ControlCommand(this.commandType);
-      }
-      static EvalStart() {
-          return new ControlCommand(ControlCommand.CommandType.EvalStart);
-      }
-      static EvalOutput() {
-          return new ControlCommand(ControlCommand.CommandType.EvalOutput);
-      }
-      static EvalEnd() {
-          return new ControlCommand(ControlCommand.CommandType.EvalEnd);
-      }
-      static Duplicate() {
-          return new ControlCommand(ControlCommand.CommandType.Duplicate);
-      }
-      static PopEvaluatedValue() {
-          return new ControlCommand(ControlCommand.CommandType.PopEvaluatedValue);
-      }
-      static PopFunction() {
-          return new ControlCommand(ControlCommand.CommandType.PopFunction);
-      }
-      static PopTunnel() {
-          return new ControlCommand(ControlCommand.CommandType.PopTunnel);
-      }
-      static BeginString() {
-          return new ControlCommand(ControlCommand.CommandType.BeginString);
-      }
-      static EndString() {
-          return new ControlCommand(ControlCommand.CommandType.EndString);
-      }
-      static NoOp() {
-          return new ControlCommand(ControlCommand.CommandType.NoOp);
-      }
-      static ChoiceCount() {
-          return new ControlCommand(ControlCommand.CommandType.ChoiceCount);
-      }
-      static Turns() {
-          return new ControlCommand(ControlCommand.CommandType.Turns);
-      }
-      static TurnsSince() {
-          return new ControlCommand(ControlCommand.CommandType.TurnsSince);
-      }
-      static ReadCount() {
-          return new ControlCommand(ControlCommand.CommandType.ReadCount);
-      }
-      static Random() {
-          return new ControlCommand(ControlCommand.CommandType.Random);
-      }
-      static SeedRandom() {
-          return new ControlCommand(ControlCommand.CommandType.SeedRandom);
-      }
-      static VisitIndex() {
-          return new ControlCommand(ControlCommand.CommandType.VisitIndex);
-      }
-      static SequenceShuffleIndex() {
-          return new ControlCommand(ControlCommand.CommandType.SequenceShuffleIndex);
-      }
-      static StartThread() {
-          return new ControlCommand(ControlCommand.CommandType.StartThread);
-      }
-      static Done() {
-          return new ControlCommand(ControlCommand.CommandType.Done);
-      }
-      static End() {
-          return new ControlCommand(ControlCommand.CommandType.End);
-      }
-      static ListFromInt() {
-          return new ControlCommand(ControlCommand.CommandType.ListFromInt);
-      }
-      static ListRange() {
-          return new ControlCommand(ControlCommand.CommandType.ListRange);
-      }
-      static ListRandom() {
-          return new ControlCommand(ControlCommand.CommandType.ListRandom);
-      }
-      toString() {
-          return this.commandType.toString();
-      }
-  }
-  (function (ControlCommand) {
-      (function (CommandType) {
-          CommandType[CommandType["NotSet"] = -1] = "NotSet";
-          CommandType[CommandType["EvalStart"] = 0] = "EvalStart";
-          CommandType[CommandType["EvalOutput"] = 1] = "EvalOutput";
-          CommandType[CommandType["EvalEnd"] = 2] = "EvalEnd";
-          CommandType[CommandType["Duplicate"] = 3] = "Duplicate";
-          CommandType[CommandType["PopEvaluatedValue"] = 4] = "PopEvaluatedValue";
-          CommandType[CommandType["PopFunction"] = 5] = "PopFunction";
-          CommandType[CommandType["PopTunnel"] = 6] = "PopTunnel";
-          CommandType[CommandType["BeginString"] = 7] = "BeginString";
-          CommandType[CommandType["EndString"] = 8] = "EndString";
-          CommandType[CommandType["NoOp"] = 9] = "NoOp";
-          CommandType[CommandType["ChoiceCount"] = 10] = "ChoiceCount";
-          CommandType[CommandType["Turns"] = 11] = "Turns";
-          CommandType[CommandType["TurnsSince"] = 12] = "TurnsSince";
-          CommandType[CommandType["Random"] = 13] = "Random";
-          CommandType[CommandType["SeedRandom"] = 14] = "SeedRandom";
-          CommandType[CommandType["VisitIndex"] = 15] = "VisitIndex";
-          CommandType[CommandType["SequenceShuffleIndex"] = 16] = "SequenceShuffleIndex";
-          CommandType[CommandType["StartThread"] = 17] = "StartThread";
-          CommandType[CommandType["Done"] = 18] = "Done";
-          CommandType[CommandType["End"] = 19] = "End";
-          CommandType[CommandType["ListFromInt"] = 20] = "ListFromInt";
-          CommandType[CommandType["ListRange"] = 21] = "ListRange";
-          CommandType[CommandType["ListRandom"] = 22] = "ListRandom";
-          CommandType[CommandType["ReadCount"] = 23] = "ReadCount";
-          CommandType[CommandType["TOTAL_VALUES"] = 24] = "TOTAL_VALUES";
-      })(ControlCommand.CommandType || (ControlCommand.CommandType = {}));
-  })(ControlCommand || (ControlCommand = {}));
-
-  var PushPopType;
-  (function (PushPopType) {
-      PushPopType[PushPopType["Tunnel"] = 0] = "Tunnel";
-      PushPopType[PushPopType["Function"] = 1] = "Function";
-      PushPopType[PushPopType["FunctionEvaluationFromGame"] = 2] = "FunctionEvaluationFromGame";
-  })(PushPopType || (PushPopType = {}));
-
-  class Pointer {
-      constructor() {
-          this.container = null;
-          this.index = -1;
-          if (arguments.length === 2) {
-              this.container = arguments[0];
-              this.index = arguments[1];
-          }
-      }
-      Resolve() {
-          if (this.index < 0)
-              return this.container;
-          if (this.container == null)
-              return null;
-          if (this.container.content.length == 0)
-              return this.container;
-          if (this.index >= this.container.content.length)
-              return null;
-          return this.container.content[this.index];
-      }
-      get isNull() {
-          return this.container == null;
-      }
-      get path() {
-          if (this.isNull)
-              return null;
-          if (this.index >= 0)
-              return this.container.path.PathByAppendingComponent(new Path.Component(this.index));
-          else
-              return this.container.path;
-      }
-      toString() {
-          if (!this.container)
-              return "Ink Pointer (null)";
-          return ("Ink Pointer -> " +
-              this.container.path.toString() +
-              " -- index " +
-              this.index);
-      }
-      // This method does not exist in the original C# code, but is here to maintain the
-      // value semantics of Pointer.
-      copy() {
-          return new Pointer(this.container, this.index);
-      }
-      static StartOf(container) {
-          return new Pointer(container, 0);
-      }
-      static get Null() {
-          return new Pointer(null, -1);
-      }
-  }
-
-  class Divert extends InkObject {
-      constructor(stackPushType) {
-          super();
-          this._targetPath = null;
-          this._targetPointer = Pointer.Null;
-          this.variableDivertName = null;
-          this.pushesToStack = false;
-          this.stackPushType = 0;
-          this.isExternal = false;
-          this.externalArgs = 0;
-          this.isConditional = false;
-          this.pushesToStack = false;
-          if (typeof stackPushType !== "undefined") {
-              this.pushesToStack = true;
-              this.stackPushType = stackPushType;
-          }
-      }
-      get targetPath() {
-          if (this._targetPath != null && this._targetPath.isRelative) {
-              let targetObj = this.targetPointer.Resolve();
-              if (targetObj) {
-                  this._targetPath = targetObj.path;
-              }
-          }
-          return this._targetPath;
-      }
-      set targetPath(value) {
-          this._targetPath = value;
-          this._targetPointer = Pointer.Null;
-      }
-      get targetPointer() {
-          if (this._targetPointer.isNull) {
-              let targetObj = this.ResolvePath(this._targetPath).obj;
-              if (this._targetPath === null)
-                  return throwNullException("this._targetPath");
-              if (this._targetPath.lastComponent === null)
-                  return throwNullException("this._targetPath.lastComponent");
-              if (this._targetPath.lastComponent.isIndex) {
-                  if (targetObj === null)
-                      return throwNullException("targetObj");
-                  this._targetPointer.container =
-                      targetObj.parent instanceof Container ? targetObj.parent : null;
-                  this._targetPointer.index = this._targetPath.lastComponent.index;
-              }
-              else {
-                  this._targetPointer = Pointer.StartOf(targetObj instanceof Container ? targetObj : null);
-              }
-          }
-          return this._targetPointer.copy();
-      }
-      get targetPathString() {
-          if (this.targetPath == null)
-              return null;
-          return this.CompactPathString(this.targetPath);
-      }
-      set targetPathString(value) {
-          if (value == null) {
-              this.targetPath = null;
-          }
-          else {
-              this.targetPath = new Path(value);
-          }
-      }
-      get hasVariableTarget() {
-          return this.variableDivertName != null;
-      }
-      Equals(obj) {
-          let otherDivert = obj;
-          if (otherDivert instanceof Divert) {
-              if (this.hasVariableTarget == otherDivert.hasVariableTarget) {
-                  if (this.hasVariableTarget) {
-                      return this.variableDivertName == otherDivert.variableDivertName;
-                  }
-                  else {
-                      if (this.targetPath === null)
-                          return throwNullException("this.targetPath");
-                      return this.targetPath.Equals(otherDivert.targetPath);
-                  }
-              }
-          }
-          return false;
-      }
-      toString() {
-          if (this.hasVariableTarget) {
-              return "Divert(variable: " + this.variableDivertName + ")";
-          }
-          else if (this.targetPath == null) {
-              return "Divert(null)";
-          }
-          else {
-              let sb = new StringBuilder();
-              let targetStr = this.targetPath.toString();
-              sb.Append("Divert");
-              if (this.isConditional)
-                  sb.Append("?");
-              if (this.pushesToStack) {
-                  if (this.stackPushType == PushPopType.Function) {
-                      sb.Append(" function");
-                  }
-                  else {
-                      sb.Append(" tunnel");
-                  }
-              }
-              sb.Append(" -> ");
-              sb.Append(this.targetPathString);
-              sb.Append(" (");
-              sb.Append(targetStr);
-              sb.Append(")");
-              return sb.toString();
-          }
-      }
-  }
-
-  class ChoicePoint extends InkObject {
-      constructor(onceOnly = true) {
-          super();
-          this._pathOnChoice = null;
-          this.hasCondition = false;
-          this.hasStartContent = false;
-          this.hasChoiceOnlyContent = false;
-          this.isInvisibleDefault = false;
-          this.onceOnly = true;
-          this.onceOnly = onceOnly;
-      }
-      get pathOnChoice() {
-          if (this._pathOnChoice != null && this._pathOnChoice.isRelative) {
-              let choiceTargetObj = this.choiceTarget;
-              if (choiceTargetObj) {
-                  this._pathOnChoice = choiceTargetObj.path;
-              }
-          }
-          return this._pathOnChoice;
-      }
-      set pathOnChoice(value) {
-          this._pathOnChoice = value;
-      }
-      get choiceTarget() {
-          if (this._pathOnChoice === null)
-              return throwNullException("ChoicePoint._pathOnChoice");
-          return this.ResolvePath(this._pathOnChoice).container;
-      }
-      get pathStringOnChoice() {
-          if (this.pathOnChoice === null)
-              return throwNullException("ChoicePoint.pathOnChoice");
-          return this.CompactPathString(this.pathOnChoice);
-      }
-      set pathStringOnChoice(value) {
-          this.pathOnChoice = new Path(value);
-      }
-      get flags() {
-          let flags = 0;
-          if (this.hasCondition)
-              flags |= 1;
-          if (this.hasStartContent)
-              flags |= 2;
-          if (this.hasChoiceOnlyContent)
-              flags |= 4;
-          if (this.isInvisibleDefault)
-              flags |= 8;
-          if (this.onceOnly)
-              flags |= 16;
-          return flags;
-      }
-      set flags(value) {
-          this.hasCondition = (value & 1) > 0;
-          this.hasStartContent = (value & 2) > 0;
-          this.hasChoiceOnlyContent = (value & 4) > 0;
-          this.isInvisibleDefault = (value & 8) > 0;
-          this.onceOnly = (value & 16) > 0;
-      }
-      toString() {
-          if (this.pathOnChoice === null)
-              return throwNullException("ChoicePoint.pathOnChoice");
-          let targetString = this.pathOnChoice.toString();
-          return "Choice: -> " + targetString;
-      }
-  }
-
-  class VariableReference extends InkObject {
-      constructor(name = null) {
-          super();
-          this.pathForCount = null;
-          this.name = name;
-      }
-      get containerForCount() {
-          if (this.pathForCount === null)
-              return null;
-          return this.ResolvePath(this.pathForCount).container;
-      }
-      get pathStringForCount() {
-          if (this.pathForCount === null)
-              return null;
-          return this.CompactPathString(this.pathForCount);
-      }
-      set pathStringForCount(value) {
-          if (value === null)
-              this.pathForCount = null;
-          else
-              this.pathForCount = new Path(value);
-      }
-      toString() {
-          if (this.name != null) {
-              return "var(" + this.name + ")";
-          }
-          else {
-              let pathStr = this.pathStringForCount;
-              return "read_count(" + pathStr + ")";
-          }
-      }
-  }
-
-  class VariableAssignment extends InkObject {
-      constructor(variableName, isNewDeclaration) {
-          super();
-          this.variableName = variableName || null;
-          this.isNewDeclaration = !!isNewDeclaration;
-          this.isGlobal = false;
-      }
-      toString() {
-          return "VarAssign to " + this.variableName;
-      }
-  }
-
-  class Void extends InkObject {
-  }
-
-  class NativeFunctionCall extends InkObject {
-      constructor() {
-          super();
-          this._name = null;
-          this._numberOfParameters = 0;
-          this._prototype = null;
-          this._isPrototype = false;
-          this._operationFuncs = null;
-          if (arguments.length === 0) {
-              NativeFunctionCall.GenerateNativeFunctionsIfNecessary();
-          }
-          else if (arguments.length === 1) {
-              let name = arguments[0];
-              NativeFunctionCall.GenerateNativeFunctionsIfNecessary();
-              this.name = name;
-          }
-          else if (arguments.length === 2) {
-              let name = arguments[0];
-              let numberOfParameters = arguments[1];
-              this._isPrototype = true;
-              this.name = name;
-              this.numberOfParameters = numberOfParameters;
-          }
-      }
-      static CallWithName(functionName) {
-          return new NativeFunctionCall(functionName);
-      }
-      static CallExistsWithName(functionName) {
-          this.GenerateNativeFunctionsIfNecessary();
-          return this._nativeFunctions.get(functionName);
-      }
-      get name() {
-          if (this._name === null)
-              return throwNullException("NativeFunctionCall._name");
-          return this._name;
-      }
-      set name(value) {
-          this._name = value;
-          if (!this._isPrototype) {
-              if (NativeFunctionCall._nativeFunctions === null)
-                  throwNullException("NativeFunctionCall._nativeFunctions");
-              else
-                  this._prototype =
-                      NativeFunctionCall._nativeFunctions.get(this._name) || null;
-          }
-      }
-      get numberOfParameters() {
-          if (this._prototype) {
-              return this._prototype.numberOfParameters;
-          }
-          else {
-              return this._numberOfParameters;
-          }
-      }
-      set numberOfParameters(value) {
-          this._numberOfParameters = value;
-      }
-      Call(parameters) {
-          if (this._prototype) {
-              return this._prototype.Call(parameters);
-          }
-          if (this.numberOfParameters != parameters.length) {
-              throw new Error("Unexpected number of parameters");
-          }
-          let hasList = false;
-          for (let p of parameters) {
-              if (p instanceof Void)
-                  throw new StoryException('Attempting to perform operation on a void value. Did you forget to "return" a value from a function you called here?');
-              if (p instanceof ListValue)
-                  hasList = true;
-          }
-          if (parameters.length == 2 && hasList) {
-              return this.CallBinaryListOperation(parameters);
-          }
-          let coercedParams = this.CoerceValuesToSingleType(parameters);
-          let coercedType = coercedParams[0].valueType;
-          if (coercedType == ValueType.Int) {
-              return this.CallType(coercedParams);
-          }
-          else if (coercedType == ValueType.Float) {
-              return this.CallType(coercedParams);
-          }
-          else if (coercedType == ValueType.String) {
-              return this.CallType(coercedParams);
-          }
-          else if (coercedType == ValueType.DivertTarget) {
-              return this.CallType(coercedParams);
-          }
-          else if (coercedType == ValueType.List) {
-              return this.CallType(coercedParams);
-          }
-          return null;
-      }
-      CallType(parametersOfSingleType) {
-          let param1 = asOrThrows(parametersOfSingleType[0], Value);
-          let valType = param1.valueType;
-          let val1 = param1;
-          let paramCount = parametersOfSingleType.length;
-          if (paramCount == 2 || paramCount == 1) {
-              if (this._operationFuncs === null)
-                  return throwNullException("NativeFunctionCall._operationFuncs");
-              let opForTypeObj = this._operationFuncs.get(valType);
-              if (!opForTypeObj) {
-                  const key = ValueType[valType];
-                  throw new StoryException("Cannot perform operation " + this.name + " on " + key);
-              }
-              if (paramCount == 2) {
-                  let param2 = asOrThrows(parametersOfSingleType[1], Value);
-                  let val2 = param2;
-                  let opForType = opForTypeObj;
-                  if (val1.value === null || val2.value === null)
-                      return throwNullException("NativeFunctionCall.Call BinaryOp values");
-                  let resultVal = opForType(val1.value, val2.value);
-                  return Value.Create(resultVal);
-              }
-              else {
-                  let opForType = opForTypeObj;
-                  if (val1.value === null)
-                      return throwNullException("NativeFunctionCall.Call UnaryOp value");
-                  let resultVal = opForType(val1.value);
-                  // This code is different from upstream. Since JavaScript treats
-                  // integers and floats as the same numbers, it's impossible
-                  // to force an number to be either an integer or a float.
-                  //
-                  // It can be useful to force a specific number type
-                  // (especially for divisions), so the result of INT() & FLOAT()
-                  // is coerced to the the proper value type.
-                  //
-                  // Note that we also force all other unary operation to
-                  // return the same value type, although this is only
-                  // meaningful for numbers. See `Value.Create`.
-                  if (this.name === NativeFunctionCall.Int) {
-                      return Value.Create(resultVal, ValueType.Int);
-                  }
-                  else if (this.name === NativeFunctionCall.Float) {
-                      return Value.Create(resultVal, ValueType.Float);
-                  }
-                  else {
-                      return Value.Create(resultVal, param1.valueType);
-                  }
-              }
-          }
-          else {
-              throw new Error("Unexpected number of parameters to NativeFunctionCall: " +
-                  parametersOfSingleType.length);
-          }
-      }
-      CallBinaryListOperation(parameters) {
-          if ((this.name == "+" || this.name == "-") &&
-              parameters[0] instanceof ListValue &&
-              parameters[1] instanceof IntValue)
-              return this.CallListIncrementOperation(parameters);
-          let v1 = asOrThrows(parameters[0], Value);
-          let v2 = asOrThrows(parameters[1], Value);
-          if ((this.name == "&&" || this.name == "||") &&
-              (v1.valueType != ValueType.List || v2.valueType != ValueType.List)) {
-              if (this._operationFuncs === null)
-                  return throwNullException("NativeFunctionCall._operationFuncs");
-              let op = this._operationFuncs.get(ValueType.Int);
-              if (op === null)
-                  return throwNullException("NativeFunctionCall.CallBinaryListOperation op");
-              let result = asBooleanOrThrows(op(v1.isTruthy ? 1 : 0, v2.isTruthy ? 1 : 0));
-              return new BoolValue(result);
-          }
-          if (v1.valueType == ValueType.List && v2.valueType == ValueType.List)
-              return this.CallType([v1, v2]);
-          throw new StoryException("Can not call use " +
-              this.name +
-              " operation on " +
-              ValueType[v1.valueType] +
-              " and " +
-              ValueType[v2.valueType]);
-      }
-      CallListIncrementOperation(listIntParams) {
-          let listVal = asOrThrows(listIntParams[0], ListValue);
-          let intVal = asOrThrows(listIntParams[1], IntValue);
-          let resultInkList = new InkList();
-          if (listVal.value === null)
-              return throwNullException("NativeFunctionCall.CallListIncrementOperation listVal.value");
-          for (let [listItemKey, listItemValue] of listVal.value) {
-              let listItem = InkListItem.fromSerializedKey(listItemKey);
-              if (this._operationFuncs === null)
-                  return throwNullException("NativeFunctionCall._operationFuncs");
-              let intOp = this._operationFuncs.get(ValueType.Int);
-              if (intVal.value === null)
-                  return throwNullException("NativeFunctionCall.CallListIncrementOperation intVal.value");
-              let targetInt = intOp(listItemValue, intVal.value);
-              let itemOrigin = null;
-              if (listVal.value.origins === null)
-                  return throwNullException("NativeFunctionCall.CallListIncrementOperation listVal.value.origins");
-              for (let origin of listVal.value.origins) {
-                  if (origin.name == listItem.originName) {
-                      itemOrigin = origin;
-                      break;
-                  }
-              }
-              if (itemOrigin != null) {
-                  let incrementedItem = itemOrigin.TryGetItemWithValue(targetInt, InkListItem.Null);
-                  if (incrementedItem.exists)
-                      resultInkList.Add(incrementedItem.result, targetInt);
-              }
-          }
-          return new ListValue(resultInkList);
-      }
-      CoerceValuesToSingleType(parametersIn) {
-          let valType = ValueType.Int;
-          let specialCaseList = null;
-          for (let obj of parametersIn) {
-              let val = asOrThrows(obj, Value);
-              if (val.valueType > valType) {
-                  valType = val.valueType;
-              }
-              if (val.valueType == ValueType.List) {
-                  specialCaseList = asOrNull(val, ListValue);
-              }
-          }
-          let parametersOut = [];
-          if (ValueType[valType] == ValueType[ValueType.List]) {
-              for (let inkObjectVal of parametersIn) {
-                  let val = asOrThrows(inkObjectVal, Value);
-                  if (val.valueType == ValueType.List) {
-                      parametersOut.push(val);
-                  }
-                  else if (val.valueType == ValueType.Int) {
-                      let intVal = parseInt(val.valueObject);
-                      specialCaseList = asOrThrows(specialCaseList, ListValue);
-                      if (specialCaseList.value === null)
-                          return throwNullException("NativeFunctionCall.CoerceValuesToSingleType specialCaseList.value");
-                      let list = specialCaseList.value.originOfMaxItem;
-                      if (list === null)
-                          return throwNullException("NativeFunctionCall.CoerceValuesToSingleType list");
-                      let item = list.TryGetItemWithValue(intVal, InkListItem.Null);
-                      if (item.exists) {
-                          let castedValue = new ListValue(item.result, intVal);
-                          parametersOut.push(castedValue);
-                      }
-                      else
-                          throw new StoryException("Could not find List item with the value " +
-                              intVal +
-                              " in " +
-                              list.name);
-                  }
-                  else {
-                      const key = ValueType[val.valueType];
-                      throw new StoryException("Cannot mix Lists and " + key + " values in this operation");
-                  }
-              }
-          }
-          else {
-              for (let inkObjectVal of parametersIn) {
-                  let val = asOrThrows(inkObjectVal, Value);
-                  let castedValue = val.Cast(valType);
-                  parametersOut.push(castedValue);
-              }
-          }
-          return parametersOut;
-      }
-      static Identity(t) {
-          return t;
-      }
-      static GenerateNativeFunctionsIfNecessary() {
-          if (this._nativeFunctions == null) {
-              this._nativeFunctions = new Map();
-              // Int operations
-              this.AddIntBinaryOp(this.Add, (x, y) => x + y);
-              this.AddIntBinaryOp(this.Subtract, (x, y) => x - y);
-              this.AddIntBinaryOp(this.Multiply, (x, y) => x * y);
-              this.AddIntBinaryOp(this.Divide, (x, y) => Math.floor(x / y));
-              this.AddIntBinaryOp(this.Mod, (x, y) => x % y);
-              this.AddIntUnaryOp(this.Negate, (x) => -x);
-              this.AddIntBinaryOp(this.Equal, (x, y) => x == y);
-              this.AddIntBinaryOp(this.Greater, (x, y) => x > y);
-              this.AddIntBinaryOp(this.Less, (x, y) => x < y);
-              this.AddIntBinaryOp(this.GreaterThanOrEquals, (x, y) => x >= y);
-              this.AddIntBinaryOp(this.LessThanOrEquals, (x, y) => x <= y);
-              this.AddIntBinaryOp(this.NotEquals, (x, y) => x != y);
-              this.AddIntUnaryOp(this.Not, (x) => x == 0);
-              this.AddIntBinaryOp(this.And, (x, y) => x != 0 && y != 0);
-              this.AddIntBinaryOp(this.Or, (x, y) => x != 0 || y != 0);
-              this.AddIntBinaryOp(this.Max, (x, y) => Math.max(x, y));
-              this.AddIntBinaryOp(this.Min, (x, y) => Math.min(x, y));
-              this.AddIntBinaryOp(this.Pow, (x, y) => Math.pow(x, y));
-              this.AddIntUnaryOp(this.Floor, NativeFunctionCall.Identity);
-              this.AddIntUnaryOp(this.Ceiling, NativeFunctionCall.Identity);
-              this.AddIntUnaryOp(this.Int, NativeFunctionCall.Identity);
-              this.AddIntUnaryOp(this.Float, (x) => x);
-              // Float operations
-              this.AddFloatBinaryOp(this.Add, (x, y) => x + y);
-              this.AddFloatBinaryOp(this.Subtract, (x, y) => x - y);
-              this.AddFloatBinaryOp(this.Multiply, (x, y) => x * y);
-              this.AddFloatBinaryOp(this.Divide, (x, y) => x / y);
-              this.AddFloatBinaryOp(this.Mod, (x, y) => x % y);
-              this.AddFloatUnaryOp(this.Negate, (x) => -x);
-              this.AddFloatBinaryOp(this.Equal, (x, y) => x == y);
-              this.AddFloatBinaryOp(this.Greater, (x, y) => x > y);
-              this.AddFloatBinaryOp(this.Less, (x, y) => x < y);
-              this.AddFloatBinaryOp(this.GreaterThanOrEquals, (x, y) => x >= y);
-              this.AddFloatBinaryOp(this.LessThanOrEquals, (x, y) => x <= y);
-              this.AddFloatBinaryOp(this.NotEquals, (x, y) => x != y);
-              this.AddFloatUnaryOp(this.Not, (x) => x == 0.0);
-              this.AddFloatBinaryOp(this.And, (x, y) => x != 0.0 && y != 0.0);
-              this.AddFloatBinaryOp(this.Or, (x, y) => x != 0.0 || y != 0.0);
-              this.AddFloatBinaryOp(this.Max, (x, y) => Math.max(x, y));
-              this.AddFloatBinaryOp(this.Min, (x, y) => Math.min(x, y));
-              this.AddFloatBinaryOp(this.Pow, (x, y) => Math.pow(x, y));
-              this.AddFloatUnaryOp(this.Floor, (x) => Math.floor(x));
-              this.AddFloatUnaryOp(this.Ceiling, (x) => Math.ceil(x));
-              this.AddFloatUnaryOp(this.Int, (x) => Math.floor(x));
-              this.AddFloatUnaryOp(this.Float, NativeFunctionCall.Identity);
-              // String operations
-              this.AddStringBinaryOp(this.Add, (x, y) => x + y); // concat
-              this.AddStringBinaryOp(this.Equal, (x, y) => x === y);
-              this.AddStringBinaryOp(this.NotEquals, (x, y) => !(x === y));
-              this.AddStringBinaryOp(this.Has, (x, y) => x.includes(y));
-              this.AddStringBinaryOp(this.Hasnt, (x, y) => !x.includes(y));
-              this.AddListBinaryOp(this.Add, (x, y) => x.Union(y));
-              this.AddListBinaryOp(this.Subtract, (x, y) => x.Without(y));
-              this.AddListBinaryOp(this.Has, (x, y) => x.Contains(y));
-              this.AddListBinaryOp(this.Hasnt, (x, y) => !x.Contains(y));
-              this.AddListBinaryOp(this.Intersect, (x, y) => x.Intersect(y));
-              this.AddListBinaryOp(this.Equal, (x, y) => x.Equals(y));
-              this.AddListBinaryOp(this.Greater, (x, y) => x.GreaterThan(y));
-              this.AddListBinaryOp(this.Less, (x, y) => x.LessThan(y));
-              this.AddListBinaryOp(this.GreaterThanOrEquals, (x, y) => x.GreaterThanOrEquals(y));
-              this.AddListBinaryOp(this.LessThanOrEquals, (x, y) => x.LessThanOrEquals(y));
-              this.AddListBinaryOp(this.NotEquals, (x, y) => !x.Equals(y));
-              this.AddListBinaryOp(this.And, (x, y) => x.Count > 0 && y.Count > 0);
-              this.AddListBinaryOp(this.Or, (x, y) => x.Count > 0 || y.Count > 0);
-              this.AddListUnaryOp(this.Not, (x) => (x.Count == 0 ? 1 : 0));
-              this.AddListUnaryOp(this.Invert, (x) => x.inverse);
-              this.AddListUnaryOp(this.All, (x) => x.all);
-              this.AddListUnaryOp(this.ListMin, (x) => x.MinAsList());
-              this.AddListUnaryOp(this.ListMax, (x) => x.MaxAsList());
-              this.AddListUnaryOp(this.Count, (x) => x.Count);
-              this.AddListUnaryOp(this.ValueOfList, (x) => x.maxItem.Value);
-              let divertTargetsEqual = (d1, d2) => d1.Equals(d2);
-              let divertTargetsNotEqual = (d1, d2) => !d1.Equals(d2);
-              this.AddOpToNativeFunc(this.Equal, 2, ValueType.DivertTarget, divertTargetsEqual);
-              this.AddOpToNativeFunc(this.NotEquals, 2, ValueType.DivertTarget, divertTargetsNotEqual);
-          }
-      }
-      AddOpFuncForType(valType, op) {
-          if (this._operationFuncs == null) {
-              this._operationFuncs = new Map();
-          }
-          this._operationFuncs.set(valType, op);
-      }
-      static AddOpToNativeFunc(name, args, valType, op) {
-          if (this._nativeFunctions === null)
-              return throwNullException("NativeFunctionCall._nativeFunctions");
-          let nativeFunc = this._nativeFunctions.get(name);
-          if (!nativeFunc) {
-              nativeFunc = new NativeFunctionCall(name, args);
-              this._nativeFunctions.set(name, nativeFunc);
-          }
-          nativeFunc.AddOpFuncForType(valType, op);
-      }
-      static AddIntBinaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 2, ValueType.Int, op);
-      }
-      static AddIntUnaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 1, ValueType.Int, op);
-      }
-      static AddFloatBinaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 2, ValueType.Float, op);
-      }
-      static AddFloatUnaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 1, ValueType.Float, op);
-      }
-      static AddStringBinaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 2, ValueType.String, op);
-      }
-      static AddListBinaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 2, ValueType.List, op);
-      }
-      static AddListUnaryOp(name, op) {
-          this.AddOpToNativeFunc(name, 1, ValueType.List, op);
-      }
-      toString() {
-          return 'Native "' + this.name + '"';
-      }
-  }
-  NativeFunctionCall.Add = "+";
-  NativeFunctionCall.Subtract = "-";
-  NativeFunctionCall.Divide = "/";
-  NativeFunctionCall.Multiply = "*";
-  NativeFunctionCall.Mod = "%";
-  NativeFunctionCall.Negate = "_";
-  NativeFunctionCall.Equal = "==";
-  NativeFunctionCall.Greater = ">";
-  NativeFunctionCall.Less = "<";
-  NativeFunctionCall.GreaterThanOrEquals = ">=";
-  NativeFunctionCall.LessThanOrEquals = "<=";
-  NativeFunctionCall.NotEquals = "!=";
-  NativeFunctionCall.Not = "!";
-  NativeFunctionCall.And = "&&";
-  NativeFunctionCall.Or = "||";
-  NativeFunctionCall.Min = "MIN";
-  NativeFunctionCall.Max = "MAX";
-  NativeFunctionCall.Pow = "POW";
-  NativeFunctionCall.Floor = "FLOOR";
-  NativeFunctionCall.Ceiling = "CEILING";
-  NativeFunctionCall.Int = "INT";
-  NativeFunctionCall.Float = "FLOAT";
-  NativeFunctionCall.Has = "?";
-  NativeFunctionCall.Hasnt = "!?";
-  NativeFunctionCall.Intersect = "^";
-  NativeFunctionCall.ListMin = "LIST_MIN";
-  NativeFunctionCall.ListMax = "LIST_MAX";
-  NativeFunctionCall.All = "LIST_ALL";
-  NativeFunctionCall.Count = "LIST_COUNT";
-  NativeFunctionCall.ValueOfList = "LIST_VALUE";
-  NativeFunctionCall.Invert = "LIST_INVERT";
-  NativeFunctionCall._nativeFunctions = null;
-
-  class Tag extends InkObject {
-      constructor(tagText) {
-          super();
-          this.text = tagText.toString() || "";
-      }
-      toString() {
-          return "# " + this.text;
-      }
-  }
-
-  class Choice extends InkObject {
-      constructor() {
-          super(...arguments);
-          this.text = "";
-          this.index = 0;
-          this.threadAtGeneration = null;
-          this.sourcePath = "";
-          this.targetPath = null;
-          this.isInvisibleDefault = false;
-          this.originalThreadIndex = 0;
-      }
-      get pathStringOnChoice() {
-          if (this.targetPath === null)
-              return throwNullException("Choice.targetPath");
-          return this.targetPath.toString();
-      }
-      set pathStringOnChoice(value) {
-          this.targetPath = new Path(value);
-      }
-  }
-
-  class ListDefinition {
-      constructor(name, items) {
-          this._name = name || "";
-          this._items = null;
-          this._itemNameToValues = items || new Map();
-      }
-      get name() {
-          return this._name;
-      }
-      get items() {
-          if (this._items == null) {
-              this._items = new Map();
-              for (let [key, value] of this._itemNameToValues) {
-                  let item = new InkListItem(this.name, key);
-                  this._items.set(item.serialized(), value);
-              }
-          }
-          return this._items;
-      }
-      ValueForItem(item) {
-          if (!item.itemName)
-              return 0;
-          let intVal = this._itemNameToValues.get(item.itemName);
-          if (typeof intVal !== "undefined")
-              return intVal;
-          else
-              return 0;
-      }
-      ContainsItem(item) {
-          if (!item.itemName)
-              return false;
-          if (item.originName != this.name)
-              return false;
-          return this._itemNameToValues.has(item.itemName);
-      }
-      ContainsItemWithName(itemName) {
-          return this._itemNameToValues.has(itemName);
-      }
-      TryGetItemWithValue(val, 
-      /* out */ item) {
-          for (let [key, value] of this._itemNameToValues) {
-              if (value == val) {
-                  item = new InkListItem(this.name, key);
-                  return { result: item, exists: true };
-              }
-          }
-          item = InkListItem.Null;
-          return { result: item, exists: false };
-      }
-      TryGetValueForItem(item, 
-      /* out */ intVal) {
-          if (!item.itemName)
-              return { result: 0, exists: false };
-          let value = this._itemNameToValues.get(item.itemName);
-          if (!value)
-              return { result: 0, exists: false };
-          return { result: value, exists: true };
-      }
-  }
-
-  class ListDefinitionsOrigin {
-      constructor(lists) {
-          this._lists = new Map();
-          this._allUnambiguousListValueCache = new Map();
-          for (let list of lists) {
-              this._lists.set(list.name, list);
-              for (let [key, val] of list.items) {
-                  let item = InkListItem.fromSerializedKey(key);
-                  let listValue = new ListValue(item, val);
-                  if (!item.itemName) {
-                      throw new Error("item.itemName is null or undefined.");
-                  }
-                  this._allUnambiguousListValueCache.set(item.itemName, listValue);
-                  this._allUnambiguousListValueCache.set(item.fullName, listValue);
-              }
-          }
-      }
-      get lists() {
-          let listOfLists = [];
-          for (let [, value] of this._lists) {
-              listOfLists.push(value);
-          }
-          return listOfLists;
-      }
-      TryListGetDefinition(name, 
-      /* out */ def) {
-          if (name === null) {
-              return { result: def, exists: false };
-          }
-          // initially, this function returns a boolean and the second parameter is an out.
-          let definition = this._lists.get(name);
-          if (!definition)
-              return { result: def, exists: false };
-          return { result: definition, exists: true };
-      }
-      FindSingleItemListWithName(name) {
-          if (name === null) {
-              return throwNullException("name");
-          }
-          let val = this._allUnambiguousListValueCache.get(name);
-          if (typeof val !== "undefined") {
-              return val;
-          }
-          return null;
-      }
-  }
-
-  class JsonSerialisation {
-      static JArrayToRuntimeObjList(jArray, skipLast = false) {
-          let count = jArray.length;
-          if (skipLast)
-              count--;
-          let list = [];
-          for (let i = 0; i < count; i++) {
-              let jTok = jArray[i];
-              let runtimeObj = this.JTokenToRuntimeObject(jTok);
-              if (runtimeObj === null) {
-                  return throwNullException("runtimeObj");
-              }
-              list.push(runtimeObj);
-          }
-          return list;
-      }
-      static WriteDictionaryRuntimeObjs(writer, dictionary) {
-          writer.WriteObjectStart();
-          for (let [key, value] of dictionary) {
-              writer.WritePropertyStart(key);
-              this.WriteRuntimeObject(writer, value);
-              writer.WritePropertyEnd();
-          }
-          writer.WriteObjectEnd();
-      }
-      static WriteListRuntimeObjs(writer, list) {
-          writer.WriteArrayStart();
-          for (let value of list) {
-              this.WriteRuntimeObject(writer, value);
-          }
-          writer.WriteArrayEnd();
-      }
-      static WriteIntDictionary(writer, dict) {
-          writer.WriteObjectStart();
-          for (let [key, value] of dict) {
-              writer.WriteIntProperty(key, value);
-          }
-          writer.WriteObjectEnd();
-      }
-      static WriteRuntimeObject(writer, obj) {
-          let container = asOrNull(obj, Container);
-          if (container) {
-              this.WriteRuntimeContainer(writer, container);
-              return;
-          }
-          let divert = asOrNull(obj, Divert);
-          if (divert) {
-              let divTypeKey = "->";
-              if (divert.isExternal) {
-                  divTypeKey = "x()";
-              }
-              else if (divert.pushesToStack) {
-                  if (divert.stackPushType == PushPopType.Function) {
-                      divTypeKey = "f()";
-                  }
-                  else if (divert.stackPushType == PushPopType.Tunnel) {
-                      divTypeKey = "->t->";
-                  }
-              }
-              let targetStr;
-              if (divert.hasVariableTarget) {
-                  targetStr = divert.variableDivertName;
-              }
-              else {
-                  targetStr = divert.targetPathString;
-              }
-              writer.WriteObjectStart();
-              writer.WriteProperty(divTypeKey, targetStr);
-              if (divert.hasVariableTarget) {
-                  writer.WriteProperty("var", true);
-              }
-              if (divert.isConditional) {
-                  writer.WriteProperty("c", true);
-              }
-              if (divert.externalArgs > 0) {
-                  writer.WriteIntProperty("exArgs", divert.externalArgs);
-              }
-              writer.WriteObjectEnd();
-              return;
-          }
-          let choicePoint = asOrNull(obj, ChoicePoint);
-          if (choicePoint) {
-              writer.WriteObjectStart();
-              writer.WriteProperty("*", choicePoint.pathStringOnChoice);
-              writer.WriteIntProperty("flg", choicePoint.flags);
-              writer.WriteObjectEnd();
-              return;
-          }
-          let boolVal = asOrNull(obj, BoolValue);
-          if (boolVal) {
-              writer.WriteBool(boolVal.value);
-              return;
-          }
-          let intVal = asOrNull(obj, IntValue);
-          if (intVal) {
-              writer.WriteInt(intVal.value);
-              return;
-          }
-          let floatVal = asOrNull(obj, FloatValue);
-          if (floatVal) {
-              writer.WriteFloat(floatVal.value);
-              return;
-          }
-          let strVal = asOrNull(obj, StringValue);
-          if (strVal) {
-              if (strVal.isNewline) {
-                  writer.Write("\n", false);
-              }
-              else {
-                  writer.WriteStringStart();
-                  writer.WriteStringInner("^");
-                  writer.WriteStringInner(strVal.value);
-                  writer.WriteStringEnd();
-              }
-              return;
-          }
-          let listVal = asOrNull(obj, ListValue);
-          if (listVal) {
-              this.WriteInkList(writer, listVal);
-              return;
-          }
-          let divTargetVal = asOrNull(obj, DivertTargetValue);
-          if (divTargetVal) {
-              writer.WriteObjectStart();
-              if (divTargetVal.value === null) {
-                  return throwNullException("divTargetVal.value");
-              }
-              writer.WriteProperty("^->", divTargetVal.value.componentsString);
-              writer.WriteObjectEnd();
-              return;
-          }
-          let varPtrVal = asOrNull(obj, VariablePointerValue);
-          if (varPtrVal) {
-              writer.WriteObjectStart();
-              writer.WriteProperty("^var", varPtrVal.value);
-              writer.WriteIntProperty("ci", varPtrVal.contextIndex);
-              writer.WriteObjectEnd();
-              return;
-          }
-          let glue = asOrNull(obj, Glue);
-          if (glue) {
-              writer.Write("<>");
-              return;
-          }
-          let controlCmd = asOrNull(obj, ControlCommand);
-          if (controlCmd) {
-              writer.Write(JsonSerialisation._controlCommandNames[controlCmd.commandType]);
-              return;
-          }
-          let nativeFunc = asOrNull(obj, NativeFunctionCall);
-          if (nativeFunc) {
-              let name = nativeFunc.name;
-              if (name == "^")
-                  name = "L^";
-              writer.Write(name);
-              return;
-          }
-          let varRef = asOrNull(obj, VariableReference);
-          if (varRef) {
-              writer.WriteObjectStart();
-              let readCountPath = varRef.pathStringForCount;
-              if (readCountPath != null) {
-                  writer.WriteProperty("CNT?", readCountPath);
-              }
-              else {
-                  writer.WriteProperty("VAR?", varRef.name);
-              }
-              writer.WriteObjectEnd();
-              return;
-          }
-          let varAss = asOrNull(obj, VariableAssignment);
-          if (varAss) {
-              writer.WriteObjectStart();
-              let key = varAss.isGlobal ? "VAR=" : "temp=";
-              writer.WriteProperty(key, varAss.variableName);
-              // Reassignment?
-              if (!varAss.isNewDeclaration)
-                  writer.WriteProperty("re", true);
-              writer.WriteObjectEnd();
-              return;
-          }
-          let voidObj = asOrNull(obj, Void);
-          if (voidObj) {
-              writer.Write("void");
-              return;
-          }
-          let tag = asOrNull(obj, Tag);
-          if (tag) {
-              writer.WriteObjectStart();
-              writer.WriteProperty("#", tag.text);
-              writer.WriteObjectEnd();
-              return;
-          }
-          let choice = asOrNull(obj, Choice);
-          if (choice) {
-              this.WriteChoice(writer, choice);
-              return;
-          }
-          throw new Error("Failed to convert runtime object to Json token: " + obj);
-      }
-      static JObjectToDictionaryRuntimeObjs(jObject) {
-          let dict = new Map();
-          for (let key in jObject) {
-              if (jObject.hasOwnProperty(key)) {
-                  let inkObject = this.JTokenToRuntimeObject(jObject[key]);
-                  if (inkObject === null) {
-                      return throwNullException("inkObject");
-                  }
-                  dict.set(key, inkObject);
-              }
-          }
-          return dict;
-      }
-      static JObjectToIntDictionary(jObject) {
-          let dict = new Map();
-          for (let key in jObject) {
-              if (jObject.hasOwnProperty(key)) {
-                  dict.set(key, parseInt(jObject[key]));
-              }
-          }
-          return dict;
-      }
-      static JTokenToRuntimeObject(token) {
-          if ((typeof token === "number" && !isNaN(token)) ||
-              typeof token === "boolean") {
-              return Value.Create(token);
-          }
-          if (typeof token === "string") {
-              let str = token.toString();
-              // String value
-              let firstChar = str[0];
-              if (firstChar == "^")
-                  return new StringValue(str.substring(1));
-              else if (firstChar == "\n" && str.length == 1)
-                  return new StringValue("\n");
-              // Glue
-              if (str == "<>")
-                  return new Glue();
-              // Control commands (would looking up in a hash set be faster?)
-              for (let i = 0; i < JsonSerialisation._controlCommandNames.length; ++i) {
-                  let cmdName = JsonSerialisation._controlCommandNames[i];
-                  if (str == cmdName) {
-                      return new ControlCommand(i);
-                  }
-              }
-              // Native functions
-              if (str == "L^")
-                  str = "^";
-              if (NativeFunctionCall.CallExistsWithName(str))
-                  return NativeFunctionCall.CallWithName(str);
-              // Pop
-              if (str == "->->")
-                  return ControlCommand.PopTunnel();
-              else if (str == "~ret")
-                  return ControlCommand.PopFunction();
-              // Void
-              if (str == "void")
-                  return new Void();
-          }
-          if (typeof token === "object" && !Array.isArray(token)) {
-              let obj = token;
-              let propValue;
-              // Divert target value to path
-              if (obj["^->"]) {
-                  propValue = obj["^->"];
-                  return new DivertTargetValue(new Path(propValue.toString()));
-              }
-              // VariablePointerValue
-              if (obj["^var"]) {
-                  propValue = obj["^var"];
-                  let varPtr = new VariablePointerValue(propValue.toString());
-                  if ("ci" in obj) {
-                      propValue = obj["ci"];
-                      varPtr.contextIndex = parseInt(propValue);
-                  }
-                  return varPtr;
-              }
-              // Divert
-              let isDivert = false;
-              let pushesToStack = false;
-              let divPushType = PushPopType.Function;
-              let external = false;
-              if ((propValue = obj["->"])) {
-                  isDivert = true;
-              }
-              else if ((propValue = obj["f()"])) {
-                  isDivert = true;
-                  pushesToStack = true;
-                  divPushType = PushPopType.Function;
-              }
-              else if ((propValue = obj["->t->"])) {
-                  isDivert = true;
-                  pushesToStack = true;
-                  divPushType = PushPopType.Tunnel;
-              }
-              else if ((propValue = obj["x()"])) {
-                  isDivert = true;
-                  external = true;
-                  pushesToStack = false;
-                  divPushType = PushPopType.Function;
-              }
-              if (isDivert) {
-                  let divert = new Divert();
-                  divert.pushesToStack = pushesToStack;
-                  divert.stackPushType = divPushType;
-                  divert.isExternal = external;
-                  let target = propValue.toString();
-                  if ((propValue = obj["var"]))
-                      divert.variableDivertName = target;
-                  else
-                      divert.targetPathString = target;
-                  divert.isConditional = !!obj["c"];
-                  if (external) {
-                      if ((propValue = obj["exArgs"]))
-                          divert.externalArgs = parseInt(propValue);
-                  }
-                  return divert;
-              }
-              // Choice
-              if ((propValue = obj["*"])) {
-                  let choice = new ChoicePoint();
-                  choice.pathStringOnChoice = propValue.toString();
-                  if ((propValue = obj["flg"]))
-                      choice.flags = parseInt(propValue);
-                  return choice;
-              }
-              // Variable reference
-              if ((propValue = obj["VAR?"])) {
-                  return new VariableReference(propValue.toString());
-              }
-              else if ((propValue = obj["CNT?"])) {
-                  let readCountVarRef = new VariableReference();
-                  readCountVarRef.pathStringForCount = propValue.toString();
-                  return readCountVarRef;
-              }
-              // Variable assignment
-              let isVarAss = false;
-              let isGlobalVar = false;
-              if ((propValue = obj["VAR="])) {
-                  isVarAss = true;
-                  isGlobalVar = true;
-              }
-              else if ((propValue = obj["temp="])) {
-                  isVarAss = true;
-                  isGlobalVar = false;
-              }
-              if (isVarAss) {
-                  let varName = propValue.toString();
-                  let isNewDecl = !obj["re"];
-                  let varAss = new VariableAssignment(varName, isNewDecl);
-                  varAss.isGlobal = isGlobalVar;
-                  return varAss;
-              }
-              if (obj["#"] !== undefined) {
-                  propValue = obj["#"];
-                  return new Tag(propValue.toString());
-              }
-              // List value
-              if ((propValue = obj["list"])) {
-                  // var listContent = (Dictionary<string, object>)propValue;
-                  let listContent = propValue;
-                  let rawList = new InkList();
-                  if ((propValue = obj["origins"])) {
-                      // var namesAsObjs = (List<object>)propValue;
-                      let namesAsObjs = propValue;
-                      // rawList.SetInitialOriginNames(namesAsObjs.Cast<string>().ToList());
-                      rawList.SetInitialOriginNames(namesAsObjs);
-                  }
-                  for (let key in listContent) {
-                      if (listContent.hasOwnProperty(key)) {
-                          let nameToVal = listContent[key];
-                          let item = new InkListItem(key);
-                          let val = parseInt(nameToVal);
-                          rawList.Add(item, val);
-                      }
-                  }
-                  return new ListValue(rawList);
-              }
-              if (obj["originalChoicePath"] != null)
-                  return this.JObjectToChoice(obj);
-          }
-          // Array is always a Runtime.Container
-          if (Array.isArray(token)) {
-              return this.JArrayToContainer(token);
-          }
-          if (token === null || token === undefined)
-              return null;
-          throw new Error("Failed to convert token to runtime object: " + JSON.stringify(token));
-      }
-      static WriteRuntimeContainer(writer, container, withoutName = false) {
-          writer.WriteArrayStart();
-          if (container === null) {
-              return throwNullException("container");
-          }
-          for (let c of container.content)
-              this.WriteRuntimeObject(writer, c);
-          let namedOnlyContent = container.namedOnlyContent;
-          let countFlags = container.countFlags;
-          let hasNameProperty = container.name != null && !withoutName;
-          let hasTerminator = namedOnlyContent != null || countFlags > 0 || hasNameProperty;
-          if (hasTerminator) {
-              writer.WriteObjectStart();
-          }
-          if (namedOnlyContent != null) {
-              for (let [key, value] of namedOnlyContent) {
-                  let name = key;
-                  let namedContainer = asOrNull(value, Container);
-                  writer.WritePropertyStart(name);
-                  this.WriteRuntimeContainer(writer, namedContainer, true);
-                  writer.WritePropertyEnd();
-              }
-          }
-          if (hasNameProperty)
-              writer.WriteProperty("#n", container.name);
-          if (hasTerminator)
-              writer.WriteObjectEnd();
-          else
-              writer.WriteNull();
-          writer.WriteArrayEnd();
-      }
-      static JArrayToContainer(jArray) {
-          let container = new Container();
-          container.content = this.JArrayToRuntimeObjList(jArray, true);
-          let terminatingObj = jArray[jArray.length - 1];
-          if (terminatingObj != null) {
-              let namedOnlyContent = new Map();
-              for (let key in terminatingObj) {
-                  if (key == "#f") {
-                      container.countFlags = parseInt(terminatingObj[key]);
-                  }
-                  else if (key == "#n") {
-                      container.name = terminatingObj[key].toString();
-                  }
-                  else {
-                      let namedContentItem = this.JTokenToRuntimeObject(terminatingObj[key]);
-                      // var namedSubContainer = namedContentItem as Container;
-                      let namedSubContainer = asOrNull(namedContentItem, Container);
-                      if (namedSubContainer)
-                          namedSubContainer.name = key;
-                      namedOnlyContent.set(key, namedContentItem);
-                  }
-              }
-              container.namedOnlyContent = namedOnlyContent;
-          }
-          return container;
-      }
-      static JObjectToChoice(jObj) {
-          let choice = new Choice();
-          choice.text = jObj["text"].toString();
-          choice.index = parseInt(jObj["index"]);
-          choice.sourcePath = jObj["originalChoicePath"].toString();
-          choice.originalThreadIndex = parseInt(jObj["originalThreadIndex"]);
-          choice.pathStringOnChoice = jObj["targetPath"].toString();
-          return choice;
-      }
-      static WriteChoice(writer, choice) {
-          writer.WriteObjectStart();
-          writer.WriteProperty("text", choice.text);
-          writer.WriteIntProperty("index", choice.index);
-          writer.WriteProperty("originalChoicePath", choice.sourcePath);
-          writer.WriteIntProperty("originalThreadIndex", choice.originalThreadIndex);
-          writer.WriteProperty("targetPath", choice.pathStringOnChoice);
-          writer.WriteObjectEnd();
-      }
-      static WriteInkList(writer, listVal) {
-          let rawList = listVal.value;
-          if (rawList === null) {
-              return throwNullException("rawList");
-          }
-          writer.WriteObjectStart();
-          writer.WritePropertyStart("list");
-          writer.WriteObjectStart();
-          for (let [key, val] of rawList) {
-              let item = InkListItem.fromSerializedKey(key);
-              let itemVal = val;
-              if (item.itemName === null) {
-                  return throwNullException("item.itemName");
-              }
-              writer.WritePropertyNameStart();
-              writer.WritePropertyNameInner(item.originName ? item.originName : "?");
-              writer.WritePropertyNameInner(".");
-              writer.WritePropertyNameInner(item.itemName);
-              writer.WritePropertyNameEnd();
-              writer.Write(itemVal);
-              writer.WritePropertyEnd();
-          }
-          writer.WriteObjectEnd();
-          writer.WritePropertyEnd();
-          if (rawList.Count == 0 &&
-              rawList.originNames != null &&
-              rawList.originNames.length > 0) {
-              writer.WritePropertyStart("origins");
-              writer.WriteArrayStart();
-              for (let name of rawList.originNames)
-                  writer.Write(name);
-              writer.WriteArrayEnd();
-              writer.WritePropertyEnd();
-          }
-          writer.WriteObjectEnd();
-      }
-      static ListDefinitionsToJToken(origin) {
-          let result = {};
-          for (let def of origin.lists) {
-              let listDefJson = {};
-              for (let [key, val] of def.items) {
-                  let item = InkListItem.fromSerializedKey(key);
-                  if (item.itemName === null) {
-                      return throwNullException("item.itemName");
-                  }
-                  listDefJson[item.itemName] = val;
-              }
-              result[def.name] = listDefJson;
-          }
-          return result;
-      }
-      static JTokenToListDefinitions(obj) {
-          // var defsObj = (Dictionary<string, object>)obj;
-          let defsObj = obj;
-          let allDefs = [];
-          for (let key in defsObj) {
-              if (defsObj.hasOwnProperty(key)) {
-                  let name = key.toString();
-                  // var listDefJson = (Dictionary<string, object>)kv.Value;
-                  let listDefJson = defsObj[key];
-                  // Cast (string, object) to (string, int) for items
-                  let items = new Map();
-                  for (let nameValueKey in listDefJson) {
-                      if (defsObj.hasOwnProperty(key)) {
-                          let nameValue = listDefJson[nameValueKey];
-                          items.set(nameValueKey, parseInt(nameValue));
-                      }
-                  }
-                  let def = new ListDefinition(name, items);
-                  allDefs.push(def);
-              }
-          }
-          return new ListDefinitionsOrigin(allDefs);
-      }
-  }
-  JsonSerialisation._controlCommandNames = (() => {
-      let _controlCommandNames = [];
-      _controlCommandNames[ControlCommand.CommandType.EvalStart] = "ev";
-      _controlCommandNames[ControlCommand.CommandType.EvalOutput] = "out";
-      _controlCommandNames[ControlCommand.CommandType.EvalEnd] = "/ev";
-      _controlCommandNames[ControlCommand.CommandType.Duplicate] = "du";
-      _controlCommandNames[ControlCommand.CommandType.PopEvaluatedValue] = "pop";
-      _controlCommandNames[ControlCommand.CommandType.PopFunction] = "~ret";
-      _controlCommandNames[ControlCommand.CommandType.PopTunnel] = "->->";
-      _controlCommandNames[ControlCommand.CommandType.BeginString] = "str";
-      _controlCommandNames[ControlCommand.CommandType.EndString] = "/str";
-      _controlCommandNames[ControlCommand.CommandType.NoOp] = "nop";
-      _controlCommandNames[ControlCommand.CommandType.ChoiceCount] = "choiceCnt";
-      _controlCommandNames[ControlCommand.CommandType.Turns] = "turn";
-      _controlCommandNames[ControlCommand.CommandType.TurnsSince] = "turns";
-      _controlCommandNames[ControlCommand.CommandType.ReadCount] = "readc";
-      _controlCommandNames[ControlCommand.CommandType.Random] = "rnd";
-      _controlCommandNames[ControlCommand.CommandType.SeedRandom] = "srnd";
-      _controlCommandNames[ControlCommand.CommandType.VisitIndex] = "visit";
-      _controlCommandNames[ControlCommand.CommandType.SequenceShuffleIndex] =
-          "seq";
-      _controlCommandNames[ControlCommand.CommandType.StartThread] = "thread";
-      _controlCommandNames[ControlCommand.CommandType.Done] = "done";
-      _controlCommandNames[ControlCommand.CommandType.End] = "end";
-      _controlCommandNames[ControlCommand.CommandType.ListFromInt] = "listInt";
-      _controlCommandNames[ControlCommand.CommandType.ListRange] = "range";
-      _controlCommandNames[ControlCommand.CommandType.ListRandom] = "lrnd";
-      for (let i = 0; i < ControlCommand.CommandType.TOTAL_VALUES; ++i) {
-          if (_controlCommandNames[i] == null)
-              throw new Error("Control command not accounted for in serialisation");
-      }
-      return _controlCommandNames;
-  })();
-
-  class CallStack {
-      constructor() {
-          this._threadCounter = 0;
-          this._startOfRoot = Pointer.Null;
-          if (arguments[0] instanceof Story) {
-              let storyContext = arguments[0];
-              this._startOfRoot = Pointer.StartOf(storyContext.rootContentContainer);
-              this.Reset();
-          }
-          else {
-              let toCopy = arguments[0];
-              this._threads = [];
-              for (let otherThread of toCopy._threads) {
-                  this._threads.push(otherThread.Copy());
-              }
-              this._threadCounter = toCopy._threadCounter;
-              this._startOfRoot = toCopy._startOfRoot.copy();
-          }
-      }
-      get elements() {
-          return this.callStack;
-      }
-      get depth() {
-          return this.elements.length;
-      }
-      get currentElement() {
-          let thread = this._threads[this._threads.length - 1];
-          let cs = thread.callstack;
-          return cs[cs.length - 1];
-      }
-      get currentElementIndex() {
-          return this.callStack.length - 1;
-      }
-      get currentThread() {
-          return this._threads[this._threads.length - 1];
-      }
-      set currentThread(value) {
-          Debug.Assert(this._threads.length == 1, "Shouldn't be directly setting the current thread when we have a stack of them");
-          this._threads.length = 0;
-          this._threads.push(value);
-      }
-      get canPop() {
-          return this.callStack.length > 1;
-      }
-      Reset() {
-          this._threads = [];
-          this._threads.push(new CallStack.Thread());
-          this._threads[0].callstack.push(new CallStack.Element(PushPopType.Tunnel, this._startOfRoot));
-      }
-      SetJsonToken(jObject, storyContext) {
-          this._threads.length = 0;
-          // TODO: (List<object>) jObject ["threads"];
-          let jThreads = jObject["threads"];
-          for (let jThreadTok of jThreads) {
-              // TODO: var jThreadObj = (Dictionary<string, object>)jThreadTok;
-              let jThreadObj = jThreadTok;
-              let thread = new CallStack.Thread(jThreadObj, storyContext);
-              this._threads.push(thread);
-          }
-          // TODO: (int)jObject ["threadCounter"];
-          this._threadCounter = parseInt(jObject["threadCounter"]);
-          this._startOfRoot = Pointer.StartOf(storyContext.rootContentContainer);
-      }
-      WriteJson(w) {
-          w.WriteObject((writer) => {
-              writer.WritePropertyStart("threads");
-              writer.WriteArrayStart();
-              for (let thread of this._threads) {
-                  thread.WriteJson(writer);
-              }
-              writer.WriteArrayEnd();
-              writer.WritePropertyEnd();
-              writer.WritePropertyStart("threadCounter");
-              writer.WriteInt(this._threadCounter);
-              writer.WritePropertyEnd();
-          });
-      }
-      PushThread() {
-          let newThread = this.currentThread.Copy();
-          this._threadCounter++;
-          newThread.threadIndex = this._threadCounter;
-          this._threads.push(newThread);
-      }
-      ForkThread() {
-          let forkedThread = this.currentThread.Copy();
-          this._threadCounter++;
-          forkedThread.threadIndex = this._threadCounter;
-          return forkedThread;
-      }
-      PopThread() {
-          if (this.canPopThread) {
-              this._threads.splice(this._threads.indexOf(this.currentThread), 1); // should be equivalent to a pop()
-          }
-          else {
-              throw new Error("Can't pop thread");
-          }
-      }
-      get canPopThread() {
-          return this._threads.length > 1 && !this.elementIsEvaluateFromGame;
-      }
-      get elementIsEvaluateFromGame() {
-          return this.currentElement.type == PushPopType.FunctionEvaluationFromGame;
-      }
-      Push(type, externalEvaluationStackHeight = 0, outputStreamLengthWithPushed = 0) {
-          let element = new CallStack.Element(type, this.currentElement.currentPointer, false);
-          element.evaluationStackHeightWhenPushed = externalEvaluationStackHeight;
-          element.functionStartInOutputStream = outputStreamLengthWithPushed;
-          this.callStack.push(element);
-      }
-      CanPop(type = null) {
-          if (!this.canPop)
-              return false;
-          if (type == null)
-              return true;
-          return this.currentElement.type == type;
-      }
-      Pop(type = null) {
-          if (this.CanPop(type)) {
-              this.callStack.pop();
-              return;
-          }
-          else {
-              throw new Error("Mismatched push/pop in Callstack");
-          }
-      }
-      GetTemporaryVariableWithName(name, contextIndex = -1) {
-          if (contextIndex == -1)
-              contextIndex = this.currentElementIndex + 1;
-          let contextElement = this.callStack[contextIndex - 1];
-          let varValue = tryGetValueFromMap(contextElement.temporaryVariables, name, null);
-          if (varValue.exists) {
-              return varValue.result;
-          }
-          else {
-              return null;
-          }
-      }
-      SetTemporaryVariable(name, value, declareNew, contextIndex = -1) {
-          if (contextIndex == -1)
-              contextIndex = this.currentElementIndex + 1;
-          let contextElement = this.callStack[contextIndex - 1];
-          if (!declareNew && !contextElement.temporaryVariables.get(name)) {
-              throw new Error("Could not find temporary variable to set: " + name);
-          }
-          let oldValue = tryGetValueFromMap(contextElement.temporaryVariables, name, null);
-          if (oldValue.exists)
-              ListValue.RetainListOriginsForAssignment(oldValue.result, value);
-          contextElement.temporaryVariables.set(name, value);
-      }
-      ContextForVariableNamed(name) {
-          if (this.currentElement.temporaryVariables.get(name)) {
-              return this.currentElementIndex + 1;
-          }
-          else {
-              return 0;
-          }
-      }
-      ThreadWithIndex(index) {
-          let filtered = this._threads.filter((t) => {
-              if (t.threadIndex == index)
-                  return t;
-          });
-          return filtered.length > 0 ? filtered[0] : null;
-      }
-      get callStack() {
-          return this.currentThread.callstack;
-      }
-      get callStackTrace() {
-          let sb = new StringBuilder();
-          for (let t = 0; t < this._threads.length; t++) {
-              let thread = this._threads[t];
-              let isCurrent = t == this._threads.length - 1;
-              sb.AppendFormat("=== THREAD {0}/{1} {2}===\n", t + 1, this._threads.length, isCurrent ? "(current) " : "");
-              for (let i = 0; i < thread.callstack.length; i++) {
-                  if (thread.callstack[i].type == PushPopType.Function)
-                      sb.Append("  [FUNCTION] ");
-                  else
-                      sb.Append("  [TUNNEL] ");
-                  let pointer = thread.callstack[i].currentPointer;
-                  if (!pointer.isNull) {
-                      sb.Append("<SOMEWHERE IN ");
-                      if (pointer.container === null) {
-                          return throwNullException("pointer.container");
-                      }
-                      sb.Append(pointer.container.path.toString());
-                      sb.AppendLine(">");
-                  }
-              }
-          }
-          return sb.toString();
-      }
-  }
-  (function (CallStack) {
-      class Element {
-          constructor(type, pointer, inExpressionEvaluation = false) {
-              this.evaluationStackHeightWhenPushed = 0;
-              this.functionStartInOutputStream = 0;
-              this.currentPointer = pointer.copy();
-              this.inExpressionEvaluation = inExpressionEvaluation;
-              this.temporaryVariables = new Map();
-              this.type = type;
-          }
-          Copy() {
-              let copy = new Element(this.type, this.currentPointer, this.inExpressionEvaluation);
-              copy.temporaryVariables = new Map(this.temporaryVariables);
-              copy.evaluationStackHeightWhenPushed = this.evaluationStackHeightWhenPushed;
-              copy.functionStartInOutputStream = this.functionStartInOutputStream;
-              return copy;
-          }
-      }
-      CallStack.Element = Element;
-      class Thread {
-          constructor() {
-              this.threadIndex = 0;
-              this.previousPointer = Pointer.Null;
-              this.callstack = [];
-              if (arguments[0] && arguments[1]) {
-                  let jThreadObj = arguments[0];
-                  let storyContext = arguments[1];
-                  // TODO: (int) jThreadObj['threadIndex'] can raise;
-                  this.threadIndex = parseInt(jThreadObj["threadIndex"]);
-                  let jThreadCallstack = jThreadObj["callstack"];
-                  for (let jElTok of jThreadCallstack) {
-                      let jElementObj = jElTok;
-                      // TODO: (int) jElementObj['type'] can raise;
-                      let pushPopType = parseInt(jElementObj["type"]);
-                      let pointer = Pointer.Null;
-                      let currentContainerPathStr;
-                      // TODO: jElementObj.TryGetValue ("cPath", out currentContainerPathStrToken);
-                      let currentContainerPathStrToken = jElementObj["cPath"];
-                      if (typeof currentContainerPathStrToken !== "undefined") {
-                          currentContainerPathStr = currentContainerPathStrToken.toString();
-                          let threadPointerResult = storyContext.ContentAtPath(new Path(currentContainerPathStr));
-                          pointer.container = threadPointerResult.container;
-                          pointer.index = parseInt(jElementObj["idx"]);
-                          if (threadPointerResult.obj == null)
-                              throw new Error("When loading state, internal story location couldn't be found: " +
-                                  currentContainerPathStr +
-                                  ". Has the story changed since this save data was created?");
-                          else if (threadPointerResult.approximate) {
-                              if (pointer.container === null) {
-                                  return throwNullException("pointer.container");
-                              }
-                              storyContext.Warning("When loading state, exact internal story location couldn't be found: '" +
-                                  currentContainerPathStr +
-                                  "', so it was approximated to '" +
-                                  pointer.container.path.toString() +
-                                  "' to recover. Has the story changed since this save data was created?");
-                          }
-                      }
-                      let inExpressionEvaluation = !!jElementObj["exp"];
-                      let el = new Element(pushPopType, pointer, inExpressionEvaluation);
-                      let temps = jElementObj["temp"];
-                      if (typeof temps !== "undefined") {
-                          el.temporaryVariables = JsonSerialisation.JObjectToDictionaryRuntimeObjs(temps);
-                      }
-                      else {
-                          el.temporaryVariables.clear();
-                      }
-                      this.callstack.push(el);
-                  }
-                  let prevContentObjPath = jThreadObj["previousContentObject"];
-                  if (typeof prevContentObjPath !== "undefined") {
-                      let prevPath = new Path(prevContentObjPath.toString());
-                      this.previousPointer = storyContext.PointerAtPath(prevPath);
-                  }
-              }
-          }
-          Copy() {
-              let copy = new Thread();
-              copy.threadIndex = this.threadIndex;
-              for (let e of this.callstack) {
-                  copy.callstack.push(e.Copy());
-              }
-              copy.previousPointer = this.previousPointer.copy();
-              return copy;
-          }
-          WriteJson(writer) {
-              writer.WriteObjectStart();
-              writer.WritePropertyStart("callstack");
-              writer.WriteArrayStart();
-              for (let el of this.callstack) {
-                  writer.WriteObjectStart();
-                  if (!el.currentPointer.isNull) {
-                      if (el.currentPointer.container === null) {
-                          return throwNullException("el.currentPointer.container");
-                      }
-                      writer.WriteProperty("cPath", el.currentPointer.container.path.componentsString);
-                      writer.WriteIntProperty("idx", el.currentPointer.index);
-                  }
-                  writer.WriteProperty("exp", el.inExpressionEvaluation);
-                  writer.WriteIntProperty("type", el.type);
-                  if (el.temporaryVariables.size > 0) {
-                      writer.WritePropertyStart("temp");
-                      JsonSerialisation.WriteDictionaryRuntimeObjs(writer, el.temporaryVariables);
-                      writer.WritePropertyEnd();
-                  }
-                  writer.WriteObjectEnd();
-              }
-              writer.WriteArrayEnd();
-              writer.WritePropertyEnd();
-              writer.WriteIntProperty("threadIndex", this.threadIndex);
-              if (!this.previousPointer.isNull) {
-                  let resolvedPointer = this.previousPointer.Resolve();
-                  if (resolvedPointer === null) {
-                      return throwNullException("this.previousPointer.Resolve()");
-                  }
-                  writer.WriteProperty("previousContentObject", resolvedPointer.path.toString());
-              }
-              writer.WriteObjectEnd();
-          }
-      }
-      CallStack.Thread = Thread;
-  })(CallStack || (CallStack = {}));
-
-  class VariablesState {
-      constructor(callStack, listDefsOrigin) {
-          // The way variableChangedEvent is a bit different than the reference implementation.
-          // Originally it uses the C# += operator to add delegates, but in js we need to maintain
-          // an actual collection of delegates (ie. callbacks) to register a new one, there is a
-          // special ObserveVariableChange method below.
-          this.variableChangedEventCallbacks = [];
-          this.patch = null;
-          this._batchObservingVariableChanges = false;
-          this._defaultGlobalVariables = new Map();
-          this._changedVariablesForBatchObs = new Set();
-          this._globalVariables = new Map();
-          this._callStack = callStack;
-          this._listDefsOrigin = listDefsOrigin;
-          // if es6 proxies are available, use them.
-          try {
-              // the proxy is used to allow direct manipulation of global variables.
-              // It first tries to access the objects own property, and if none is
-              // found it delegates the call to the $ method, defined below
-              let p = new Proxy(this, {
-                  get(target, name) {
-                      return name in target ? target[name] : target.$(name);
-                  },
-                  set(target, name, value) {
-                      if (name in target)
-                          target[name] = value;
-                      else
-                          target.$(name, value);
-                      return true; // returning a falsy value make the trap fail
-                  },
-              });
-              return p;
-          }
-          catch (e) {
-              // thr proxy object is not available in this context. we should warn the
-              // dev but writting to the console feels a bit intrusive.
-              // console.log("ES6 Proxy not available - direct manipulation of global variables can't work, use $() instead.");
-          }
-      }
-      variableChangedEvent(variableName, newValue) {
-          for (let callback of this.variableChangedEventCallbacks) {
-              callback(variableName, newValue);
-          }
-      }
-      get batchObservingVariableChanges() {
-          return this._batchObservingVariableChanges;
-      }
-      set batchObservingVariableChanges(value) {
-          this._batchObservingVariableChanges = value;
-          if (value) {
-              this._changedVariablesForBatchObs = new Set();
-          }
-          else {
-              if (this._changedVariablesForBatchObs != null) {
-                  for (let variableName of this._changedVariablesForBatchObs) {
-                      let currentValue = this._globalVariables.get(variableName);
-                      if (!currentValue) {
-                          throwNullException("currentValue");
-                      }
-                      else {
-                          this.variableChangedEvent(variableName, currentValue);
-                      }
-                  }
-                  this._changedVariablesForBatchObs = null;
-              }
-          }
-      }
-      get callStack() {
-          return this._callStack;
-      }
-      set callStack(callStack) {
-          this._callStack = callStack;
-      }
-      // the original code uses a magic getter and setter for global variables,
-      // allowing things like variableState['varname]. This is not quite possible
-      // in js without a Proxy, so it is replaced with this $ function.
-      $(variableName, value) {
-          if (typeof value === "undefined") {
-              let varContents = null;
-              if (this.patch !== null) {
-                  varContents = this.patch.TryGetGlobal(variableName, null);
-                  if (varContents.exists)
-                      return varContents.result.valueObject;
-              }
-              varContents = this._globalVariables.get(variableName);
-              if (typeof varContents === "undefined") {
-                  varContents = this._defaultGlobalVariables.get(variableName);
-              }
-              if (typeof varContents !== "undefined")
-                  return varContents.valueObject;
-              else
-                  return null;
-          }
-          else {
-              if (typeof this._defaultGlobalVariables.get(variableName) === "undefined")
-                  throw new StoryException("Cannot assign to a variable (" +
-                      variableName +
-                      ") that hasn't been declared in the story");
-              let val = Value.Create(value);
-              if (val == null) {
-                  if (value == null) {
-                      throw new Error("Cannot pass null to VariableState");
-                  }
-                  else {
-                      throw new Error("Invalid value passed to VariableState: " + value.toString());
-                  }
-              }
-              this.SetGlobal(variableName, val);
-          }
-      }
-      ApplyPatch() {
-          if (this.patch === null) {
-              return throwNullException("this.patch");
-          }
-          for (let [namedVarKey, namedVarValue] of this.patch.globals) {
-              this._globalVariables.set(namedVarKey, namedVarValue);
-          }
-          if (this._changedVariablesForBatchObs !== null) {
-              for (let name of this.patch.changedVariables) {
-                  this._changedVariablesForBatchObs.add(name);
-              }
-          }
-          this.patch = null;
-      }
-      SetJsonToken(jToken) {
-          this._globalVariables.clear();
-          for (let [varValKey, varValValue] of this._defaultGlobalVariables) {
-              let loadedToken = jToken[varValKey];
-              if (typeof loadedToken !== "undefined") {
-                  let tokenInkObject = JsonSerialisation.JTokenToRuntimeObject(loadedToken);
-                  if (tokenInkObject === null) {
-                      return throwNullException("tokenInkObject");
-                  }
-                  this._globalVariables.set(varValKey, tokenInkObject);
-              }
-              else {
-                  this._globalVariables.set(varValKey, varValValue);
-              }
-          }
-      }
-      WriteJson(writer) {
-          writer.WriteObjectStart();
-          for (let [keyValKey, keyValValue] of this._globalVariables) {
-              let name = keyValKey;
-              let val = keyValValue;
-              if (VariablesState.dontSaveDefaultValues) {
-                  if (this._defaultGlobalVariables.has(name)) {
-                      let defaultVal = this._defaultGlobalVariables.get(name);
-                      if (this.RuntimeObjectsEqual(val, defaultVal))
-                          continue;
-                  }
-              }
-              writer.WritePropertyStart(name);
-              JsonSerialisation.WriteRuntimeObject(writer, val);
-              writer.WritePropertyEnd();
-          }
-          writer.WriteObjectEnd();
-      }
-      RuntimeObjectsEqual(obj1, obj2) {
-          if (obj1 === null) {
-              return throwNullException("obj1");
-          }
-          if (obj2 === null) {
-              return throwNullException("obj2");
-          }
-          if (obj1.constructor !== obj2.constructor)
-              return false;
-          let boolVal = asOrNull(obj1, BoolValue);
-          if (boolVal !== null) {
-              return boolVal.value === asOrThrows(obj2, BoolValue).value;
-          }
-          let intVal = asOrNull(obj1, IntValue);
-          if (intVal !== null) {
-              return intVal.value === asOrThrows(obj2, IntValue).value;
-          }
-          let floatVal = asOrNull(obj1, FloatValue);
-          if (floatVal !== null) {
-              return floatVal.value === asOrThrows(obj2, FloatValue).value;
-          }
-          let val1 = asOrNull(obj1, Value);
-          let val2 = asOrNull(obj2, Value);
-          if (val1 !== null && val2 !== null) {
-              if (isEquatable(val1.valueObject) && isEquatable(val2.valueObject)) {
-                  return val1.valueObject.Equals(val2.valueObject);
-              }
-              else {
-                  return val1.valueObject === val2.valueObject;
-              }
-          }
-          throw new Error("FastRoughDefinitelyEquals: Unsupported runtime object type: " +
-              obj1.constructor.name);
-      }
-      GetVariableWithName(name, contextIndex = -1) {
-          let varValue = this.GetRawVariableWithName(name, contextIndex);
-          // var varPointer = varValue as VariablePointerValue;
-          let varPointer = asOrNull(varValue, VariablePointerValue);
-          if (varPointer !== null) {
-              varValue = this.ValueAtVariablePointer(varPointer);
-          }
-          return varValue;
-      }
-      TryGetDefaultVariableValue(name) {
-          let val = tryGetValueFromMap(this._defaultGlobalVariables, name, null);
-          return val.exists ? val.result : null;
-      }
-      GlobalVariableExistsWithName(name) {
-          return (this._globalVariables.has(name) ||
-              (this._defaultGlobalVariables !== null &&
-                  this._defaultGlobalVariables.has(name)));
-      }
-      GetRawVariableWithName(name, contextIndex) {
-          let varValue = null;
-          if (contextIndex == 0 || contextIndex == -1) {
-              let variableValue = null;
-              if (this.patch !== null) {
-                  variableValue = this.patch.TryGetGlobal(name, null);
-                  if (variableValue.exists)
-                      return variableValue.result;
-              }
-              // this is a conditional assignment
-              variableValue = tryGetValueFromMap(this._globalVariables, name, null);
-              if (variableValue.exists)
-                  return variableValue.result;
-              if (this._defaultGlobalVariables !== null) {
-                  variableValue = tryGetValueFromMap(this._defaultGlobalVariables, name, null);
-                  if (variableValue.exists)
-                      return variableValue.result;
-              }
-              if (this._listDefsOrigin === null)
-                  return throwNullException("VariablesState._listDefsOrigin");
-              let listItemValue = this._listDefsOrigin.FindSingleItemListWithName(name);
-              if (listItemValue)
-                  return listItemValue;
-          }
-          varValue = this._callStack.GetTemporaryVariableWithName(name, contextIndex);
-          return varValue;
-      }
-      ValueAtVariablePointer(pointer) {
-          return this.GetVariableWithName(pointer.variableName, pointer.contextIndex);
-      }
-      Assign(varAss, value) {
-          let name = varAss.variableName;
-          if (name === null) {
-              return throwNullException("name");
-          }
-          let contextIndex = -1;
-          let setGlobal = false;
-          if (varAss.isNewDeclaration) {
-              setGlobal = varAss.isGlobal;
-          }
-          else {
-              setGlobal = this.GlobalVariableExistsWithName(name);
-          }
-          if (varAss.isNewDeclaration) {
-              // var varPointer = value as VariablePointerValue;
-              let varPointer = asOrNull(value, VariablePointerValue);
-              if (varPointer !== null) {
-                  let fullyResolvedVariablePointer = this.ResolveVariablePointer(varPointer);
-                  value = fullyResolvedVariablePointer;
-              }
-          }
-          else {
-              let existingPointer = null;
-              do {
-                  // existingPointer = GetRawVariableWithName (name, contextIndex) as VariablePointerValue;
-                  existingPointer = asOrNull(this.GetRawVariableWithName(name, contextIndex), VariablePointerValue);
-                  if (existingPointer != null) {
-                      name = existingPointer.variableName;
-                      contextIndex = existingPointer.contextIndex;
-                      setGlobal = contextIndex == 0;
-                  }
-              } while (existingPointer != null);
-          }
-          if (setGlobal) {
-              this.SetGlobal(name, value);
-          }
-          else {
-              this._callStack.SetTemporaryVariable(name, value, varAss.isNewDeclaration, contextIndex);
-          }
-      }
-      SnapshotDefaultGlobals() {
-          this._defaultGlobalVariables = new Map(this._globalVariables);
-      }
-      RetainListOriginsForAssignment(oldValue, newValue) {
-          let oldList = asOrThrows(oldValue, ListValue);
-          let newList = asOrThrows(newValue, ListValue);
-          if (oldList.value && newList.value && newList.value.Count == 0) {
-              newList.value.SetInitialOriginNames(oldList.value.originNames);
-          }
-      }
-      SetGlobal(variableName, value) {
-          let oldValue = null;
-          if (this.patch === null) {
-              oldValue = tryGetValueFromMap(this._globalVariables, variableName, null);
-          }
-          if (this.patch !== null) {
-              oldValue = this.patch.TryGetGlobal(variableName, null);
-              if (!oldValue.exists) {
-                  oldValue = tryGetValueFromMap(this._globalVariables, variableName, null);
-              }
-          }
-          ListValue.RetainListOriginsForAssignment(oldValue.result, value);
-          if (variableName === null) {
-              return throwNullException("variableName");
-          }
-          if (this.patch !== null) {
-              this.patch.SetGlobal(variableName, value);
-          }
-          else {
-              this._globalVariables.set(variableName, value);
-          }
-          // TODO: Not sure !== is equivalent to !value.Equals(oldValue)
-          if (this.variableChangedEvent !== null &&
-              oldValue !== null &&
-              value !== oldValue.result) {
-              if (this.batchObservingVariableChanges) {
-                  if (this._changedVariablesForBatchObs === null) {
-                      return throwNullException("this._changedVariablesForBatchObs");
-                  }
-                  if (this.patch !== null) {
-                      this.patch.AddChangedVariable(variableName);
-                  }
-                  else if (this._changedVariablesForBatchObs !== null) {
-                      this._changedVariablesForBatchObs.add(variableName);
-                  }
-              }
-              else {
-                  this.variableChangedEvent(variableName, value);
-              }
-          }
-      }
-      ResolveVariablePointer(varPointer) {
-          let contextIndex = varPointer.contextIndex;
-          if (contextIndex == -1)
-              contextIndex = this.GetContextIndexOfVariableNamed(varPointer.variableName);
-          let valueOfVariablePointedTo = this.GetRawVariableWithName(varPointer.variableName, contextIndex);
-          // var doubleRedirectionPointer = valueOfVariablePointedTo as VariablePointerValue;
-          let doubleRedirectionPointer = asOrNull(valueOfVariablePointedTo, VariablePointerValue);
-          if (doubleRedirectionPointer != null) {
-              return doubleRedirectionPointer;
-          }
-          else {
-              return new VariablePointerValue(varPointer.variableName, contextIndex);
-          }
-      }
-      GetContextIndexOfVariableNamed(varName) {
-          if (this.GlobalVariableExistsWithName(varName))
-              return 0;
-          return this._callStack.currentElementIndex;
-      }
-      /**
-       * This function is specific to the js version of ink. It allows to register a
-       * callback that will be called when a variable changes. The original code uses
-       * `state.variableChangedEvent += callback` instead.
-       *
-       * @param {function} callback
-       */
-      ObserveVariableChange(callback) {
-          this.variableChangedEventCallbacks.push(callback);
-      }
-  }
-  VariablesState.dontSaveDefaultValues = true;
-
-  // Taken from https://gist.github.com/blixt/f17b47c62508be59987b
-  // Ink uses a seedable PRNG of which there is none in native javascript.
-  class PRNG {
-      constructor(seed) {
-          this.seed = seed % 2147483647;
-          if (this.seed <= 0)
-              this.seed += 2147483646;
-      }
-      next() {
-          return (this.seed = (this.seed * 16807) % 2147483647);
-      }
-      nextFloat() {
-          return (this.next() - 1) / 2147483646;
-      }
-  }
-
-  class StatePatch {
-      constructor() {
-          this._changedVariables = new Set();
-          this._visitCounts = new Map();
-          this._turnIndices = new Map();
-          if (arguments.length === 1 && arguments[0] !== null) {
-              let toCopy = arguments[0];
-              this._globals = new Map(toCopy._globals);
-              this._changedVariables = new Set(toCopy._changedVariables);
-              this._visitCounts = new Map(toCopy._visitCounts);
-              this._turnIndices = new Map(toCopy._turnIndices);
-          }
-          else {
-              this._globals = new Map();
-              this._changedVariables = new Set();
-              this._visitCounts = new Map();
-              this._turnIndices = new Map();
-          }
-      }
-      get globals() {
-          return this._globals;
-      }
-      get changedVariables() {
-          return this._changedVariables;
-      }
-      get visitCounts() {
-          return this._visitCounts;
-      }
-      get turnIndices() {
-          return this._turnIndices;
-      }
-      TryGetGlobal(name, /* out */ value) {
-          if (name !== null && this._globals.has(name)) {
-              return { result: this._globals.get(name), exists: true };
-          }
-          return { result: value, exists: false };
-      }
-      SetGlobal(name, value) {
-          this._globals.set(name, value);
-      }
-      AddChangedVariable(name) {
-          return this._changedVariables.add(name);
-      }
-      TryGetVisitCount(container, /* out */ count) {
-          if (this._visitCounts.has(container)) {
-              return { result: this._visitCounts.get(container), exists: true };
-          }
-          return { result: count, exists: false };
-      }
-      SetVisitCount(container, count) {
-          this._visitCounts.set(container, count);
-      }
-      SetTurnIndex(container, index) {
-          this._turnIndices.set(container, index);
-      }
-      TryGetTurnIndex(container, /* out */ index) {
-          if (this._turnIndices.has(container)) {
-              return { result: this._turnIndices.get(container), exists: true };
-          }
-          return { result: index, exists: false };
-      }
-  }
-
-  class SimpleJson {
-      static TextToDictionary(text) {
-          return new SimpleJson.Reader(text).ToDictionary();
-      }
-      static TextToArray(text) {
-          return new SimpleJson.Reader(text).ToArray();
-      }
-  }
-  (function (SimpleJson) {
-      class Reader {
-          constructor(text) {
-              this._rootObject = JSON.parse(text);
-          }
-          ToDictionary() {
-              return this._rootObject;
-          }
-          ToArray() {
-              return this._rootObject;
-          }
-      }
-      SimpleJson.Reader = Reader;
-      // In C#, this class writes json tokens directly to a StringWriter or
-      // another stream. Here, a temporary hierarchy is created in the form
-      // of a javascript object, which is serialised in the `toString` method.
-      // See individual methods and properties for more information.
-      class Writer {
-          constructor() {
-              // In addition to `_stateStack` present in the original code,
-              // this implementation of SimpleJson use two other stacks and two
-              // temporary variables holding the current context.
-              // Used to keep track of the current property name being built
-              // with `WritePropertyNameStart`, `WritePropertyNameInner` and
-              // `WritePropertyNameEnd`.
-              this._currentPropertyName = null;
-              // Used to keep track of the current string value being built
-              // with `WriteStringStart`, `WriteStringInner` and
-              // `WriteStringEnd`.
-              this._currentString = null;
-              this._stateStack = [];
-              // Keep track of the current collection being built (either an array
-              // or an object). For instance, at the '?' step during the hiarchy
-              // creation, this hierarchy:
-              // [3, {a: [b, ?]}] will have this corresponding stack:
-              // (bottom) [Array, Object, Array] (top)
-              this._collectionStack = [];
-              // Keep track of the current property being assigned. For instance, at
-              // the '?' step during the hiarchy creation, this hierarchy:
-              // [3, {a: [b, {c: ?}]}] will have this corresponding stack:
-              // (bottom) [a, c] (top)
-              this._propertyNameStack = [];
-              // Object containing the entire hiearchy.
-              this._jsonObject = null;
-          }
-          WriteObject(inner) {
-              this.WriteObjectStart();
-              inner(this);
-              this.WriteObjectEnd();
-          }
-          // Add a new object.
-          WriteObjectStart() {
-              this.StartNewObject(true);
-              let newObject = {};
-              if (this.state === SimpleJson.Writer.State.Property) {
-                  // This object is created as the value of a property,
-                  // inside an other object.
-                  this.Assert(this.currentCollection !== null);
-                  this.Assert(this.currentPropertyName !== null);
-                  let propertyName = this._propertyNameStack.pop();
-                  this.currentCollection[propertyName] = newObject;
-                  this._collectionStack.push(newObject);
-              }
-              else if (this.state === SimpleJson.Writer.State.Array) {
-                  // This object is created as the child of an array.
-                  this.Assert(this.currentCollection !== null);
-                  this.currentCollection.push(newObject);
-                  this._collectionStack.push(newObject);
-              }
-              else {
-                  // This object is the root object.
-                  this.Assert(this.state === SimpleJson.Writer.State.None);
-                  this._jsonObject = newObject;
-                  this._collectionStack.push(newObject);
-              }
-              this._stateStack.push(new SimpleJson.Writer.StateElement(SimpleJson.Writer.State.Object));
-          }
-          WriteObjectEnd() {
-              this.Assert(this.state === SimpleJson.Writer.State.Object);
-              this._collectionStack.pop();
-              this._stateStack.pop();
-          }
-          // Write a property name / value pair to the current object.
-          WriteProperty(name, 
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          innerOrContent) {
-              this.WritePropertyStart(name);
-              if (arguments[1] instanceof Function) {
-                  let inner = arguments[1];
-                  inner(this);
-              }
-              else {
-                  let content = arguments[1];
-                  this.Write(content);
-              }
-              this.WritePropertyEnd();
-          }
-          // Int and Float are separate calls, since there both are
-          // numbers in JavaScript, but need to be handled differently.
-          WriteIntProperty(name, content) {
-              this.WritePropertyStart(name);
-              this.WriteInt(content);
-              this.WritePropertyEnd();
-          }
-          WriteFloatProperty(name, content) {
-              this.WritePropertyStart(name);
-              this.WriteFloat(content);
-              this.WritePropertyEnd();
-          }
-          // Prepare a new property name, which will be use to add the
-          // new object when calling _addToCurrentObject() from a Write
-          // method.
-          WritePropertyStart(name) {
-              this.Assert(this.state === SimpleJson.Writer.State.Object);
-              this._propertyNameStack.push(name);
-              this.IncrementChildCount();
-              this._stateStack.push(new SimpleJson.Writer.StateElement(SimpleJson.Writer.State.Property));
-          }
-          WritePropertyEnd() {
-              this.Assert(this.state === SimpleJson.Writer.State.Property);
-              this.Assert(this.childCount === 1);
-              this._stateStack.pop();
-          }
-          // Prepare a new property name, except this time, the property name
-          // will be created by concatenating all the strings passed to
-          // WritePropertyNameInner.
-          WritePropertyNameStart() {
-              this.Assert(this.state === SimpleJson.Writer.State.Object);
-              this.IncrementChildCount();
-              this._currentPropertyName = "";
-              this._stateStack.push(new SimpleJson.Writer.StateElement(SimpleJson.Writer.State.Property));
-              this._stateStack.push(new SimpleJson.Writer.StateElement(SimpleJson.Writer.State.PropertyName));
-          }
-          WritePropertyNameEnd() {
-              this.Assert(this.state === SimpleJson.Writer.State.PropertyName);
-              this.Assert(this._currentPropertyName !== null);
-              this._propertyNameStack.push(this._currentPropertyName);
-              this._currentPropertyName = null;
-              this._stateStack.pop();
-          }
-          WritePropertyNameInner(str) {
-              this.Assert(this.state === SimpleJson.Writer.State.PropertyName);
-              this.Assert(this._currentPropertyName !== null);
-              this._currentPropertyName += str;
-          }
-          // Add a new array.
-          WriteArrayStart() {
-              this.StartNewObject(true);
-              let newObject = [];
-              if (this.state === SimpleJson.Writer.State.Property) {
-                  // This array is created as the value of a property,
-                  // inside an object.
-                  this.Assert(this.currentCollection !== null);
-                  this.Assert(this.currentPropertyName !== null);
-                  let propertyName = this._propertyNameStack.pop();
-                  this.currentCollection[propertyName] = newObject;
-                  this._collectionStack.push(newObject);
-              }
-              else if (this.state === SimpleJson.Writer.State.Array) {
-                  // This array is created as the child of another array.
-                  this.Assert(this.currentCollection !== null);
-                  this.currentCollection.push(newObject);
-                  this._collectionStack.push(newObject);
-              }
-              else {
-                  // This array is the root object.
-                  this.Assert(this.state === SimpleJson.Writer.State.None);
-                  this._jsonObject = newObject;
-                  this._collectionStack.push(newObject);
-              }
-              this._stateStack.push(new SimpleJson.Writer.StateElement(SimpleJson.Writer.State.Array));
-          }
-          WriteArrayEnd() {
-              this.Assert(this.state === SimpleJson.Writer.State.Array);
-              this._collectionStack.pop();
-              this._stateStack.pop();
-          }
-          // Add the value to the appropriate collection (array / object), given the current
-          // context.
-          Write(value, 
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          escape = true) {
-              if (value === null) {
-                  console.error("Warning: trying to write a null string");
-                  return;
-              }
-              this.StartNewObject(false);
-              this._addToCurrentObject(value);
-          }
-          WriteBool(value) {
-              if (value === null) {
-                  return;
-              }
-              this.StartNewObject(false);
-              this._addToCurrentObject(value);
-          }
-          WriteInt(value) {
-              if (value === null) {
-                  return;
-              }
-              this.StartNewObject(false);
-              // Math.floor is used as a precaution:
-              //     1. to ensure that the value is written as an integer
-              //        (without a fractional part -> 1 instead of 1.0), even
-              //        though it should be the default behaviour of
-              //        JSON.serialize;
-              //     2. to ensure that if a floating number is passed
-              //        accidentally, it's converted to an integer.
-              //
-              // This guarantees savegame compatibility with the reference
-              // implementation.
-              this._addToCurrentObject(Math.floor(value));
-          }
-          // Since JSON doesn't support NaN and Infinity, these values
-          // are converted here.
-          WriteFloat(value) {
-              if (value === null) {
-                  return;
-              }
-              this.StartNewObject(false);
-              if (value == Number.POSITIVE_INFINITY) {
-                  this._addToCurrentObject(3.4e38);
-              }
-              else if (value == Number.NEGATIVE_INFINITY) {
-                  this._addToCurrentObject(-3.4e38);
-              }
-              else if (isNaN(value)) {
-                  this._addToCurrentObject(0.0);
-              }
-              else {
-                  this._addToCurrentObject(value);
-              }
-          }
-          WriteNull() {
-              this.StartNewObject(false);
-              this._addToCurrentObject(null);
-          }
-          // Prepare a string before adding it to the current collection in
-          // WriteStringEnd(). The string will be a concatenation of all the
-          // strings passed to WriteStringInner.
-          WriteStringStart() {
-              this.StartNewObject(false);
-              this._currentString = "";
-              this._stateStack.push(new SimpleJson.Writer.StateElement(SimpleJson.Writer.State.String));
-          }
-          WriteStringEnd() {
-              this.Assert(this.state == SimpleJson.Writer.State.String);
-              this._stateStack.pop();
-              this._addToCurrentObject(this._currentString);
-              this._currentString = null;
-          }
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          WriteStringInner(str, escape = true) {
-              this.Assert(this.state === SimpleJson.Writer.State.String);
-              if (str === null) {
-                  console.error("Warning: trying to write a null string");
-                  return;
-              }
-              this._currentString += str;
-          }
-          // Serialise the root object into a JSON string.
-          ToString() {
-              if (this._jsonObject === null) {
-                  return "";
-              }
-              return JSON.stringify(this._jsonObject);
-          }
-          // Prepare the state stack when adding new objects / values.
-          StartNewObject(container) {
-              if (container) {
-                  this.Assert(this.state === SimpleJson.Writer.State.None ||
-                      this.state === SimpleJson.Writer.State.Property ||
-                      this.state === SimpleJson.Writer.State.Array);
-              }
-              else {
-                  this.Assert(this.state === SimpleJson.Writer.State.Property ||
-                      this.state === SimpleJson.Writer.State.Array);
-              }
-              if (this.state === SimpleJson.Writer.State.Property) {
-                  this.Assert(this.childCount === 0);
-              }
-              if (this.state === SimpleJson.Writer.State.Array ||
-                  this.state === SimpleJson.Writer.State.Property) {
-                  this.IncrementChildCount();
-              }
-          }
-          // These getters peek all the different stacks.
-          get state() {
-              if (this._stateStack.length > 0) {
-                  return this._stateStack[this._stateStack.length - 1].type;
-              }
-              else {
-                  return SimpleJson.Writer.State.None;
-              }
-          }
-          get childCount() {
-              if (this._stateStack.length > 0) {
-                  return this._stateStack[this._stateStack.length - 1].childCount;
-              }
-              else {
-                  return 0;
-              }
-          }
-          get currentCollection() {
-              if (this._collectionStack.length > 0) {
-                  return this._collectionStack[this._collectionStack.length - 1];
-              }
-              else {
-                  return null;
-              }
-          }
-          get currentPropertyName() {
-              if (this._propertyNameStack.length > 0) {
-                  return this._propertyNameStack[this._propertyNameStack.length - 1];
-              }
-              else {
-                  return null;
-              }
-          }
-          IncrementChildCount() {
-              this.Assert(this._stateStack.length > 0);
-              let currEl = this._stateStack.pop();
-              currEl.childCount++;
-              this._stateStack.push(currEl);
-          }
-          Assert(condition) {
-              if (!condition)
-                  throw Error("Assert failed while writing JSON");
-          }
-          // This method did not exist in the original C# code. It adds
-          // the given value to the current collection (used by Write methods).
-          _addToCurrentObject(value) {
-              this.Assert(this.currentCollection !== null);
-              if (this.state === SimpleJson.Writer.State.Array) {
-                  this.Assert(Array.isArray(this.currentCollection));
-                  this.currentCollection.push(value);
-              }
-              else if (this.state === SimpleJson.Writer.State.Property) {
-                  this.Assert(!Array.isArray(this.currentCollection));
-                  this.Assert(this.currentPropertyName !== null);
-                  this.currentCollection[this.currentPropertyName] = value;
-                  this._propertyNameStack.pop();
-              }
-          }
-      }
-      SimpleJson.Writer = Writer;
-      (function (Writer) {
-          (function (State) {
-              State[State["None"] = 0] = "None";
-              State[State["Object"] = 1] = "Object";
-              State[State["Array"] = 2] = "Array";
-              State[State["Property"] = 3] = "Property";
-              State[State["PropertyName"] = 4] = "PropertyName";
-              State[State["String"] = 5] = "String";
-          })(Writer.State || (Writer.State = {}));
-          class StateElement {
-              constructor(type) {
-                  this.type = SimpleJson.Writer.State.None;
-                  this.childCount = 0;
-                  this.type = type;
-              }
-          }
-          Writer.StateElement = StateElement;
-      })(Writer = SimpleJson.Writer || (SimpleJson.Writer = {}));
-  })(SimpleJson || (SimpleJson = {}));
-
-  class Flow {
-      constructor() {
-          let name = arguments[0];
-          let story = arguments[1];
-          this.name = name;
-          this.callStack = new CallStack(story);
-          if (arguments[2]) {
-              let jObject = arguments[2];
-              this.callStack.SetJsonToken(jObject["callstack"], story);
-              this.outputStream = JsonSerialisation.JArrayToRuntimeObjList(jObject["outputStream"]);
-              this.currentChoices = JsonSerialisation.JArrayToRuntimeObjList(jObject["currentChoices"]);
-              let jChoiceThreadsObj = jObject["choiceThreads"];
-              if (typeof jChoiceThreadsObj !== "undefined") {
-                  this.LoadFlowChoiceThreads(jChoiceThreadsObj, story);
-              }
-          }
-          else {
-              this.outputStream = [];
-              this.currentChoices = [];
-          }
-      }
-      WriteJson(writer) {
-          writer.WriteObjectStart();
-          writer.WriteProperty("callstack", (w) => this.callStack.WriteJson(w));
-          writer.WriteProperty("outputStream", (w) => JsonSerialisation.WriteListRuntimeObjs(w, this.outputStream));
-          let hasChoiceThreads = false;
-          for (let c of this.currentChoices) {
-              if (c.threadAtGeneration === null)
-                  return throwNullException("c.threadAtGeneration");
-              c.originalThreadIndex = c.threadAtGeneration.threadIndex;
-              if (this.callStack.ThreadWithIndex(c.originalThreadIndex) === null) {
-                  if (!hasChoiceThreads) {
-                      hasChoiceThreads = true;
-                      writer.WritePropertyStart("choiceThreads");
-                      writer.WriteObjectStart();
-                  }
-                  writer.WritePropertyStart(c.originalThreadIndex);
-                  c.threadAtGeneration.WriteJson(writer);
-                  writer.WritePropertyEnd();
-              }
-          }
-          if (hasChoiceThreads) {
-              writer.WriteObjectEnd();
-              writer.WritePropertyEnd();
-          }
-          writer.WriteProperty("currentChoices", (w) => {
-              w.WriteArrayStart();
-              for (let c of this.currentChoices) {
-                  JsonSerialisation.WriteChoice(w, c);
-              }
-              w.WriteArrayEnd();
-          });
-          writer.WriteObjectEnd();
-      }
-      LoadFlowChoiceThreads(jChoiceThreads, story) {
-          for (let choice of this.currentChoices) {
-              let foundActiveThread = this.callStack.ThreadWithIndex(choice.originalThreadIndex);
-              if (foundActiveThread !== null) {
-                  choice.threadAtGeneration = foundActiveThread.Copy();
-              }
-              else {
-                  let jSavedChoiceThread = jChoiceThreads[`${choice.originalThreadIndex}`];
-                  choice.threadAtGeneration = new CallStack.Thread(jSavedChoiceThread, story);
-              }
-          }
-      }
-  }
-
-  class StoryState {
-      constructor(story) {
-          this.kInkSaveStateVersion = 9;
-          this.kMinCompatibleLoadVersion = 8;
-          this.onDidLoadState = null;
-          this._currentErrors = null;
-          this._currentWarnings = null;
-          this.divertedPointer = Pointer.Null;
-          this._currentTurnIndex = 0;
-          this.storySeed = 0;
-          this.previousRandom = 0;
-          this.didSafeExit = false;
-          this._currentText = null;
-          this._currentTags = null;
-          this._outputStreamTextDirty = true;
-          this._outputStreamTagsDirty = true;
-          this._patch = null;
-          this._namedFlows = null;
-          this.kDefaultFlowName = "DEFAULT_FLOW";
-          this.story = story;
-          this._currentFlow = new Flow(this.kDefaultFlowName, story);
-          this.OutputStreamDirty();
-          this._evaluationStack = [];
-          this._variablesState = new VariablesState(this.callStack, story.listDefinitions);
-          this._visitCounts = new Map();
-          this._turnIndices = new Map();
-          this.currentTurnIndex = -1;
-          let timeSeed = new Date().getTime();
-          this.storySeed = new PRNG(timeSeed).next() % 100;
-          this.previousRandom = 0;
-          this.GoToStart();
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      ToJson(indented = false) {
-          let writer = new SimpleJson.Writer();
-          this.WriteJson(writer);
-          return writer.ToString();
-      }
-      toJson(indented = false) {
-          return this.ToJson(indented);
-      }
-      LoadJson(json) {
-          let jObject = SimpleJson.TextToDictionary(json);
-          this.LoadJsonObj(jObject);
-          if (this.onDidLoadState !== null)
-              this.onDidLoadState();
-      }
-      VisitCountAtPathString(pathString) {
-          let visitCountOut;
-          if (this._patch !== null) {
-              let container = this.story.ContentAtPath(new Path(pathString)).container;
-              if (container === null)
-                  throw new Error("Content at path not found: " + pathString);
-              visitCountOut = this._patch.TryGetVisitCount(container, 0);
-              if (visitCountOut.exists)
-                  return visitCountOut.result;
-          }
-          visitCountOut = tryGetValueFromMap(this._visitCounts, pathString, null);
-          if (visitCountOut.exists)
-              return visitCountOut.result;
-          return 0;
-      }
-      VisitCountForContainer(container) {
-          if (container === null) {
-              return throwNullException("container");
-          }
-          if (!container.visitsShouldBeCounted) {
-              this.story.Error("Read count for target (" +
-                  container.name +
-                  " - on " +
-                  container.debugMetadata +
-                  ") unknown. The story may need to be compiled with countAllVisits flag (-c).");
-              return 0;
-          }
-          if (this._patch !== null) {
-              let count = this._patch.TryGetVisitCount(container, 0);
-              if (count.exists) {
-                  return count.result;
-              }
-          }
-          let containerPathStr = container.path.toString();
-          let count2 = tryGetValueFromMap(this._visitCounts, containerPathStr, null);
-          if (count2.exists) {
-              return count2.result;
-          }
-          return 0;
-      }
-      IncrementVisitCountForContainer(container) {
-          if (this._patch !== null) {
-              let currCount = this.VisitCountForContainer(container);
-              currCount++;
-              this._patch.SetVisitCount(container, currCount);
-              return;
-          }
-          let containerPathStr = container.path.toString();
-          let count = tryGetValueFromMap(this._visitCounts, containerPathStr, null);
-          if (count.exists) {
-              this._visitCounts.set(containerPathStr, count.result + 1);
-          }
-          else {
-              this._visitCounts.set(containerPathStr, 1);
-          }
-      }
-      RecordTurnIndexVisitToContainer(container) {
-          if (this._patch !== null) {
-              this._patch.SetTurnIndex(container, this.currentTurnIndex);
-              return;
-          }
-          let containerPathStr = container.path.toString();
-          this._turnIndices.set(containerPathStr, this.currentTurnIndex);
-      }
-      TurnsSinceForContainer(container) {
-          if (!container.turnIndexShouldBeCounted) {
-              this.story.Error("TURNS_SINCE() for target (" +
-                  container.name +
-                  " - on " +
-                  container.debugMetadata +
-                  ") unknown. The story may need to be compiled with countAllVisits flag (-c).");
-          }
-          if (this._patch !== null) {
-              let index = this._patch.TryGetTurnIndex(container, 0);
-              if (index.exists) {
-                  return this.currentTurnIndex - index.result;
-              }
-          }
-          let containerPathStr = container.path.toString();
-          let index2 = tryGetValueFromMap(this._turnIndices, containerPathStr, 0);
-          if (index2.exists) {
-              return this.currentTurnIndex - index2.result;
-          }
-          else {
-              return -1;
-          }
-      }
-      get callstackDepth() {
-          return this.callStack.depth;
-      }
-      get outputStream() {
-          return this._currentFlow.outputStream;
-      }
-      get currentChoices() {
-          // If we can continue generating text content rather than choices,
-          // then we reflect the choice list as being empty, since choices
-          // should always come at the end.
-          if (this.canContinue)
-              return [];
-          return this._currentFlow.currentChoices;
-      }
-      get generatedChoices() {
-          return this._currentFlow.currentChoices;
-      }
-      get currentErrors() {
-          return this._currentErrors;
-      }
-      get currentWarnings() {
-          return this._currentWarnings;
-      }
-      get variablesState() {
-          return this._variablesState;
-      }
-      set variablesState(value) {
-          this._variablesState = value;
-      }
-      get callStack() {
-          return this._currentFlow.callStack;
-      }
-      get evaluationStack() {
-          return this._evaluationStack;
-      }
-      get currentTurnIndex() {
-          return this._currentTurnIndex;
-      }
-      set currentTurnIndex(value) {
-          this._currentTurnIndex = value;
-      }
-      get currentPathString() {
-          let pointer = this.currentPointer;
-          if (pointer.isNull) {
-              return null;
-          }
-          else {
-              if (pointer.path === null) {
-                  return throwNullException("pointer.path");
-              }
-              return pointer.path.toString();
-          }
-      }
-      get currentPointer() {
-          return this.callStack.currentElement.currentPointer.copy();
-      }
-      set currentPointer(value) {
-          this.callStack.currentElement.currentPointer = value.copy();
-      }
-      get previousPointer() {
-          return this.callStack.currentThread.previousPointer.copy();
-      }
-      set previousPointer(value) {
-          this.callStack.currentThread.previousPointer = value.copy();
-      }
-      get canContinue() {
-          return !this.currentPointer.isNull && !this.hasError;
-      }
-      get hasError() {
-          return this.currentErrors != null && this.currentErrors.length > 0;
-      }
-      get hasWarning() {
-          return this.currentWarnings != null && this.currentWarnings.length > 0;
-      }
-      get currentText() {
-          if (this._outputStreamTextDirty) {
-              let sb = new StringBuilder();
-              for (let outputObj of this.outputStream) {
-                  // var textContent = outputObj as StringValue;
-                  let textContent = asOrNull(outputObj, StringValue);
-                  if (textContent !== null) {
-                      sb.Append(textContent.value);
-                  }
-              }
-              this._currentText = this.CleanOutputWhitespace(sb.toString());
-              this._outputStreamTextDirty = false;
-          }
-          return this._currentText;
-      }
-      CleanOutputWhitespace(str) {
-          let sb = new StringBuilder();
-          let currentWhitespaceStart = -1;
-          let startOfLine = 0;
-          for (let i = 0; i < str.length; i++) {
-              let c = str.charAt(i);
-              let isInlineWhitespace = c == " " || c == "\t";
-              if (isInlineWhitespace && currentWhitespaceStart == -1)
-                  currentWhitespaceStart = i;
-              if (!isInlineWhitespace) {
-                  if (c != "\n" &&
-                      currentWhitespaceStart > 0 &&
-                      currentWhitespaceStart != startOfLine) {
-                      sb.Append(" ");
-                  }
-                  currentWhitespaceStart = -1;
-              }
-              if (c == "\n")
-                  startOfLine = i + 1;
-              if (!isInlineWhitespace)
-                  sb.Append(c);
-          }
-          return sb.toString();
-      }
-      get currentTags() {
-          if (this._outputStreamTagsDirty) {
-              this._currentTags = [];
-              for (let outputObj of this.outputStream) {
-                  // var tag = outputObj as Tag;
-                  let tag = asOrNull(outputObj, Tag);
-                  if (tag !== null) {
-                      this._currentTags.push(tag.text);
-                  }
-              }
-              this._outputStreamTagsDirty = false;
-          }
-          return this._currentTags;
-      }
-      get currentFlowName() {
-          return this._currentFlow.name;
-      }
-      get inExpressionEvaluation() {
-          return this.callStack.currentElement.inExpressionEvaluation;
-      }
-      set inExpressionEvaluation(value) {
-          this.callStack.currentElement.inExpressionEvaluation = value;
-      }
-      GoToStart() {
-          this.callStack.currentElement.currentPointer = Pointer.StartOf(this.story.mainContentContainer);
-      }
-      SwitchFlow_Internal(flowName) {
-          if (flowName === null)
-              throw new Error("Must pass a non-null string to Story.SwitchFlow");
-          if (this._namedFlows === null) {
-              this._namedFlows = new Map();
-              this._namedFlows.set(this.kDefaultFlowName, this._currentFlow);
-          }
-          if (flowName === this._currentFlow.name) {
-              return;
-          }
-          let flow;
-          let content = tryGetValueFromMap(this._namedFlows, flowName, null);
-          if (content.exists) {
-              flow = content.result;
-          }
-          else {
-              flow = new Flow(flowName, this.story);
-              this._namedFlows.set(flowName, flow);
-          }
-          this._currentFlow = flow;
-          this.variablesState.callStack = this._currentFlow.callStack;
-          this.OutputStreamDirty();
-      }
-      SwitchToDefaultFlow_Internal() {
-          if (this._namedFlows === null)
-              return;
-          this.SwitchFlow_Internal(this.kDefaultFlowName);
-      }
-      RemoveFlow_Internal(flowName) {
-          if (flowName === null)
-              throw new Error("Must pass a non-null string to Story.DestroyFlow");
-          if (flowName === this.kDefaultFlowName)
-              throw new Error("Cannot destroy default flow");
-          if (this._currentFlow.name === flowName) {
-              this.SwitchToDefaultFlow_Internal();
-          }
-          if (this._namedFlows === null)
-              return throwNullException("this._namedFlows");
-          this._namedFlows.delete(flowName);
-      }
-      CopyAndStartPatching() {
-          let copy = new StoryState(this.story);
-          copy._patch = new StatePatch(this._patch);
-          copy._currentFlow.name = this._currentFlow.name;
-          copy._currentFlow.callStack = new CallStack(this._currentFlow.callStack);
-          copy._currentFlow.currentChoices.push(...this._currentFlow.currentChoices);
-          copy._currentFlow.outputStream.push(...this._currentFlow.outputStream);
-          copy.OutputStreamDirty();
-          if (this._namedFlows !== null) {
-              copy._namedFlows = new Map();
-              for (let [namedFlowKey, namedFlowValue] of this._namedFlows) {
-                  copy._namedFlows.set(namedFlowKey, namedFlowValue);
-              }
-              copy._namedFlows.set(this._currentFlow.name, copy._currentFlow);
-          }
-          if (this.hasError) {
-              copy._currentErrors = [];
-              copy._currentErrors.push(...(this.currentErrors || []));
-          }
-          if (this.hasWarning) {
-              copy._currentWarnings = [];
-              copy._currentWarnings.push(...(this.currentWarnings || []));
-          }
-          copy.variablesState = this.variablesState;
-          copy.variablesState.callStack = copy.callStack;
-          copy.variablesState.patch = copy._patch;
-          copy.evaluationStack.push(...this.evaluationStack);
-          if (!this.divertedPointer.isNull)
-              copy.divertedPointer = this.divertedPointer.copy();
-          copy.previousPointer = this.previousPointer.copy();
-          copy._visitCounts = this._visitCounts;
-          copy._turnIndices = this._turnIndices;
-          copy.currentTurnIndex = this.currentTurnIndex;
-          copy.storySeed = this.storySeed;
-          copy.previousRandom = this.previousRandom;
-          copy.didSafeExit = this.didSafeExit;
-          return copy;
-      }
-      RestoreAfterPatch() {
-          this.variablesState.callStack = this.callStack;
-          this.variablesState.patch = this._patch;
-      }
-      ApplyAnyPatch() {
-          if (this._patch === null)
-              return;
-          this.variablesState.ApplyPatch();
-          for (let [key, value] of this._patch.visitCounts)
-              this.ApplyCountChanges(key, value, true);
-          for (let [key, value] of this._patch.turnIndices)
-              this.ApplyCountChanges(key, value, false);
-          this._patch = null;
-      }
-      ApplyCountChanges(container, newCount, isVisit) {
-          let counts = isVisit ? this._visitCounts : this._turnIndices;
-          counts.set(container.path.toString(), newCount);
-      }
-      WriteJson(writer) {
-          writer.WriteObjectStart();
-          writer.WritePropertyStart("flows");
-          writer.WriteObjectStart();
-          // NOTE: Never pass `WriteJson` directly as an argument to `WriteProperty`.
-          // Call it inside a function to make sure `this` is correctly bound
-          // and passed down the call hierarchy.
-          if (this._namedFlows !== null) {
-              for (let [namedFlowKey, namedFlowValue] of this._namedFlows) {
-                  writer.WriteProperty(namedFlowKey, (w) => namedFlowValue.WriteJson(w));
-              }
-          }
-          else {
-              writer.WriteProperty(this._currentFlow.name, (w) => this._currentFlow.WriteJson(w));
-          }
-          writer.WriteObjectEnd();
-          writer.WritePropertyEnd();
-          writer.WriteProperty("currentFlowName", this._currentFlow.name);
-          writer.WriteProperty("variablesState", (w) => this.variablesState.WriteJson(w));
-          writer.WriteProperty("evalStack", (w) => JsonSerialisation.WriteListRuntimeObjs(w, this.evaluationStack));
-          if (!this.divertedPointer.isNull) {
-              if (this.divertedPointer.path === null) {
-                  return throwNullException("divertedPointer");
-              }
-              writer.WriteProperty("currentDivertTarget", this.divertedPointer.path.componentsString);
-          }
-          writer.WriteProperty("visitCounts", (w) => JsonSerialisation.WriteIntDictionary(w, this._visitCounts));
-          writer.WriteProperty("turnIndices", (w) => JsonSerialisation.WriteIntDictionary(w, this._turnIndices));
-          writer.WriteIntProperty("turnIdx", this.currentTurnIndex);
-          writer.WriteIntProperty("storySeed", this.storySeed);
-          writer.WriteIntProperty("previousRandom", this.previousRandom);
-          writer.WriteIntProperty("inkSaveVersion", this.kInkSaveStateVersion);
-          writer.WriteIntProperty("inkFormatVersion", Story.inkVersionCurrent);
-          writer.WriteObjectEnd();
-      }
-      LoadJsonObj(value) {
-          let jObject = value;
-          let jSaveVersion = jObject["inkSaveVersion"];
-          if (jSaveVersion == null) {
-              throw new Error("ink save format incorrect, can't load.");
-          }
-          else if (parseInt(jSaveVersion) < this.kMinCompatibleLoadVersion) {
-              throw new Error("Ink save format isn't compatible with the current version (saw '" +
-                  jSaveVersion +
-                  "', but minimum is " +
-                  this.kMinCompatibleLoadVersion +
-                  "), so can't load.");
-          }
-          let flowsObj = jObject["flows"];
-          if (flowsObj != null) {
-              let flowsObjDict = flowsObj;
-              // Single default flow
-              if (Object.keys(flowsObjDict).length === 1) {
-                  this._namedFlows = null;
-              }
-              else if (this._namedFlows === null) {
-                  this._namedFlows = new Map();
-              }
-              else {
-                  this._namedFlows.clear();
-              }
-              let flowsObjDictEntries = Object.entries(flowsObjDict);
-              for (let [namedFlowObjKey, namedFlowObjValue] of flowsObjDictEntries) {
-                  let name = namedFlowObjKey;
-                  let flowObj = namedFlowObjValue;
-                  let flow = new Flow(name, this.story, flowObj);
-                  if (Object.keys(flowsObjDict).length === 1) {
-                      this._currentFlow = new Flow(name, this.story, flowObj);
-                  }
-                  else {
-                      if (this._namedFlows === null)
-                          return throwNullException("this._namedFlows");
-                      this._namedFlows.set(name, flow);
-                  }
-              }
-              if (this._namedFlows != null && this._namedFlows.size > 1) {
-                  let currFlowName = jObject["currentFlowName"];
-                  // Adding a bang at the end, because we're trusting the save, as
-                  // done in upstream.  If the save is corrupted, the execution
-                  // is undefined.
-                  this._currentFlow = this._namedFlows.get(currFlowName);
-              }
-          }
-          else {
-              this._namedFlows = null;
-              this._currentFlow.name = this.kDefaultFlowName;
-              this._currentFlow.callStack.SetJsonToken(jObject["callstackThreads"], this.story);
-              this._currentFlow.outputStream = JsonSerialisation.JArrayToRuntimeObjList(jObject["outputStream"]);
-              this._currentFlow.currentChoices = JsonSerialisation.JArrayToRuntimeObjList(jObject["currentChoices"]);
-              let jChoiceThreadsObj = jObject["choiceThreads"];
-              this._currentFlow.LoadFlowChoiceThreads(jChoiceThreadsObj, this.story);
-          }
-          this.OutputStreamDirty();
-          this.variablesState.SetJsonToken(jObject["variablesState"]);
-          this.variablesState.callStack = this._currentFlow.callStack;
-          this._evaluationStack = JsonSerialisation.JArrayToRuntimeObjList(jObject["evalStack"]);
-          let currentDivertTargetPath = jObject["currentDivertTarget"];
-          if (currentDivertTargetPath != null) {
-              let divertPath = new Path(currentDivertTargetPath.toString());
-              this.divertedPointer = this.story.PointerAtPath(divertPath);
-          }
-          this._visitCounts = JsonSerialisation.JObjectToIntDictionary(jObject["visitCounts"]);
-          this._turnIndices = JsonSerialisation.JObjectToIntDictionary(jObject["turnIndices"]);
-          this.currentTurnIndex = parseInt(jObject["turnIdx"]);
-          this.storySeed = parseInt(jObject["storySeed"]);
-          this.previousRandom = parseInt(jObject["previousRandom"]);
-      }
-      ResetErrors() {
-          this._currentErrors = null;
-          this._currentWarnings = null;
-      }
-      ResetOutput(objs = null) {
-          this.outputStream.length = 0;
-          if (objs !== null)
-              this.outputStream.push(...objs);
-          this.OutputStreamDirty();
-      }
-      PushToOutputStream(obj) {
-          // var text = obj as StringValue;
-          let text = asOrNull(obj, StringValue);
-          if (text !== null) {
-              let listText = this.TrySplittingHeadTailWhitespace(text);
-              if (listText !== null) {
-                  for (let textObj of listText) {
-                      this.PushToOutputStreamIndividual(textObj);
-                  }
-                  this.OutputStreamDirty();
-                  return;
-              }
-          }
-          this.PushToOutputStreamIndividual(obj);
-          this.OutputStreamDirty();
-      }
-      PopFromOutputStream(count) {
-          this.outputStream.splice(this.outputStream.length - count, count);
-          this.OutputStreamDirty();
-      }
-      TrySplittingHeadTailWhitespace(single) {
-          let str = single.value;
-          if (str === null) {
-              return throwNullException("single.value");
-          }
-          let headFirstNewlineIdx = -1;
-          let headLastNewlineIdx = -1;
-          for (let i = 0; i < str.length; i++) {
-              let c = str[i];
-              if (c == "\n") {
-                  if (headFirstNewlineIdx == -1)
-                      headFirstNewlineIdx = i;
-                  headLastNewlineIdx = i;
-              }
-              else if (c == " " || c == "\t")
-                  continue;
-              else
-                  break;
-          }
-          let tailLastNewlineIdx = -1;
-          let tailFirstNewlineIdx = -1;
-          for (let i = str.length - 1; i >= 0; i--) {
-              let c = str[i];
-              if (c == "\n") {
-                  if (tailLastNewlineIdx == -1)
-                      tailLastNewlineIdx = i;
-                  tailFirstNewlineIdx = i;
-              }
-              else if (c == " " || c == "\t")
-                  continue;
-              else
-                  break;
-          }
-          // No splitting to be done?
-          if (headFirstNewlineIdx == -1 && tailLastNewlineIdx == -1)
-              return null;
-          let listTexts = [];
-          let innerStrStart = 0;
-          let innerStrEnd = str.length;
-          if (headFirstNewlineIdx != -1) {
-              if (headFirstNewlineIdx > 0) {
-                  let leadingSpaces = new StringValue(str.substring(0, headFirstNewlineIdx));
-                  listTexts.push(leadingSpaces);
-              }
-              listTexts.push(new StringValue("\n"));
-              innerStrStart = headLastNewlineIdx + 1;
-          }
-          if (tailLastNewlineIdx != -1) {
-              innerStrEnd = tailFirstNewlineIdx;
-          }
-          if (innerStrEnd > innerStrStart) {
-              let innerStrText = str.substring(innerStrStart, innerStrEnd - innerStrStart);
-              listTexts.push(new StringValue(innerStrText));
-          }
-          if (tailLastNewlineIdx != -1 && tailFirstNewlineIdx > headLastNewlineIdx) {
-              listTexts.push(new StringValue("\n"));
-              if (tailLastNewlineIdx < str.length - 1) {
-                  let numSpaces = str.length - tailLastNewlineIdx - 1;
-                  let trailingSpaces = new StringValue(str.substring(tailLastNewlineIdx + 1, numSpaces));
-                  listTexts.push(trailingSpaces);
-              }
-          }
-          return listTexts;
-      }
-      PushToOutputStreamIndividual(obj) {
-          let glue = asOrNull(obj, Glue);
-          let text = asOrNull(obj, StringValue);
-          let includeInOutput = true;
-          if (glue) {
-              this.TrimNewlinesFromOutputStream();
-              includeInOutput = true;
-          }
-          else if (text) {
-              let functionTrimIndex = -1;
-              let currEl = this.callStack.currentElement;
-              if (currEl.type == PushPopType.Function) {
-                  functionTrimIndex = currEl.functionStartInOutputStream;
-              }
-              let glueTrimIndex = -1;
-              for (let i = this.outputStream.length - 1; i >= 0; i--) {
-                  let o = this.outputStream[i];
-                  let c = o instanceof ControlCommand ? o : null;
-                  let g = o instanceof Glue ? o : null;
-                  if (g != null) {
-                      glueTrimIndex = i;
-                      break;
-                  }
-                  else if (c != null &&
-                      c.commandType == ControlCommand.CommandType.BeginString) {
-                      if (i >= functionTrimIndex) {
-                          functionTrimIndex = -1;
-                      }
-                      break;
-                  }
-              }
-              let trimIndex = -1;
-              if (glueTrimIndex != -1 && functionTrimIndex != -1)
-                  trimIndex = Math.min(functionTrimIndex, glueTrimIndex);
-              else if (glueTrimIndex != -1)
-                  trimIndex = glueTrimIndex;
-              else
-                  trimIndex = functionTrimIndex;
-              if (trimIndex != -1) {
-                  if (text.isNewline) {
-                      includeInOutput = false;
-                  }
-                  else if (text.isNonWhitespace) {
-                      if (glueTrimIndex > -1)
-                          this.RemoveExistingGlue();
-                      if (functionTrimIndex > -1) {
-                          let callStackElements = this.callStack.elements;
-                          for (let i = callStackElements.length - 1; i >= 0; i--) {
-                              let el = callStackElements[i];
-                              if (el.type == PushPopType.Function) {
-                                  el.functionStartInOutputStream = -1;
-                              }
-                              else {
-                                  break;
-                              }
-                          }
-                      }
-                  }
-              }
-              else if (text.isNewline) {
-                  if (this.outputStreamEndsInNewline || !this.outputStreamContainsContent)
-                      includeInOutput = false;
-              }
-          }
-          if (includeInOutput) {
-              if (obj === null) {
-                  return throwNullException("obj");
-              }
-              this.outputStream.push(obj);
-              this.OutputStreamDirty();
-          }
-      }
-      TrimNewlinesFromOutputStream() {
-          let removeWhitespaceFrom = -1;
-          let i = this.outputStream.length - 1;
-          while (i >= 0) {
-              let obj = this.outputStream[i];
-              let cmd = asOrNull(obj, ControlCommand);
-              let txt = asOrNull(obj, StringValue);
-              if (cmd != null || (txt != null && txt.isNonWhitespace)) {
-                  break;
-              }
-              else if (txt != null && txt.isNewline) {
-                  removeWhitespaceFrom = i;
-              }
-              i--;
-          }
-          // Remove the whitespace
-          if (removeWhitespaceFrom >= 0) {
-              i = removeWhitespaceFrom;
-              while (i < this.outputStream.length) {
-                  let text = asOrNull(this.outputStream[i], StringValue);
-                  if (text) {
-                      this.outputStream.splice(i, 1);
-                  }
-                  else {
-                      i++;
-                  }
-              }
-          }
-          this.OutputStreamDirty();
-      }
-      RemoveExistingGlue() {
-          for (let i = this.outputStream.length - 1; i >= 0; i--) {
-              let c = this.outputStream[i];
-              if (c instanceof Glue) {
-                  this.outputStream.splice(i, 1);
-              }
-              else if (c instanceof ControlCommand) {
-                  break;
-              }
-          }
-          this.OutputStreamDirty();
-      }
-      get outputStreamEndsInNewline() {
-          if (this.outputStream.length > 0) {
-              for (let i = this.outputStream.length - 1; i >= 0; i--) {
-                  let obj = this.outputStream[i];
-                  if (obj instanceof ControlCommand)
-                      break;
-                  let text = this.outputStream[i];
-                  if (text instanceof StringValue) {
-                      if (text.isNewline)
-                          return true;
-                      else if (text.isNonWhitespace)
-                          break;
-                  }
-              }
-          }
-          return false;
-      }
-      get outputStreamContainsContent() {
-          for (let content of this.outputStream) {
-              if (content instanceof StringValue)
-                  return true;
-          }
-          return false;
-      }
-      get inStringEvaluation() {
-          for (let i = this.outputStream.length - 1; i >= 0; i--) {
-              let cmd = asOrNull(this.outputStream[i], ControlCommand);
-              if (cmd instanceof ControlCommand &&
-                  cmd.commandType == ControlCommand.CommandType.BeginString) {
-                  return true;
-              }
-          }
-          return false;
-      }
-      PushEvaluationStack(obj) {
-          // var listValue = obj as ListValue;
-          let listValue = asOrNull(obj, ListValue);
-          if (listValue) {
-              // Update origin when list is has something to indicate the list origin
-              let rawList = listValue.value;
-              if (rawList === null) {
-                  return throwNullException("rawList");
-              }
-              if (rawList.originNames != null) {
-                  if (!rawList.origins)
-                      rawList.origins = [];
-                  rawList.origins.length = 0;
-                  for (let n of rawList.originNames) {
-                      if (this.story.listDefinitions === null)
-                          return throwNullException("StoryState.story.listDefinitions");
-                      let def = this.story.listDefinitions.TryListGetDefinition(n, null);
-                      if (def.result === null)
-                          return throwNullException("StoryState def.result");
-                      if (rawList.origins.indexOf(def.result) < 0)
-                          rawList.origins.push(def.result);
-                  }
-              }
-          }
-          if (obj === null) {
-              return throwNullException("obj");
-          }
-          this.evaluationStack.push(obj);
-      }
-      PopEvaluationStack(numberOfObjects) {
-          if (typeof numberOfObjects === "undefined") {
-              let obj = this.evaluationStack.pop();
-              return nullIfUndefined(obj);
-          }
-          else {
-              if (numberOfObjects > this.evaluationStack.length) {
-                  throw new Error("trying to pop too many objects");
-              }
-              let popped = this.evaluationStack.splice(this.evaluationStack.length - numberOfObjects, numberOfObjects);
-              return nullIfUndefined(popped);
-          }
-      }
-      PeekEvaluationStack() {
-          return this.evaluationStack[this.evaluationStack.length - 1];
-      }
-      ForceEnd() {
-          this.callStack.Reset();
-          this._currentFlow.currentChoices.length = 0;
-          this.currentPointer = Pointer.Null;
-          this.previousPointer = Pointer.Null;
-          this.didSafeExit = true;
-      }
-      TrimWhitespaceFromFunctionEnd() {
-          Debug.Assert(this.callStack.currentElement.type == PushPopType.Function);
-          let functionStartPoint = this.callStack.currentElement
-              .functionStartInOutputStream;
-          if (functionStartPoint == -1) {
-              functionStartPoint = 0;
-          }
-          for (let i = this.outputStream.length - 1; i >= functionStartPoint; i--) {
-              let obj = this.outputStream[i];
-              let txt = asOrNull(obj, StringValue);
-              let cmd = asOrNull(obj, ControlCommand);
-              if (txt == null)
-                  continue;
-              if (cmd)
-                  break;
-              if (txt.isNewline || txt.isInlineWhitespace) {
-                  this.outputStream.splice(i, 1);
-                  this.OutputStreamDirty();
-              }
-              else {
-                  break;
-              }
-          }
-      }
-      PopCallStack(popType = null) {
-          if (this.callStack.currentElement.type == PushPopType.Function)
-              this.TrimWhitespaceFromFunctionEnd();
-          this.callStack.Pop(popType);
-      }
-      SetChosenPath(path, incrementingTurnIndex) {
-          // Changing direction, assume we need to clear current set of choices
-          this._currentFlow.currentChoices.length = 0;
-          let newPointer = this.story.PointerAtPath(path);
-          if (!newPointer.isNull && newPointer.index == -1)
-              newPointer.index = 0;
-          this.currentPointer = newPointer;
-          if (incrementingTurnIndex) {
-              this.currentTurnIndex++;
-          }
-      }
-      StartFunctionEvaluationFromGame(funcContainer, args) {
-          this.callStack.Push(PushPopType.FunctionEvaluationFromGame, this.evaluationStack.length);
-          this.callStack.currentElement.currentPointer = Pointer.StartOf(funcContainer);
-          this.PassArgumentsToEvaluationStack(args);
-      }
-      PassArgumentsToEvaluationStack(args) {
-          if (args !== null) {
-              for (let i = 0; i < args.length; i++) {
-                  if (!(typeof args[i] === "number" || typeof args[i] === "string") ||
-                      args[i] instanceof InkList) {
-                      throw new Error("ink arguments when calling EvaluateFunction / ChoosePathStringWithParameters must be" +
-                          "number, string or InkList. Argument was " +
-                          (nullIfUndefined(arguments[i]) === null)
-                          ? "null"
-                          : arguments[i].constructor.name);
-                  }
-                  this.PushEvaluationStack(Value.Create(args[i]));
-              }
-          }
-      }
-      TryExitFunctionEvaluationFromGame() {
-          if (this.callStack.currentElement.type ==
-              PushPopType.FunctionEvaluationFromGame) {
-              this.currentPointer = Pointer.Null;
-              this.didSafeExit = true;
-              return true;
-          }
-          return false;
-      }
-      CompleteFunctionEvaluationFromGame() {
-          if (this.callStack.currentElement.type !=
-              PushPopType.FunctionEvaluationFromGame) {
-              throw new Error("Expected external function evaluation to be complete. Stack trace: " +
-                  this.callStack.callStackTrace);
-          }
-          let originalEvaluationStackHeight = this.callStack.currentElement
-              .evaluationStackHeightWhenPushed;
-          let returnedObj = null;
-          while (this.evaluationStack.length > originalEvaluationStackHeight) {
-              let poppedObj = this.PopEvaluationStack();
-              if (returnedObj === null)
-                  returnedObj = poppedObj;
-          }
-          this.PopCallStack(PushPopType.FunctionEvaluationFromGame);
-          if (returnedObj) {
-              if (returnedObj instanceof Void)
-                  return null;
-              // Some kind of value, if not void
-              // var returnVal = returnedObj as Runtime.Value;
-              let returnVal = asOrThrows(returnedObj, Value);
-              // DivertTargets get returned as the string of components
-              // (rather than a Path, which isn't public)
-              if (returnVal.valueType == ValueType.DivertTarget) {
-                  return returnVal.valueObject.toString();
-              }
-              // Other types can just have their exact object type:
-              // int, float, string. VariablePointers get returned as strings.
-              return returnVal.valueObject;
-          }
-          return null;
-      }
-      AddError(message, isWarning) {
-          if (!isWarning) {
-              if (this._currentErrors == null)
-                  this._currentErrors = [];
-              this._currentErrors.push(message);
-          }
-          else {
-              if (this._currentWarnings == null)
-                  this._currentWarnings = [];
-              this._currentWarnings.push(message);
-          }
-      }
-      OutputStreamDirty() {
-          this._outputStreamTextDirty = true;
-          this._outputStreamTagsDirty = true;
-      }
-  }
-
-  // This is simple replacement of the Stopwatch class from the .NET Framework.
-  // The original class can count time with much more accuracy than the Javascript version.
-  // It might be worth considering using `window.performance` in the browser
-  // or `process.hrtime()` in node.
-  class Stopwatch {
-      constructor() {
-          this.startTime = undefined;
-      }
-      get ElapsedMilliseconds() {
-          if (typeof this.startTime === "undefined") {
-              return 0;
-          }
-          return new Date().getTime() - this.startTime;
-      }
-      Start() {
-          this.startTime = new Date().getTime();
-      }
-      Stop() {
-          this.startTime = undefined;
-      }
-  }
-
-  var ErrorType;
-  (function (ErrorType) {
-      ErrorType[ErrorType["Author"] = 0] = "Author";
-      ErrorType[ErrorType["Warning"] = 1] = "Warning";
-      ErrorType[ErrorType["Error"] = 2] = "Error";
-  })(ErrorType || (ErrorType = {}));
-
-  if (!Number.isInteger) {
-      Number.isInteger = function isInteger(nVal) {
-          return (typeof nVal === "number" &&
-              isFinite(nVal) &&
-              nVal > -9007199254740992 &&
-              nVal < 9007199254740992 &&
-              Math.floor(nVal) === nVal);
-      };
-  }
-  class Story extends InkObject {
-      constructor() {
-          super();
-          this.inkVersionMinimumCompatible = 18;
-          this.onError = null;
-          this.onDidContinue = null;
-          this.onMakeChoice = null;
-          this.onEvaluateFunction = null;
-          this.onCompleteEvaluateFunction = null;
-          this.onChoosePathString = null;
-          this._prevContainers = [];
-          this.allowExternalFunctionFallbacks = false;
-          this._listDefinitions = null;
-          this._variableObservers = null;
-          this._hasValidatedExternals = false;
-          this._temporaryEvaluationContainer = null;
-          this._asyncContinueActive = false;
-          this._stateSnapshotAtLastNewline = null;
-          this._sawLookaheadUnsafeFunctionAfterNewline = false;
-          this._recursiveContinueCount = 0;
-          this._asyncSaving = false;
-          this._profiler = null; // TODO: Profiler
-          // Discrimination between constructors
-          let contentContainer;
-          let lists = null;
-          let json = null;
-          if (arguments[0] instanceof Container) {
-              contentContainer = arguments[0];
-              if (typeof arguments[1] !== "undefined") {
-                  lists = arguments[1];
-              }
-              // ------ Story (Container contentContainer, List<Runtime.ListDefinition> lists = null)
-              this._mainContentContainer = contentContainer;
-              // ------
-          }
-          else {
-              if (typeof arguments[0] === "string") {
-                  let jsonString = arguments[0];
-                  json = SimpleJson.TextToDictionary(jsonString);
-              }
-              else {
-                  json = arguments[0];
-              }
-          }
-          // ------ Story (Container contentContainer, List<Runtime.ListDefinition> lists = null)
-          if (lists != null)
-              this._listDefinitions = new ListDefinitionsOrigin(lists);
-          this._externals = new Map();
-          // ------
-          // ------ Story(string jsonString) : this((Container)null)
-          if (json !== null) {
-              let rootObject = json;
-              let versionObj = rootObject["inkVersion"];
-              if (versionObj == null)
-                  throw new Error("ink version number not found. Are you sure it's a valid .ink.json file?");
-              let formatFromFile = parseInt(versionObj);
-              if (formatFromFile > Story.inkVersionCurrent) {
-                  throw new Error("Version of ink used to build story was newer than the current version of the engine");
-              }
-              else if (formatFromFile < this.inkVersionMinimumCompatible) {
-                  throw new Error("Version of ink used to build story is too old to be loaded by this version of the engine");
-              }
-              else if (formatFromFile != Story.inkVersionCurrent) {
-                  console.warn("WARNING: Version of ink used to build story doesn't match current version of engine. Non-critical, but recommend synchronising.");
-              }
-              let rootToken = rootObject["root"];
-              if (rootToken == null)
-                  throw new Error("Root node for ink not found. Are you sure it's a valid .ink.json file?");
-              let listDefsObj;
-              if ((listDefsObj = rootObject["listDefs"])) {
-                  this._listDefinitions = JsonSerialisation.JTokenToListDefinitions(listDefsObj);
-              }
-              this._mainContentContainer = asOrThrows(JsonSerialisation.JTokenToRuntimeObject(rootToken), Container);
-              this.ResetState();
-          }
-          // ------
-      }
-      get currentChoices() {
-          let choices = [];
-          if (this._state === null) {
-              return throwNullException("this._state");
-          }
-          for (let c of this._state.currentChoices) {
-              if (!c.isInvisibleDefault) {
-                  c.index = choices.length;
-                  choices.push(c);
-              }
-          }
-          return choices;
-      }
-      get currentText() {
-          this.IfAsyncWeCant("call currentText since it's a work in progress");
-          return this.state.currentText;
-      }
-      get currentTags() {
-          this.IfAsyncWeCant("call currentTags since it's a work in progress");
-          return this.state.currentTags;
-      }
-      get currentErrors() {
-          return this.state.currentErrors;
-      }
-      get currentWarnings() {
-          return this.state.currentWarnings;
-      }
-      get currentFlowName() {
-          return this.state.currentFlowName;
-      }
-      get hasError() {
-          return this.state.hasError;
-      }
-      get hasWarning() {
-          return this.state.hasWarning;
-      }
-      get variablesState() {
-          return this.state.variablesState;
-      }
-      get listDefinitions() {
-          return this._listDefinitions;
-      }
-      get state() {
-          return this._state;
-      }
-      // TODO: Implement Profiler
-      StartProfiling() {
-          /* */
-      }
-      EndProfiling() {
-          /* */
-      }
-      // Merge together `public string ToJson()` and `void ToJson(SimpleJson.Writer writer)`.
-      // Will only return a value if writer was not provided.
-      ToJson(writer) {
-          let shouldReturn = false;
-          if (!writer) {
-              shouldReturn = true;
-              writer = new SimpleJson.Writer();
-          }
-          writer.WriteObjectStart();
-          writer.WriteIntProperty("inkVersion", Story.inkVersionCurrent);
-          writer.WriteProperty("root", (w) => JsonSerialisation.WriteRuntimeContainer(w, this._mainContentContainer));
-          if (this._listDefinitions != null) {
-              writer.WritePropertyStart("listDefs");
-              writer.WriteObjectStart();
-              for (let def of this._listDefinitions.lists) {
-                  writer.WritePropertyStart(def.name);
-                  writer.WriteObjectStart();
-                  for (let [key, value] of def.items) {
-                      let item = InkListItem.fromSerializedKey(key);
-                      let val = value;
-                      writer.WriteIntProperty(item.itemName, val);
-                  }
-                  writer.WriteObjectEnd();
-                  writer.WritePropertyEnd();
-              }
-              writer.WriteObjectEnd();
-              writer.WritePropertyEnd();
-          }
-          writer.WriteObjectEnd();
-          if (shouldReturn)
-              return writer.ToString();
-      }
-      ResetState() {
-          this.IfAsyncWeCant("ResetState");
-          this._state = new StoryState(this);
-          this._state.variablesState.ObserveVariableChange(this.VariableStateDidChangeEvent.bind(this));
-          this.ResetGlobals();
-      }
-      ResetErrors() {
-          if (this._state === null) {
-              return throwNullException("this._state");
-          }
-          this._state.ResetErrors();
-      }
-      ResetCallstack() {
-          this.IfAsyncWeCant("ResetCallstack");
-          if (this._state === null) {
-              return throwNullException("this._state");
-          }
-          this._state.ForceEnd();
-      }
-      ResetGlobals() {
-          if (this._mainContentContainer.namedContent.get("global decl")) {
-              let originalPointer = this.state.currentPointer.copy();
-              this.ChoosePath(new Path("global decl"), false);
-              this.ContinueInternal();
-              this.state.currentPointer = originalPointer;
-          }
-          this.state.variablesState.SnapshotDefaultGlobals();
-      }
-      SwitchFlow(flowName) {
-          this.IfAsyncWeCant("switch flow");
-          if (this._asyncSaving) {
-              throw new Error("Story is already in background saving mode, can't switch flow to " +
-                  flowName);
-          }
-          this.state.SwitchFlow_Internal(flowName);
-      }
-      RemoveFlow(flowName) {
-          this.state.RemoveFlow_Internal(flowName);
-      }
-      SwitchToDefaultFlow() {
-          this.state.SwitchToDefaultFlow_Internal();
-      }
-      Continue() {
-          this.ContinueAsync(0);
-          return this.currentText;
-      }
-      get canContinue() {
-          return this.state.canContinue;
-      }
-      get asyncContinueComplete() {
-          return !this._asyncContinueActive;
-      }
-      ContinueAsync(millisecsLimitAsync) {
-          if (!this._hasValidatedExternals)
-              this.ValidateExternalBindings();
-          this.ContinueInternal(millisecsLimitAsync);
-      }
-      ContinueInternal(millisecsLimitAsync = 0) {
-          if (this._profiler != null)
-              this._profiler.PreContinue();
-          let isAsyncTimeLimited = millisecsLimitAsync > 0;
-          this._recursiveContinueCount++;
-          if (!this._asyncContinueActive) {
-              this._asyncContinueActive = isAsyncTimeLimited;
-              if (!this.canContinue) {
-                  throw new Error("Can't continue - should check canContinue before calling Continue");
-              }
-              this._state.didSafeExit = false;
-              this._state.ResetOutput();
-              if (this._recursiveContinueCount == 1)
-                  this._state.variablesState.batchObservingVariableChanges = true;
-          }
-          let durationStopwatch = new Stopwatch();
-          durationStopwatch.Start();
-          let outputStreamEndsInNewline = false;
-          this._sawLookaheadUnsafeFunctionAfterNewline = false;
-          do {
-              try {
-                  outputStreamEndsInNewline = this.ContinueSingleStep();
-              }
-              catch (e) {
-                  if (!(e instanceof StoryException))
-                      throw e;
-                  this.AddError(e.message, undefined, e.useEndLineNumber);
-                  break;
-              }
-              if (outputStreamEndsInNewline)
-                  break;
-              if (this._asyncContinueActive &&
-                  durationStopwatch.ElapsedMilliseconds > millisecsLimitAsync) {
-                  break;
-              }
-          } while (this.canContinue);
-          durationStopwatch.Stop();
-          if (outputStreamEndsInNewline || !this.canContinue) {
-              if (this._stateSnapshotAtLastNewline !== null) {
-                  this.RestoreStateSnapshot();
-              }
-              if (!this.canContinue) {
-                  if (this.state.callStack.canPopThread)
-                      this.AddError("Thread available to pop, threads should always be flat by the end of evaluation?");
-                  if (this.state.generatedChoices.length == 0 &&
-                      !this.state.didSafeExit &&
-                      this._temporaryEvaluationContainer == null) {
-                      if (this.state.callStack.CanPop(PushPopType.Tunnel))
-                          this.AddError("unexpectedly reached end of content. Do you need a '->->' to return from a tunnel?");
-                      else if (this.state.callStack.CanPop(PushPopType.Function))
-                          this.AddError("unexpectedly reached end of content. Do you need a '~ return'?");
-                      else if (!this.state.callStack.canPop)
-                          this.AddError("ran out of content. Do you need a '-> DONE' or '-> END'?");
-                      else
-                          this.AddError("unexpectedly reached end of content for unknown reason. Please debug compiler!");
-                  }
-              }
-              this.state.didSafeExit = false;
-              this._sawLookaheadUnsafeFunctionAfterNewline = false;
-              if (this._recursiveContinueCount == 1)
-                  this._state.variablesState.batchObservingVariableChanges = false;
-              this._asyncContinueActive = false;
-              if (this.onDidContinue !== null)
-                  this.onDidContinue();
-          }
-          this._recursiveContinueCount--;
-          if (this._profiler != null)
-              this._profiler.PostContinue();
-          // In the following code, we're masking a lot of non-null assertion,
-          // because testing for against `hasError` or `hasWarning` makes sure
-          // the arrays are present and contain at least one element.
-          if (this.state.hasError || this.state.hasWarning) {
-              if (this.onError !== null) {
-                  if (this.state.hasError) {
-                      for (let err of this.state.currentErrors) {
-                          this.onError(err, ErrorType.Error);
-                      }
-                  }
-                  if (this.state.hasWarning) {
-                      for (let err of this.state.currentWarnings) {
-                          this.onError(err, ErrorType.Warning);
-                      }
-                  }
-                  this.ResetErrors();
-              }
-              else {
-                  let sb = new StringBuilder();
-                  sb.Append("Ink had ");
-                  if (this.state.hasError) {
-                      sb.Append(`${this.state.currentErrors.length}`);
-                      sb.Append(this.state.currentErrors.length == 1 ? " error" : "errors");
-                      if (this.state.hasWarning)
-                          sb.Append(" and ");
-                  }
-                  if (this.state.hasWarning) {
-                      sb.Append(`${this.state.currentWarnings.length}`);
-                      sb.Append(this.state.currentWarnings.length == 1 ? " warning" : "warnings");
-                      if (this.state.hasWarning)
-                          sb.Append(" and ");
-                  }
-                  sb.Append(". It is strongly suggested that you assign an error handler to story.onError. The first issue was: ");
-                  sb.Append(this.state.hasError
-                      ? this.state.currentErrors[0]
-                      : this.state.currentWarnings[0]);
-                  throw new StoryException(sb.toString());
-              }
-          }
-      }
-      ContinueSingleStep() {
-          if (this._profiler != null)
-              this._profiler.PreStep();
-          this.Step();
-          if (this._profiler != null)
-              this._profiler.PostStep();
-          if (!this.canContinue && !this.state.callStack.elementIsEvaluateFromGame) {
-              this.TryFollowDefaultInvisibleChoice();
-          }
-          if (this._profiler != null)
-              this._profiler.PreSnapshot();
-          if (!this.state.inStringEvaluation) {
-              if (this._stateSnapshotAtLastNewline !== null) {
-                  if (this._stateSnapshotAtLastNewline.currentTags === null) {
-                      return throwNullException("this._stateAtLastNewline.currentTags");
-                  }
-                  if (this.state.currentTags === null) {
-                      return throwNullException("this.state.currentTags");
-                  }
-                  let change = this.CalculateNewlineOutputStateChange(this._stateSnapshotAtLastNewline.currentText, this.state.currentText, this._stateSnapshotAtLastNewline.currentTags.length, this.state.currentTags.length);
-                  if (change == Story.OutputStateChange.ExtendedBeyondNewline ||
-                      this._sawLookaheadUnsafeFunctionAfterNewline) {
-                      this.RestoreStateSnapshot();
-                      return true;
-                  }
-                  else if (change == Story.OutputStateChange.NewlineRemoved) {
-                      this.DiscardSnapshot();
-                  }
-              }
-              if (this.state.outputStreamEndsInNewline) {
-                  if (this.canContinue) {
-                      if (this._stateSnapshotAtLastNewline == null)
-                          this.StateSnapshot();
-                  }
-                  else {
-                      this.DiscardSnapshot();
-                  }
-              }
-          }
-          if (this._profiler != null)
-              this._profiler.PostSnapshot();
-          return false;
-      }
-      CalculateNewlineOutputStateChange(prevText, currText, prevTagCount, currTagCount) {
-          if (prevText === null) {
-              return throwNullException("prevText");
-          }
-          if (currText === null) {
-              return throwNullException("currText");
-          }
-          let newlineStillExists = currText.length >= prevText.length &&
-              currText.charAt(prevText.length - 1) == "\n";
-          if (prevTagCount == currTagCount &&
-              prevText.length == currText.length &&
-              newlineStillExists)
-              return Story.OutputStateChange.NoChange;
-          if (!newlineStillExists) {
-              return Story.OutputStateChange.NewlineRemoved;
-          }
-          if (currTagCount > prevTagCount)
-              return Story.OutputStateChange.ExtendedBeyondNewline;
-          for (let i = prevText.length; i < currText.length; i++) {
-              let c = currText.charAt(i);
-              if (c != " " && c != "\t") {
-                  return Story.OutputStateChange.ExtendedBeyondNewline;
-              }
-          }
-          return Story.OutputStateChange.NoChange;
-      }
-      ContinueMaximally() {
-          this.IfAsyncWeCant("ContinueMaximally");
-          let sb = new StringBuilder();
-          while (this.canContinue) {
-              sb.Append(this.Continue());
-          }
-          return sb.toString();
-      }
-      ContentAtPath(path) {
-          return this.mainContentContainer.ContentAtPath(path);
-      }
-      KnotContainerWithName(name) {
-          let namedContainer = this.mainContentContainer.namedContent.get(name);
-          if (namedContainer instanceof Container)
-              return namedContainer;
-          else
-              return null;
-      }
-      PointerAtPath(path) {
-          if (path.length == 0)
-              return Pointer.Null;
-          let p = new Pointer();
-          let pathLengthToUse = path.length;
-          let result = null;
-          if (path.lastComponent === null) {
-              return throwNullException("path.lastComponent");
-          }
-          if (path.lastComponent.isIndex) {
-              pathLengthToUse = path.length - 1;
-              result = this.mainContentContainer.ContentAtPath(path, undefined, pathLengthToUse);
-              p.container = result.container;
-              p.index = path.lastComponent.index;
-          }
-          else {
-              result = this.mainContentContainer.ContentAtPath(path);
-              p.container = result.container;
-              p.index = -1;
-          }
-          if (result.obj == null ||
-              (result.obj == this.mainContentContainer && pathLengthToUse > 0)) {
-              this.Error("Failed to find content at path '" +
-                  path +
-                  "', and no approximation of it was possible.");
-          }
-          else if (result.approximate)
-              this.Warning("Failed to find content at path '" +
-                  path +
-                  "', so it was approximated to: '" +
-                  result.obj.path +
-                  "'.");
-          return p;
-      }
-      StateSnapshot() {
-          this._stateSnapshotAtLastNewline = this._state;
-          this._state = this._state.CopyAndStartPatching();
-      }
-      RestoreStateSnapshot() {
-          if (this._stateSnapshotAtLastNewline === null) {
-              throwNullException("_stateSnapshotAtLastNewline");
-          }
-          this._stateSnapshotAtLastNewline.RestoreAfterPatch();
-          this._state = this._stateSnapshotAtLastNewline;
-          this._stateSnapshotAtLastNewline = null;
-          if (!this._asyncSaving) {
-              this._state.ApplyAnyPatch();
-          }
-      }
-      DiscardSnapshot() {
-          if (!this._asyncSaving)
-              this._state.ApplyAnyPatch();
-          this._stateSnapshotAtLastNewline = null;
-      }
-      CopyStateForBackgroundThreadSave() {
-          this.IfAsyncWeCant("start saving on a background thread");
-          if (this._asyncSaving)
-              throw new Error("Story is already in background saving mode, can't call CopyStateForBackgroundThreadSave again!");
-          let stateToSave = this._state;
-          this._state = this._state.CopyAndStartPatching();
-          this._asyncSaving = true;
-          return stateToSave;
-      }
-      BackgroundSaveComplete() {
-          if (this._stateSnapshotAtLastNewline === null) {
-              this._state.ApplyAnyPatch();
-          }
-          this._asyncSaving = false;
-      }
-      Step() {
-          let shouldAddToStream = true;
-          let pointer = this.state.currentPointer.copy();
-          if (pointer.isNull) {
-              return;
-          }
-          // Container containerToEnter = pointer.Resolve () as Container;
-          let containerToEnter = asOrNull(pointer.Resolve(), Container);
-          while (containerToEnter) {
-              this.VisitContainer(containerToEnter, true);
-              // No content? the most we can do is step past it
-              if (containerToEnter.content.length == 0) {
-                  break;
-              }
-              pointer = Pointer.StartOf(containerToEnter);
-              // containerToEnter = pointer.Resolve() as Container;
-              containerToEnter = asOrNull(pointer.Resolve(), Container);
-          }
-          this.state.currentPointer = pointer.copy();
-          if (this._profiler != null)
-              this._profiler.Step(this.state.callStack);
-          // Is the current content object:
-          //  - Normal content
-          //  - Or a logic/flow statement - if so, do it
-          // Stop flow if we hit a stack pop when we're unable to pop (e.g. return/done statement in knot
-          // that was diverted to rather than called as a function)
-          let currentContentObj = pointer.Resolve();
-          let isLogicOrFlowControl = this.PerformLogicAndFlowControl(currentContentObj);
-          // Has flow been forced to end by flow control above?
-          if (this.state.currentPointer.isNull) {
-              return;
-          }
-          if (isLogicOrFlowControl) {
-              shouldAddToStream = false;
-          }
-          // Choice with condition?
-          // var choicePoint = currentContentObj as ChoicePoint;
-          let choicePoint = asOrNull(currentContentObj, ChoicePoint);
-          if (choicePoint) {
-              let choice = this.ProcessChoice(choicePoint);
-              if (choice) {
-                  this.state.generatedChoices.push(choice);
-              }
-              currentContentObj = null;
-              shouldAddToStream = false;
-          }
-          // If the container has no content, then it will be
-          // the "content" itself, but we skip over it.
-          if (currentContentObj instanceof Container) {
-              shouldAddToStream = false;
-          }
-          // Content to add to evaluation stack or the output stream
-          if (shouldAddToStream) {
-              // If we're pushing a variable pointer onto the evaluation stack, ensure that it's specific
-              // to our current (possibly temporary) context index. And make a copy of the pointer
-              // so that we're not editing the original runtime object.
-              // var varPointer = currentContentObj as VariablePointerValue;
-              let varPointer = asOrNull(currentContentObj, VariablePointerValue);
-              if (varPointer && varPointer.contextIndex == -1) {
-                  // Create new object so we're not overwriting the story's own data
-                  let contextIdx = this.state.callStack.ContextForVariableNamed(varPointer.variableName);
-                  currentContentObj = new VariablePointerValue(varPointer.variableName, contextIdx);
-              }
-              // Expression evaluation content
-              if (this.state.inExpressionEvaluation) {
-                  this.state.PushEvaluationStack(currentContentObj);
-              }
-              // Output stream content (i.e. not expression evaluation)
-              else {
-                  this.state.PushToOutputStream(currentContentObj);
-              }
-          }
-          // Increment the content pointer, following diverts if necessary
-          this.NextContent();
-          // Starting a thread should be done after the increment to the content pointer,
-          // so that when returning from the thread, it returns to the content after this instruction.
-          // var controlCmd = currentContentObj as ;
-          let controlCmd = asOrNull(currentContentObj, ControlCommand);
-          if (controlCmd &&
-              controlCmd.commandType == ControlCommand.CommandType.StartThread) {
-              this.state.callStack.PushThread();
-          }
-      }
-      VisitContainer(container, atStart) {
-          if (!container.countingAtStartOnly || atStart) {
-              if (container.visitsShouldBeCounted)
-                  this.state.IncrementVisitCountForContainer(container);
-              if (container.turnIndexShouldBeCounted)
-                  this.state.RecordTurnIndexVisitToContainer(container);
-          }
-      }
-      VisitChangedContainersDueToDivert() {
-          let previousPointer = this.state.previousPointer.copy();
-          let pointer = this.state.currentPointer.copy();
-          if (pointer.isNull || pointer.index == -1)
-              return;
-          this._prevContainers.length = 0;
-          if (!previousPointer.isNull) {
-              // Container prevAncestor = previousPointer.Resolve() as Container ?? previousPointer.container as Container;
-              let resolvedPreviousAncestor = previousPointer.Resolve();
-              let prevAncestor = asOrNull(resolvedPreviousAncestor, Container) ||
-                  asOrNull(previousPointer.container, Container);
-              while (prevAncestor) {
-                  this._prevContainers.push(prevAncestor);
-                  // prevAncestor = prevAncestor.parent as Container;
-                  prevAncestor = asOrNull(prevAncestor.parent, Container);
-              }
-          }
-          let currentChildOfContainer = pointer.Resolve();
-          if (currentChildOfContainer == null)
-              return;
-          // Container currentContainerAncestor = currentChildOfContainer.parent as Container;
-          let currentContainerAncestor = asOrNull(currentChildOfContainer.parent, Container);
-          let allChildrenEnteredAtStart = true;
-          while (currentContainerAncestor &&
-              (this._prevContainers.indexOf(currentContainerAncestor) < 0 ||
-                  currentContainerAncestor.countingAtStartOnly)) {
-              // Check whether this ancestor container is being entered at the start,
-              // by checking whether the child object is the first.
-              let enteringAtStart = currentContainerAncestor.content.length > 0 &&
-                  currentChildOfContainer == currentContainerAncestor.content[0] &&
-                  allChildrenEnteredAtStart;
-              if (!enteringAtStart)
-                  allChildrenEnteredAtStart = false;
-              // Mark a visit to this container
-              this.VisitContainer(currentContainerAncestor, enteringAtStart);
-              currentChildOfContainer = currentContainerAncestor;
-              // currentContainerAncestor = currentContainerAncestor.parent as Container;
-              currentContainerAncestor = asOrNull(currentContainerAncestor.parent, Container);
-          }
-      }
-      ProcessChoice(choicePoint) {
-          let showChoice = true;
-          // Don't create choice if choice point doesn't pass conditional
-          if (choicePoint.hasCondition) {
-              let conditionValue = this.state.PopEvaluationStack();
-              if (!this.IsTruthy(conditionValue)) {
-                  showChoice = false;
-              }
-          }
-          let startText = "";
-          let choiceOnlyText = "";
-          if (choicePoint.hasChoiceOnlyContent) {
-              // var choiceOnlyStrVal = state.PopEvaluationStack () as StringValue;
-              let choiceOnlyStrVal = asOrThrows(this.state.PopEvaluationStack(), StringValue);
-              choiceOnlyText = choiceOnlyStrVal.value || "";
-          }
-          if (choicePoint.hasStartContent) {
-              // var startStrVal = state.PopEvaluationStack () as StringValue;
-              let startStrVal = asOrThrows(this.state.PopEvaluationStack(), StringValue);
-              startText = startStrVal.value || "";
-          }
-          // Don't create choice if player has already read this content
-          if (choicePoint.onceOnly) {
-              let visitCount = this.state.VisitCountForContainer(choicePoint.choiceTarget);
-              if (visitCount > 0) {
-                  showChoice = false;
-              }
-          }
-          // We go through the full process of creating the choice above so
-          // that we consume the content for it, since otherwise it'll
-          // be shown on the output stream.
-          if (!showChoice) {
-              return null;
-          }
-          let choice = new Choice();
-          choice.targetPath = choicePoint.pathOnChoice;
-          choice.sourcePath = choicePoint.path.toString();
-          choice.isInvisibleDefault = choicePoint.isInvisibleDefault;
-          choice.threadAtGeneration = this.state.callStack.ForkThread();
-          choice.text = (startText + choiceOnlyText).replace(/^[ \t]+|[ \t]+$/g, "");
-          return choice;
-      }
-      IsTruthy(obj) {
-          let truthy = false;
-          if (obj instanceof Value) {
-              let val = obj;
-              if (val instanceof DivertTargetValue) {
-                  let divTarget = val;
-                  this.Error("Shouldn't use a divert target (to " +
-                      divTarget.targetPath +
-                      ") as a conditional value. Did you intend a function call 'likeThis()' or a read count check 'likeThis'? (no arrows)");
-                  return false;
-              }
-              return val.isTruthy;
-          }
-          return truthy;
-      }
-      PerformLogicAndFlowControl(contentObj) {
-          if (contentObj == null) {
-              return false;
-          }
-          // Divert
-          if (contentObj instanceof Divert) {
-              let currentDivert = contentObj;
-              if (currentDivert.isConditional) {
-                  let conditionValue = this.state.PopEvaluationStack();
-                  // False conditional? Cancel divert
-                  if (!this.IsTruthy(conditionValue))
-                      return true;
-              }
-              if (currentDivert.hasVariableTarget) {
-                  let varName = currentDivert.variableDivertName;
-                  let varContents = this.state.variablesState.GetVariableWithName(varName);
-                  if (varContents == null) {
-                      this.Error("Tried to divert using a target from a variable that could not be found (" +
-                          varName +
-                          ")");
-                  }
-                  else if (!(varContents instanceof DivertTargetValue)) {
-                      // var intContent = varContents as IntValue;
-                      let intContent = asOrNull(varContents, IntValue);
-                      let errorMessage = "Tried to divert to a target from a variable, but the variable (" +
-                          varName +
-                          ") didn't contain a divert target, it ";
-                      if (intContent instanceof IntValue && intContent.value == 0) {
-                          errorMessage += "was empty/null (the value 0).";
-                      }
-                      else {
-                          errorMessage += "contained '" + varContents + "'.";
-                      }
-                      this.Error(errorMessage);
-                  }
-                  let target = asOrThrows(varContents, DivertTargetValue);
-                  this.state.divertedPointer = this.PointerAtPath(target.targetPath);
-              }
-              else if (currentDivert.isExternal) {
-                  this.CallExternalFunction(currentDivert.targetPathString, currentDivert.externalArgs);
-                  return true;
-              }
-              else {
-                  this.state.divertedPointer = currentDivert.targetPointer.copy();
-              }
-              if (currentDivert.pushesToStack) {
-                  this.state.callStack.Push(currentDivert.stackPushType, undefined, this.state.outputStream.length);
-              }
-              if (this.state.divertedPointer.isNull && !currentDivert.isExternal) {
-                  if (currentDivert &&
-                      currentDivert.debugMetadata &&
-                      currentDivert.debugMetadata.sourceName != null) {
-                      this.Error("Divert target doesn't exist: " +
-                          currentDivert.debugMetadata.sourceName);
-                  }
-                  else {
-                      this.Error("Divert resolution failed: " + currentDivert);
-                  }
-              }
-              return true;
-          }
-          // Start/end an expression evaluation? Or print out the result?
-          else if (contentObj instanceof ControlCommand) {
-              let evalCommand = contentObj;
-              switch (evalCommand.commandType) {
-                  case ControlCommand.CommandType.EvalStart:
-                      this.Assert(this.state.inExpressionEvaluation === false, "Already in expression evaluation?");
-                      this.state.inExpressionEvaluation = true;
-                      break;
-                  case ControlCommand.CommandType.EvalEnd:
-                      this.Assert(this.state.inExpressionEvaluation === true, "Not in expression evaluation mode");
-                      this.state.inExpressionEvaluation = false;
-                      break;
-                  case ControlCommand.CommandType.EvalOutput:
-                      // If the expression turned out to be empty, there may not be anything on the stack
-                      if (this.state.evaluationStack.length > 0) {
-                          let output = this.state.PopEvaluationStack();
-                          // Functions may evaluate to Void, in which case we skip output
-                          if (!(output instanceof Void)) {
-                              // TODO: Should we really always blanket convert to string?
-                              // It would be okay to have numbers in the output stream the
-                              // only problem is when exporting text for viewing, it skips over numbers etc.
-                              let text = new StringValue(output.toString());
-                              this.state.PushToOutputStream(text);
-                          }
-                      }
-                      break;
-                  case ControlCommand.CommandType.NoOp:
-                      break;
-                  case ControlCommand.CommandType.Duplicate:
-                      this.state.PushEvaluationStack(this.state.PeekEvaluationStack());
-                      break;
-                  case ControlCommand.CommandType.PopEvaluatedValue:
-                      this.state.PopEvaluationStack();
-                      break;
-                  case ControlCommand.CommandType.PopFunction:
-                  case ControlCommand.CommandType.PopTunnel:
-                      let popType = evalCommand.commandType == ControlCommand.CommandType.PopFunction
-                          ? PushPopType.Function
-                          : PushPopType.Tunnel;
-                      let overrideTunnelReturnTarget = null;
-                      if (popType == PushPopType.Tunnel) {
-                          let popped = this.state.PopEvaluationStack();
-                          // overrideTunnelReturnTarget = popped as DivertTargetValue;
-                          overrideTunnelReturnTarget = asOrNull(popped, DivertTargetValue);
-                          if (overrideTunnelReturnTarget === null) {
-                              this.Assert(popped instanceof Void, "Expected void if ->-> doesn't override target");
-                          }
-                      }
-                      if (this.state.TryExitFunctionEvaluationFromGame()) {
-                          break;
-                      }
-                      else if (this.state.callStack.currentElement.type != popType ||
-                          !this.state.callStack.canPop) {
-                          let names = new Map();
-                          names.set(PushPopType.Function, "function return statement (~ return)");
-                          names.set(PushPopType.Tunnel, "tunnel onwards statement (->->)");
-                          let expected = names.get(this.state.callStack.currentElement.type);
-                          if (!this.state.callStack.canPop) {
-                              expected = "end of flow (-> END or choice)";
-                          }
-                          let errorMsg = "Found " + names.get(popType) + ", when expected " + expected;
-                          this.Error(errorMsg);
-                      }
-                      else {
-                          this.state.PopCallStack();
-                          if (overrideTunnelReturnTarget)
-                              this.state.divertedPointer = this.PointerAtPath(overrideTunnelReturnTarget.targetPath);
-                      }
-                      break;
-                  case ControlCommand.CommandType.BeginString:
-                      this.state.PushToOutputStream(evalCommand);
-                      this.Assert(this.state.inExpressionEvaluation === true, "Expected to be in an expression when evaluating a string");
-                      this.state.inExpressionEvaluation = false;
-                      break;
-                  case ControlCommand.CommandType.EndString:
-                      let contentStackForString = [];
-                      let outputCountConsumed = 0;
-                      for (let i = this.state.outputStream.length - 1; i >= 0; --i) {
-                          let obj = this.state.outputStream[i];
-                          outputCountConsumed++;
-                          // var command = obj as ControlCommand;
-                          let command = asOrNull(obj, ControlCommand);
-                          if (command &&
-                              command.commandType == ControlCommand.CommandType.BeginString) {
-                              break;
-                          }
-                          if (obj instanceof StringValue) {
-                              contentStackForString.push(obj);
-                          }
-                      }
-                      // Consume the content that was produced for this string
-                      this.state.PopFromOutputStream(outputCountConsumed);
-                      // The C# version uses a Stack for contentStackForString, but we're
-                      // using a simple array, so we need to reverse it before using it
-                      contentStackForString = contentStackForString.reverse();
-                      // Build string out of the content we collected
-                      let sb = new StringBuilder();
-                      for (let c of contentStackForString) {
-                          sb.Append(c.toString());
-                      }
-                      // Return to expression evaluation (from content mode)
-                      this.state.inExpressionEvaluation = true;
-                      this.state.PushEvaluationStack(new StringValue(sb.toString()));
-                      break;
-                  case ControlCommand.CommandType.ChoiceCount:
-                      let choiceCount = this.state.generatedChoices.length;
-                      this.state.PushEvaluationStack(new IntValue(choiceCount));
-                      break;
-                  case ControlCommand.CommandType.Turns:
-                      this.state.PushEvaluationStack(new IntValue(this.state.currentTurnIndex + 1));
-                      break;
-                  case ControlCommand.CommandType.TurnsSince:
-                  case ControlCommand.CommandType.ReadCount:
-                      let target = this.state.PopEvaluationStack();
-                      if (!(target instanceof DivertTargetValue)) {
-                          let extraNote = "";
-                          if (target instanceof IntValue)
-                              extraNote =
-                                  ". Did you accidentally pass a read count ('knot_name') instead of a target ('-> knot_name')?";
-                          this.Error("TURNS_SINCE / READ_COUNT expected a divert target (knot, stitch, label name), but saw " +
-                              target +
-                              extraNote);
-                          break;
-                      }
-                      // var divertTarget = target as DivertTargetValue;
-                      let divertTarget = asOrThrows(target, DivertTargetValue);
-                      // var container = ContentAtPath (divertTarget.targetPath).correctObj as Container;
-                      let container = asOrNull(this.ContentAtPath(divertTarget.targetPath).correctObj, Container);
-                      let eitherCount;
-                      if (container != null) {
-                          if (evalCommand.commandType == ControlCommand.CommandType.TurnsSince)
-                              eitherCount = this.state.TurnsSinceForContainer(container);
-                          else
-                              eitherCount = this.state.VisitCountForContainer(container);
-                      }
-                      else {
-                          if (evalCommand.commandType == ControlCommand.CommandType.TurnsSince)
-                              eitherCount = -1;
-                          else
-                              eitherCount = 0;
-                          this.Warning("Failed to find container for " +
-                              evalCommand.toString() +
-                              " lookup at " +
-                              divertTarget.targetPath.toString());
-                      }
-                      this.state.PushEvaluationStack(new IntValue(eitherCount));
-                      break;
-                  case ControlCommand.CommandType.Random: {
-                      let maxInt = asOrNull(this.state.PopEvaluationStack(), IntValue);
-                      let minInt = asOrNull(this.state.PopEvaluationStack(), IntValue);
-                      if (minInt == null || minInt instanceof IntValue === false)
-                          return this.Error("Invalid value for minimum parameter of RANDOM(min, max)");
-                      if (maxInt == null || minInt instanceof IntValue === false)
-                          return this.Error("Invalid value for maximum parameter of RANDOM(min, max)");
-                      // Originally a primitive type, but here, can be null.
-                      // TODO: Replace by default value?
-                      if (maxInt.value === null) {
-                          return throwNullException("maxInt.value");
-                      }
-                      if (minInt.value === null) {
-                          return throwNullException("minInt.value");
-                      }
-                      // This code is differs a bit from the reference implementation, since
-                      // JavaScript has no true integers. Hence integer arithmetics and
-                      // interger overflows don't apply here. A loss of precision can
-                      // happen with big numbers however.
-                      //
-                      // The case where 'randomRange' is lower than zero is handled below,
-                      // so there's no need to test against Number.MIN_SAFE_INTEGER.
-                      let randomRange = maxInt.value - minInt.value + 1;
-                      if (!isFinite(randomRange) || randomRange > Number.MAX_SAFE_INTEGER) {
-                          randomRange = Number.MAX_SAFE_INTEGER;
-                          this.Error("RANDOM was called with a range that exceeds the size that ink numbers can use.");
-                      }
-                      if (randomRange <= 0)
-                          this.Error("RANDOM was called with minimum as " +
-                              minInt.value +
-                              " and maximum as " +
-                              maxInt.value +
-                              ". The maximum must be larger");
-                      let resultSeed = this.state.storySeed + this.state.previousRandom;
-                      let random = new PRNG(resultSeed);
-                      let nextRandom = random.next();
-                      let chosenValue = (nextRandom % randomRange) + minInt.value;
-                      this.state.PushEvaluationStack(new IntValue(chosenValue));
-                      // Next random number (rather than keeping the Random object around)
-                      this.state.previousRandom = nextRandom;
-                      break;
-                  }
-                  case ControlCommand.CommandType.SeedRandom:
-                      let seed = asOrNull(this.state.PopEvaluationStack(), IntValue);
-                      if (seed == null || seed instanceof IntValue === false)
-                          return this.Error("Invalid value passed to SEED_RANDOM");
-                      // Originally a primitive type, but here, can be null.
-                      // TODO: Replace by default value?
-                      if (seed.value === null) {
-                          return throwNullException("minInt.value");
-                      }
-                      this.state.storySeed = seed.value;
-                      this.state.previousRandom = 0;
-                      this.state.PushEvaluationStack(new Void());
-                      break;
-                  case ControlCommand.CommandType.VisitIndex:
-                      let count = this.state.VisitCountForContainer(this.state.currentPointer.container) - 1; // index not count
-                      this.state.PushEvaluationStack(new IntValue(count));
-                      break;
-                  case ControlCommand.CommandType.SequenceShuffleIndex:
-                      let shuffleIndex = this.NextSequenceShuffleIndex();
-                      this.state.PushEvaluationStack(new IntValue(shuffleIndex));
-                      break;
-                  case ControlCommand.CommandType.StartThread:
-                      // Handled in main step function
-                      break;
-                  case ControlCommand.CommandType.Done:
-                      // We may exist in the context of the initial
-                      // act of creating the thread, or in the context of
-                      // evaluating the content.
-                      if (this.state.callStack.canPopThread) {
-                          this.state.callStack.PopThread();
-                      }
-                      // In normal flow - allow safe exit without warning
-                      else {
-                          this.state.didSafeExit = true;
-                          // Stop flow in current thread
-                          this.state.currentPointer = Pointer.Null;
-                      }
-                      break;
-                  // Force flow to end completely
-                  case ControlCommand.CommandType.End:
-                      this.state.ForceEnd();
-                      break;
-                  case ControlCommand.CommandType.ListFromInt:
-                      // var intVal = state.PopEvaluationStack () as IntValue;
-                      let intVal = asOrNull(this.state.PopEvaluationStack(), IntValue);
-                      // var listNameVal = state.PopEvaluationStack () as StringValue;
-                      let listNameVal = asOrThrows(this.state.PopEvaluationStack(), StringValue);
-                      if (intVal === null) {
-                          throw new StoryException("Passed non-integer when creating a list element from a numerical value.");
-                      }
-                      let generatedListValue = null;
-                      if (this.listDefinitions === null) {
-                          return throwNullException("this.listDefinitions");
-                      }
-                      let foundListDef = this.listDefinitions.TryListGetDefinition(listNameVal.value, null);
-                      if (foundListDef.exists) {
-                          // Originally a primitive type, but here, can be null.
-                          // TODO: Replace by default value?
-                          if (intVal.value === null) {
-                              return throwNullException("minInt.value");
-                          }
-                          let foundItem = foundListDef.result.TryGetItemWithValue(intVal.value, InkListItem.Null);
-                          if (foundItem.exists) {
-                              generatedListValue = new ListValue(foundItem.result, intVal.value);
-                          }
-                      }
-                      else {
-                          throw new StoryException("Failed to find LIST called " + listNameVal.value);
-                      }
-                      if (generatedListValue == null)
-                          generatedListValue = new ListValue();
-                      this.state.PushEvaluationStack(generatedListValue);
-                      break;
-                  case ControlCommand.CommandType.ListRange:
-                      let max = asOrNull(this.state.PopEvaluationStack(), Value);
-                      let min = asOrNull(this.state.PopEvaluationStack(), Value);
-                      // var targetList = state.PopEvaluationStack () as ListValue;
-                      let targetList = asOrNull(this.state.PopEvaluationStack(), ListValue);
-                      if (targetList === null || min === null || max === null)
-                          throw new StoryException("Expected list, minimum and maximum for LIST_RANGE");
-                      if (targetList.value === null) {
-                          return throwNullException("targetList.value");
-                      }
-                      let result = targetList.value.ListWithSubRange(min.valueObject, max.valueObject);
-                      this.state.PushEvaluationStack(new ListValue(result));
-                      break;
-                  case ControlCommand.CommandType.ListRandom: {
-                      let listVal = this.state.PopEvaluationStack();
-                      if (listVal === null)
-                          throw new StoryException("Expected list for LIST_RANDOM");
-                      let list = listVal.value;
-                      let newList = null;
-                      if (list === null) {
-                          throw throwNullException("list");
-                      }
-                      if (list.Count == 0) {
-                          newList = new InkList();
-                      }
-                      else {
-                          // Generate a random index for the element to take
-                          let resultSeed = this.state.storySeed + this.state.previousRandom;
-                          let random = new PRNG(resultSeed);
-                          let nextRandom = random.next();
-                          let listItemIndex = nextRandom % list.Count;
-                          // This bit is a little different from the original
-                          // C# code, since iterators do not work in the same way.
-                          // First, we iterate listItemIndex - 1 times, calling next().
-                          // The listItemIndex-th time is made outside of the loop,
-                          // in order to retrieve the value.
-                          let listEnumerator = list.entries();
-                          for (let i = 0; i <= listItemIndex - 1; i++) {
-                              listEnumerator.next();
-                          }
-                          let value = listEnumerator.next().value;
-                          let randomItem = {
-                              Key: InkListItem.fromSerializedKey(value[0]),
-                              Value: value[1],
-                          };
-                          // Origin list is simply the origin of the one element
-                          if (randomItem.Key.originName === null) {
-                              return throwNullException("randomItem.Key.originName");
-                          }
-                          newList = new InkList(randomItem.Key.originName, this);
-                          newList.Add(randomItem.Key, randomItem.Value);
-                          this.state.previousRandom = nextRandom;
-                      }
-                      this.state.PushEvaluationStack(new ListValue(newList));
-                      break;
-                  }
-                  default:
-                      this.Error("unhandled ControlCommand: " + evalCommand);
-                      break;
-              }
-              return true;
-          }
-          // Variable assignment
-          else if (contentObj instanceof VariableAssignment) {
-              let varAss = contentObj;
-              let assignedVal = this.state.PopEvaluationStack();
-              this.state.variablesState.Assign(varAss, assignedVal);
-              return true;
-          }
-          // Variable reference
-          else if (contentObj instanceof VariableReference) {
-              let varRef = contentObj;
-              let foundValue = null;
-              // Explicit read count value
-              if (varRef.pathForCount != null) {
-                  let container = varRef.containerForCount;
-                  let count = this.state.VisitCountForContainer(container);
-                  foundValue = new IntValue(count);
-              }
-              // Normal variable reference
-              else {
-                  foundValue = this.state.variablesState.GetVariableWithName(varRef.name);
-                  if (foundValue == null) {
-                      this.Warning("Variable not found: '" +
-                          varRef.name +
-                          "'. Using default value of 0 (false). This can happen with temporary variables if the declaration hasn't yet been hit. Globals are always given a default value on load if a value doesn't exist in the save state.");
-                      foundValue = new IntValue(0);
-                  }
-              }
-              this.state.PushEvaluationStack(foundValue);
-              return true;
-          }
-          // Native function call
-          else if (contentObj instanceof NativeFunctionCall) {
-              let func = contentObj;
-              let funcParams = this.state.PopEvaluationStack(func.numberOfParameters);
-              let result = func.Call(funcParams);
-              this.state.PushEvaluationStack(result);
-              return true;
-          }
-          // No control content, must be ordinary content
-          return false;
-      }
-      ChoosePathString(path, resetCallstack = true, args = []) {
-          this.IfAsyncWeCant("call ChoosePathString right now");
-          if (this.onChoosePathString !== null)
-              this.onChoosePathString(path, args);
-          if (resetCallstack) {
-              this.ResetCallstack();
-          }
-          else {
-              if (this.state.callStack.currentElement.type == PushPopType.Function) {
-                  let funcDetail = "";
-                  let container = this.state.callStack.currentElement.currentPointer
-                      .container;
-                  if (container != null) {
-                      funcDetail = "(" + container.path.toString() + ") ";
-                  }
-                  throw new Error("Story was running a function " +
-                      funcDetail +
-                      "when you called ChoosePathString(" +
-                      path +
-                      ") - this is almost certainly not not what you want! Full stack trace: \n" +
-                      this.state.callStack.callStackTrace);
-              }
-          }
-          this.state.PassArgumentsToEvaluationStack(args);
-          this.ChoosePath(new Path(path));
-      }
-      IfAsyncWeCant(activityStr) {
-          if (this._asyncContinueActive)
-              throw new Error("Can't " +
-                  activityStr +
-                  ". Story is in the middle of a ContinueAsync(). Make more ContinueAsync() calls or a single Continue() call beforehand.");
-      }
-      ChoosePath(p, incrementingTurnIndex = true) {
-          this.state.SetChosenPath(p, incrementingTurnIndex);
-          // Take a note of newly visited containers for read counts etc
-          this.VisitChangedContainersDueToDivert();
-      }
-      ChooseChoiceIndex(choiceIdx) {
-          choiceIdx = choiceIdx;
-          let choices = this.currentChoices;
-          this.Assert(choiceIdx >= 0 && choiceIdx < choices.length, "choice out of range");
-          let choiceToChoose = choices[choiceIdx];
-          if (this.onMakeChoice !== null)
-              this.onMakeChoice(choiceToChoose);
-          if (choiceToChoose.threadAtGeneration === null) {
-              return throwNullException("choiceToChoose.threadAtGeneration");
-          }
-          if (choiceToChoose.targetPath === null) {
-              return throwNullException("choiceToChoose.targetPath");
-          }
-          this.state.callStack.currentThread = choiceToChoose.threadAtGeneration;
-          this.ChoosePath(choiceToChoose.targetPath);
-      }
-      HasFunction(functionName) {
-          try {
-              return this.KnotContainerWithName(functionName) != null;
-          }
-          catch (e) {
-              return false;
-          }
-      }
-      EvaluateFunction(functionName, args = [], returnTextOutput = false) {
-          // EvaluateFunction behaves slightly differently than the C# version.
-          // In C#, you can pass a (second) parameter `out textOutput` to get the
-          // text outputted by the function. This is not possible in js. Instead,
-          // we maintain the regular signature (functionName, args), plus an
-          // optional third parameter returnTextOutput. If set to true, we will
-          // return both the textOutput and the returned value, as an object.
-          if (this.onEvaluateFunction !== null)
-              this.onEvaluateFunction(functionName, args);
-          this.IfAsyncWeCant("evaluate a function");
-          if (functionName == null) {
-              throw new Error("Function is null");
-          }
-          else if (functionName == "" || functionName.trim() == "") {
-              throw new Error("Function is empty or white space.");
-          }
-          let funcContainer = this.KnotContainerWithName(functionName);
-          if (funcContainer == null) {
-              throw new Error("Function doesn't exist: '" + functionName + "'");
-          }
-          let outputStreamBefore = [];
-          outputStreamBefore.push(...this.state.outputStream);
-          this._state.ResetOutput();
-          this.state.StartFunctionEvaluationFromGame(funcContainer, args);
-          // Evaluate the function, and collect the string output
-          let stringOutput = new StringBuilder();
-          while (this.canContinue) {
-              stringOutput.Append(this.Continue());
-          }
-          let textOutput = stringOutput.toString();
-          this._state.ResetOutput(outputStreamBefore);
-          let result = this.state.CompleteFunctionEvaluationFromGame();
-          if (this.onCompleteEvaluateFunction != null)
-              this.onCompleteEvaluateFunction(functionName, args, textOutput, result);
-          return returnTextOutput ? { returned: result, output: textOutput } : result;
-      }
-      EvaluateExpression(exprContainer) {
-          let startCallStackHeight = this.state.callStack.elements.length;
-          this.state.callStack.Push(PushPopType.Tunnel);
-          this._temporaryEvaluationContainer = exprContainer;
-          this.state.GoToStart();
-          let evalStackHeight = this.state.evaluationStack.length;
-          this.Continue();
-          this._temporaryEvaluationContainer = null;
-          // Should have fallen off the end of the Container, which should
-          // have auto-popped, but just in case we didn't for some reason,
-          // manually pop to restore the state (including currentPath).
-          if (this.state.callStack.elements.length > startCallStackHeight) {
-              this.state.PopCallStack();
-          }
-          let endStackHeight = this.state.evaluationStack.length;
-          if (endStackHeight > evalStackHeight) {
-              return this.state.PopEvaluationStack();
-          }
-          else {
-              return null;
-          }
-      }
-      CallExternalFunction(funcName, numberOfArguments) {
-          if (funcName === null) {
-              return throwNullException("funcName");
-          }
-          let funcDef = this._externals.get(funcName);
-          let fallbackFunctionContainer = null;
-          let foundExternal = typeof funcDef !== "undefined";
-          if (foundExternal &&
-              !funcDef.lookAheadSafe &&
-              this._stateSnapshotAtLastNewline !== null) {
-              this._sawLookaheadUnsafeFunctionAfterNewline = true;
-              return;
-          }
-          if (!foundExternal) {
-              if (this.allowExternalFunctionFallbacks) {
-                  fallbackFunctionContainer = this.KnotContainerWithName(funcName);
-                  this.Assert(fallbackFunctionContainer !== null, "Trying to call EXTERNAL function '" +
-                      funcName +
-                      "' which has not been bound, and fallback ink function could not be found.");
-                  // Divert direct into fallback function and we're done
-                  this.state.callStack.Push(PushPopType.Function, undefined, this.state.outputStream.length);
-                  this.state.divertedPointer = Pointer.StartOf(fallbackFunctionContainer);
-                  return;
-              }
-              else {
-                  this.Assert(false, "Trying to call EXTERNAL function '" +
-                      funcName +
-                      "' which has not been bound (and ink fallbacks disabled).");
-              }
-          }
-          // Pop arguments
-          let args = [];
-          for (let i = 0; i < numberOfArguments; ++i) {
-              // var poppedObj = state.PopEvaluationStack () as Value;
-              let poppedObj = asOrThrows(this.state.PopEvaluationStack(), Value);
-              let valueObj = poppedObj.valueObject;
-              args.push(valueObj);
-          }
-          // Reverse arguments from the order they were popped,
-          // so they're the right way round again.
-          args.reverse();
-          // Run the function!
-          let funcResult = funcDef.function(args);
-          // Convert return value (if any) to the a type that the ink engine can use
-          let returnObj = null;
-          if (funcResult != null) {
-              returnObj = Value.Create(funcResult);
-              this.Assert(returnObj !== null, "Could not create ink value from returned object of type " +
-                  typeof funcResult);
-          }
-          else {
-              returnObj = new Void();
-          }
-          this.state.PushEvaluationStack(returnObj);
-      }
-      BindExternalFunctionGeneral(funcName, func, lookaheadSafe) {
-          this.IfAsyncWeCant("bind an external function");
-          this.Assert(!this._externals.has(funcName), "Function '" + funcName + "' has already been bound.");
-          this._externals.set(funcName, {
-              function: func,
-              lookAheadSafe: lookaheadSafe,
-          });
-      }
-      TryCoerce(value) {
-          // We're skipping type coercition in this implementation. First of, js
-          // is loosely typed, so it's not that important. Secondly, there is no
-          // clean way (AFAIK) for the user to describe what type of parameters
-          // they expect.
-          return value;
-      }
-      BindExternalFunction(funcName, func, lookaheadSafe) {
-          this.Assert(func != null, "Can't bind a null function");
-          this.BindExternalFunctionGeneral(funcName, (args) => {
-              this.Assert(args.length >= func.length, "External function expected " + func.length + " arguments");
-              let coercedArgs = [];
-              for (let i = 0, l = args.length; i < l; i++) {
-                  coercedArgs[i] = this.TryCoerce(args[i]);
-              }
-              return func.apply(null, coercedArgs);
-          }, lookaheadSafe);
-      }
-      UnbindExternalFunction(funcName) {
-          this.IfAsyncWeCant("unbind an external a function");
-          this.Assert(this._externals.has(funcName), "Function '" + funcName + "' has not been bound.");
-          this._externals.delete(funcName);
-      }
-      ValidateExternalBindings() {
-          let c = null;
-          let o = null;
-          let missingExternals = arguments[1] || new Set();
-          if (arguments[0] instanceof Container) {
-              c = arguments[0];
-          }
-          if (arguments[0] instanceof InkObject) {
-              o = arguments[0];
-          }
-          if (c === null && o === null) {
-              this.ValidateExternalBindings(this._mainContentContainer, missingExternals);
-              this._hasValidatedExternals = true;
-              // No problem! Validation complete
-              if (missingExternals.size == 0) {
-                  this._hasValidatedExternals = true;
-              }
-              else {
-                  let message = "Error: Missing function binding for external";
-                  message += missingExternals.size > 1 ? "s" : "";
-                  message += ": '";
-                  message += Array.from(missingExternals).join("', '");
-                  message += "' ";
-                  message += this.allowExternalFunctionFallbacks
-                      ? ", and no fallback ink function found."
-                      : " (ink fallbacks disabled)";
-                  this.Error(message);
-              }
-          }
-          else if (c != null) {
-              for (let innerContent of c.content) {
-                  let container = innerContent;
-                  if (container == null || !container.hasValidName)
-                      this.ValidateExternalBindings(innerContent, missingExternals);
-              }
-              for (let [, value] of c.namedContent) {
-                  this.ValidateExternalBindings(asOrNull(value, InkObject), missingExternals);
-              }
-          }
-          else if (o != null) {
-              let divert = asOrNull(o, Divert);
-              if (divert && divert.isExternal) {
-                  let name = divert.targetPathString;
-                  if (name === null) {
-                      return throwNullException("name");
-                  }
-                  if (!this._externals.has(name)) {
-                      if (this.allowExternalFunctionFallbacks) {
-                          let fallbackFound = this.mainContentContainer.namedContent.has(name);
-                          if (!fallbackFound) {
-                              missingExternals.add(name);
-                          }
-                      }
-                      else {
-                          missingExternals.add(name);
-                      }
-                  }
-              }
-          }
-      }
-      ObserveVariable(variableName, observer) {
-          this.IfAsyncWeCant("observe a new variable");
-          if (this._variableObservers === null)
-              this._variableObservers = new Map();
-          if (!this.state.variablesState.GlobalVariableExistsWithName(variableName))
-              throw new Error("Cannot observe variable '" +
-                  variableName +
-                  "' because it wasn't declared in the ink story.");
-          if (this._variableObservers.has(variableName)) {
-              this._variableObservers.get(variableName).push(observer);
-          }
-          else {
-              this._variableObservers.set(variableName, [observer]);
-          }
-      }
-      ObserveVariables(variableNames, observers) {
-          for (let i = 0, l = variableNames.length; i < l; i++) {
-              this.ObserveVariable(variableNames[i], observers[i]);
-          }
-      }
-      RemoveVariableObserver(observer, specificVariableName) {
-          // A couple of things to know about this method:
-          //
-          // 1. Since `RemoveVariableObserver` is exposed to the JavaScript world,
-          //    optionality is marked as `undefined` rather than `null`.
-          //    To keep things simple, null-checks are performed using regular
-          //    equality operators, where undefined == null.
-          //
-          // 2. Since C# delegates are translated to arrays of functions,
-          //    -= becomes a call to splice and null-checks are replaced by
-          //    emptiness-checks.
-          //
-          this.IfAsyncWeCant("remove a variable observer");
-          if (this._variableObservers === null)
-              return;
-          if (specificVariableName != null) {
-              if (this._variableObservers.has(specificVariableName)) {
-                  if (observer != null) {
-                      let variableObservers = this._variableObservers.get(specificVariableName);
-                      if (variableObservers != null) {
-                          variableObservers.splice(variableObservers.indexOf(observer), 1);
-                          if (variableObservers.length === 0) {
-                              this._variableObservers.delete(specificVariableName);
-                          }
-                      }
-                  }
-                  else {
-                      this._variableObservers.delete(specificVariableName);
-                  }
-              }
-          }
-          else if (observer != null) {
-              let keys = this._variableObservers.keys();
-              for (let varName of keys) {
-                  let variableObservers = this._variableObservers.get(varName);
-                  if (variableObservers != null) {
-                      variableObservers.splice(variableObservers.indexOf(observer), 1);
-                      if (variableObservers.length === 0) {
-                          this._variableObservers.delete(varName);
-                      }
-                  }
-              }
-          }
-      }
-      VariableStateDidChangeEvent(variableName, newValueObj) {
-          if (this._variableObservers === null)
-              return;
-          let observers = this._variableObservers.get(variableName);
-          if (typeof observers !== "undefined") {
-              if (!(newValueObj instanceof Value)) {
-                  throw new Error("Tried to get the value of a variable that isn't a standard type");
-              }
-              // var val = newValueObj as Value;
-              let val = asOrThrows(newValueObj, Value);
-              for (let observer of observers) {
-                  observer(variableName, val.valueObject);
-              }
-          }
-      }
-      get globalTags() {
-          return this.TagsAtStartOfFlowContainerWithPathString("");
-      }
-      TagsForContentAtPath(path) {
-          return this.TagsAtStartOfFlowContainerWithPathString(path);
-      }
-      TagsAtStartOfFlowContainerWithPathString(pathString) {
-          let path = new Path(pathString);
-          let flowContainer = this.ContentAtPath(path).container;
-          if (flowContainer === null) {
-              return throwNullException("flowContainer");
-          }
-          while (true) {
-              let firstContent = flowContainer.content[0];
-              if (firstContent instanceof Container)
-                  flowContainer = firstContent;
-              else
-                  break;
-          }
-          let tags = null;
-          for (let c of flowContainer.content) {
-              // var tag = c as Runtime.Tag;
-              let tag = asOrNull(c, Tag);
-              if (tag) {
-                  if (tags == null)
-                      tags = [];
-                  tags.push(tag.text);
-              }
-              else
-                  break;
-          }
-          return tags;
-      }
-      BuildStringOfHierarchy() {
-          let sb = new StringBuilder();
-          this.mainContentContainer.BuildStringOfHierarchy(sb, 0, this.state.currentPointer.Resolve());
-          return sb.toString();
-      }
-      BuildStringOfContainer(container) {
-          let sb = new StringBuilder();
-          container.BuildStringOfHierarchy(sb, 0, this.state.currentPointer.Resolve());
-          return sb.toString();
-      }
-      NextContent() {
-          this.state.previousPointer = this.state.currentPointer.copy();
-          if (!this.state.divertedPointer.isNull) {
-              this.state.currentPointer = this.state.divertedPointer.copy();
-              this.state.divertedPointer = Pointer.Null;
-              this.VisitChangedContainersDueToDivert();
-              if (!this.state.currentPointer.isNull) {
-                  return;
-              }
-          }
-          let successfulPointerIncrement = this.IncrementContentPointer();
-          if (!successfulPointerIncrement) {
-              let didPop = false;
-              if (this.state.callStack.CanPop(PushPopType.Function)) {
-                  this.state.PopCallStack(PushPopType.Function);
-                  if (this.state.inExpressionEvaluation) {
-                      this.state.PushEvaluationStack(new Void());
-                  }
-                  didPop = true;
-              }
-              else if (this.state.callStack.canPopThread) {
-                  this.state.callStack.PopThread();
-                  didPop = true;
-              }
-              else {
-                  this.state.TryExitFunctionEvaluationFromGame();
-              }
-              if (didPop && !this.state.currentPointer.isNull) {
-                  this.NextContent();
-              }
-          }
-      }
-      IncrementContentPointer() {
-          let successfulIncrement = true;
-          let pointer = this.state.callStack.currentElement.currentPointer.copy();
-          pointer.index++;
-          if (pointer.container === null) {
-              return throwNullException("pointer.container");
-          }
-          while (pointer.index >= pointer.container.content.length) {
-              successfulIncrement = false;
-              // Container nextAncestor = pointer.container.parent as Container;
-              let nextAncestor = asOrNull(pointer.container.parent, Container);
-              if (nextAncestor instanceof Container === false) {
-                  break;
-              }
-              let indexInAncestor = nextAncestor.content.indexOf(pointer.container);
-              if (indexInAncestor == -1) {
-                  break;
-              }
-              pointer = new Pointer(nextAncestor, indexInAncestor);
-              pointer.index++;
-              successfulIncrement = true;
-              if (pointer.container === null) {
-                  return throwNullException("pointer.container");
-              }
-          }
-          if (!successfulIncrement)
-              pointer = Pointer.Null;
-          this.state.callStack.currentElement.currentPointer = pointer.copy();
-          return successfulIncrement;
-      }
-      TryFollowDefaultInvisibleChoice() {
-          let allChoices = this._state.currentChoices;
-          let invisibleChoices = allChoices.filter((c) => c.isInvisibleDefault);
-          if (invisibleChoices.length == 0 ||
-              allChoices.length > invisibleChoices.length)
-              return false;
-          let choice = invisibleChoices[0];
-          if (choice.targetPath === null) {
-              return throwNullException("choice.targetPath");
-          }
-          if (choice.threadAtGeneration === null) {
-              return throwNullException("choice.threadAtGeneration");
-          }
-          this.state.callStack.currentThread = choice.threadAtGeneration;
-          if (this._stateSnapshotAtLastNewline !== null) {
-              this.state.callStack.currentThread = this.state.callStack.ForkThread();
-          }
-          this.ChoosePath(choice.targetPath, false);
-          return true;
-      }
-      NextSequenceShuffleIndex() {
-          // var numElementsIntVal = state.PopEvaluationStack () as IntValue;
-          let numElementsIntVal = asOrNull(this.state.PopEvaluationStack(), IntValue);
-          if (!(numElementsIntVal instanceof IntValue)) {
-              this.Error("expected number of elements in sequence for shuffle index");
-              return 0;
-          }
-          let seqContainer = this.state.currentPointer.container;
-          if (seqContainer === null) {
-              return throwNullException("seqContainer");
-          }
-          // Originally a primitive type, but here, can be null.
-          // TODO: Replace by default value?
-          if (numElementsIntVal.value === null) {
-              return throwNullException("numElementsIntVal.value");
-          }
-          let numElements = numElementsIntVal.value;
-          // var seqCountVal = state.PopEvaluationStack () as IntValue;
-          let seqCountVal = asOrThrows(this.state.PopEvaluationStack(), IntValue);
-          let seqCount = seqCountVal.value;
-          // Originally a primitive type, but here, can be null.
-          // TODO: Replace by default value?
-          if (seqCount === null) {
-              return throwNullException("seqCount");
-          }
-          let loopIndex = seqCount / numElements;
-          let iterationIndex = seqCount % numElements;
-          let seqPathStr = seqContainer.path.toString();
-          let sequenceHash = 0;
-          for (let i = 0, l = seqPathStr.length; i < l; i++) {
-              sequenceHash += seqPathStr.charCodeAt(i) || 0;
-          }
-          let randomSeed = sequenceHash + loopIndex + this.state.storySeed;
-          let random = new PRNG(Math.floor(randomSeed));
-          let unpickedIndices = [];
-          for (let i = 0; i < numElements; ++i) {
-              unpickedIndices.push(i);
-          }
-          for (let i = 0; i <= iterationIndex; ++i) {
-              let chosen = random.next() % unpickedIndices.length;
-              let chosenIndex = unpickedIndices[chosen];
-              unpickedIndices.splice(chosen, 1);
-              if (i == iterationIndex) {
-                  return chosenIndex;
-              }
-          }
-          throw new Error("Should never reach here");
-      }
-      Error(message, useEndLineNumber = false) {
-          let e = new StoryException(message);
-          e.useEndLineNumber = useEndLineNumber;
-          throw e;
-      }
-      Warning(message) {
-          this.AddError(message, true);
-      }
-      AddError(message, isWarning = false, useEndLineNumber = false) {
-          let dm = this.currentDebugMetadata;
-          let errorTypeStr = isWarning ? "WARNING" : "ERROR";
-          if (dm != null) {
-              let lineNum = useEndLineNumber ? dm.endLineNumber : dm.startLineNumber;
-              message =
-                  "RUNTIME " +
-                      errorTypeStr +
-                      ": '" +
-                      dm.fileName +
-                      "' line " +
-                      lineNum +
-                      ": " +
-                      message;
-          }
-          else if (!this.state.currentPointer.isNull) {
-              message =
-                  "RUNTIME " +
-                      errorTypeStr +
-                      ": (" +
-                      this.state.currentPointer +
-                      "): " +
-                      message;
-          }
-          else {
-              message = "RUNTIME " + errorTypeStr + ": " + message;
-          }
-          this.state.AddError(message, isWarning);
-          // In a broken state don't need to know about any other errors.
-          if (!isWarning)
-              this.state.ForceEnd();
-      }
-      Assert(condition, message = null) {
-          if (condition == false) {
-              if (message == null) {
-                  message = "Story assert";
-              }
-              throw new Error(message + " " + this.currentDebugMetadata);
-          }
-      }
-      get currentDebugMetadata() {
-          let dm;
-          let pointer = this.state.currentPointer;
-          if (!pointer.isNull && pointer.Resolve() !== null) {
-              dm = pointer.Resolve().debugMetadata;
-              if (dm !== null) {
-                  return dm;
-              }
-          }
-          for (let i = this.state.callStack.elements.length - 1; i >= 0; --i) {
-              pointer = this.state.callStack.elements[i].currentPointer;
-              if (!pointer.isNull && pointer.Resolve() !== null) {
-                  dm = pointer.Resolve().debugMetadata;
-                  if (dm !== null) {
-                      return dm;
-                  }
-              }
-          }
-          for (let i = this.state.outputStream.length - 1; i >= 0; --i) {
-              let outputObj = this.state.outputStream[i];
-              dm = outputObj.debugMetadata;
-              if (dm !== null) {
-                  return dm;
-              }
-          }
-          return null;
-      }
-      get mainContentContainer() {
-          if (this._temporaryEvaluationContainer) {
-              return this._temporaryEvaluationContainer;
-          }
-          else {
-              return this._mainContentContainer;
-          }
-      }
-  }
-  Story.inkVersionCurrent = 20;
-  (function (Story) {
-      (function (OutputStateChange) {
-          OutputStateChange[OutputStateChange["NoChange"] = 0] = "NoChange";
-          OutputStateChange[OutputStateChange["ExtendedBeyondNewline"] = 1] = "ExtendedBeyondNewline";
-          OutputStateChange[OutputStateChange["NewlineRemoved"] = 2] = "NewlineRemoved";
-      })(Story.OutputStateChange || (Story.OutputStateChange = {}));
-  })(Story || (Story = {}));
-
-  exports.InkList = InkList;
-  exports.Story = Story;
-
-  Object.defineProperty(exports, '__esModule', { value: true });
-
-})));
+!function(t, e) {
+    "object" == typeof exports && "undefined" != typeof module ? e(exports) : "function" == typeof define && define.amd ? define(["exports"], e) : e((t = "undefined" != typeof globalThis ? globalThis : t || self).inkjs = {})
+}(this, (function(t) {
+    "use strict";
+    function e(t) {
+        return (e = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(t) {
+            return typeof t
+        }
+        : function(t) {
+            return t && "function" == typeof Symbol && t.constructor === Symbol && t !== Symbol.prototype ? "symbol" : typeof t
+        }
+        )(t)
+    }
+    function n(t, e) {
+        if (!(t instanceof e))
+            throw new TypeError("Cannot call a class as a function")
+    }
+    function r(t, e) {
+        for (var n = 0; n < e.length; n++) {
+            var r = e[n];
+            r.enumerable = r.enumerable || !1,
+            r.configurable = !0,
+            "value"in r && (r.writable = !0),
+            Object.defineProperty(t, r.key, r)
+        }
+    }
+    function i(t, e, n) {
+        return e && r(t.prototype, e),
+        n && r(t, n),
+        Object.defineProperty(t, "prototype", {
+            writable: !1
+        }),
+        t
+    }
+    function a(t, e) {
+        if ("function" != typeof e && null !== e)
+            throw new TypeError("Super expression must either be null or a function");
+        t.prototype = Object.create(e && e.prototype, {
+            constructor: {
+                value: t,
+                writable: !0,
+                configurable: !0
+            }
+        }),
+        Object.defineProperty(t, "prototype", {
+            writable: !1
+        }),
+        e && s(t, e)
+    }
+    function o(t) {
+        return (o = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(t) {
+            return t.__proto__ || Object.getPrototypeOf(t)
+        }
+        )(t)
+    }
+    function s(t, e) {
+        return (s = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t, e) {
+            return t.__proto__ = e,
+            t
+        }
+        )(t, e)
+    }
+    function l() {
+        if ("undefined" == typeof Reflect || !Reflect.construct)
+            return !1;
+        if (Reflect.construct.sham)
+            return !1;
+        if ("function" == typeof Proxy)
+            return !0;
+        try {
+            return Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], (function() {}
+            ))),
+            !0
+        } catch (t) {
+            return !1
+        }
+    }
+    function u(t, e, n) {
+        return (u = l() ? Reflect.construct.bind() : function(t, e, n) {
+            var r = [null];
+            r.push.apply(r, e);
+            var i = new (Function.bind.apply(t, r));
+            return n && s(i, n.prototype),
+            i
+        }
+        ).apply(null, arguments)
+    }
+    function c(t) {
+        var e = "function" == typeof Map ? new Map : void 0;
+        return (c = function(t) {
+            if (null === t || (n = t,
+            -1 === Function.toString.call(n).indexOf("[native code]")))
+                return t;
+            var n;
+            if ("function" != typeof t)
+                throw new TypeError("Super expression must either be null or a function");
+            if (void 0 !== e) {
+                if (e.has(t))
+                    return e.get(t);
+                e.set(t, r)
+            }
+            function r() {
+                return u(t, arguments, o(this).constructor)
+            }
+            return r.prototype = Object.create(t.prototype, {
+                constructor: {
+                    value: r,
+                    enumerable: !1,
+                    writable: !0,
+                    configurable: !0
+                }
+            }),
+            s(r, t)
+        }
+        )(t)
+    }
+    function h(t) {
+        if (void 0 === t)
+            throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+        return t
+    }
+    function f(t, e) {
+        if (e && ("object" == typeof e || "function" == typeof e))
+            return e;
+        if (void 0 !== e)
+            throw new TypeError("Derived constructors may only return object or undefined");
+        return h(t)
+    }
+    function d(t) {
+        var e = l();
+        return function() {
+            var n, r = o(t);
+            if (e) {
+                var i = o(this).constructor;
+                n = Reflect.construct(r, arguments, i)
+            } else
+                n = r.apply(this, arguments);
+            return f(this, n)
+        }
+    }
+    function v(t, e) {
+        for (; !Object.prototype.hasOwnProperty.call(t, e) && null !== (t = o(t)); )
+            ;
+        return t
+    }
+    function p() {
+        return (p = "undefined" != typeof Reflect && Reflect.get ? Reflect.get.bind() : function(t, e, n) {
+            var r = v(t, e);
+            if (r) {
+                var i = Object.getOwnPropertyDescriptor(r, e);
+                return i.get ? i.get.call(arguments.length < 3 ? t : n) : i.value
+            }
+        }
+        ).apply(this, arguments)
+    }
+    function m(t, e) {
+        return function(t) {
+            if (Array.isArray(t))
+                return t
+        }(t) || function(t, e) {
+            var n = null == t ? null : "undefined" != typeof Symbol && t[Symbol.iterator] || t["@@iterator"];
+            if (null == n)
+                return;
+            var r, i, a = [], o = !0, s = !1;
+            try {
+                for (n = n.call(t); !(o = (r = n.next()).done) && (a.push(r.value),
+                !e || a.length !== e); o = !0)
+                    ;
+            } catch (t) {
+                s = !0,
+                i = t
+            } finally {
+                try {
+                    o || null == n.return || n.return()
+                } finally {
+                    if (s)
+                        throw i
+                }
+            }
+            return a
+        }(t, e) || y(t, e) || function() {
+            throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")
+        }()
+    }
+    function g(t) {
+        return function(t) {
+            if (Array.isArray(t))
+                return C(t)
+        }(t) || function(t) {
+            if ("undefined" != typeof Symbol && null != t[Symbol.iterator] || null != t["@@iterator"])
+                return Array.from(t)
+        }(t) || y(t) || function() {
+            throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")
+        }()
+    }
+    function y(t, e) {
+        if (t) {
+            if ("string" == typeof t)
+                return C(t, e);
+            var n = Object.prototype.toString.call(t).slice(8, -1);
+            return "Object" === n && t.constructor && (n = t.constructor.name),
+            "Map" === n || "Set" === n ? Array.from(t) : "Arguments" === n || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n) ? C(t, e) : void 0
+        }
+    }
+    function C(t, e) {
+        (null == e || e > t.length) && (e = t.length);
+        for (var n = 0, r = new Array(e); n < e; n++)
+            r[n] = t[n];
+        return r
+    }
+    function S(t, e) {
+        var n = "undefined" != typeof Symbol && t[Symbol.iterator] || t["@@iterator"];
+        if (!n) {
+            if (Array.isArray(t) || (n = y(t)) || e && t && "number" == typeof t.length) {
+                n && (t = n);
+                var r = 0
+                  , i = function() {};
+                return {
+                    s: i,
+                    n: function() {
+                        return r >= t.length ? {
+                            done: !0
+                        } : {
+                            done: !1,
+                            value: t[r++]
+                        }
+                    },
+                    e: function(t) {
+                        throw t
+                    },
+                    f: i
+                }
+            }
+            throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")
+        }
+        var a, o = !0, s = !1;
+        return {
+            s: function() {
+                n = n.call(t)
+            },
+            n: function() {
+                var t = n.next();
+                return o = t.done,
+                t
+            },
+            e: function(t) {
+                s = !0,
+                a = t
+            },
+            f: function() {
+                try {
+                    o || null == n.return || n.return()
+                } finally {
+                    if (s)
+                        throw a
+                }
+            }
+        }
+    }
+    var b, w = i((function t() {
+        var e = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null
+          , r = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : []
+          , i = arguments.length > 2 && void 0 !== arguments[2] && arguments[2]
+          , a = arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : null
+          , o = arguments.length > 4 && void 0 !== arguments[4] ? arguments[4] : null;
+        n(this, t),
+        this.sourceFilename = e,
+        this.pluginNames = r,
+        this.countAllVisits = i,
+        this.errorHandler = a,
+        this.fileHandler = o
+    }
+    )), k = i((function t(e, r, i) {
+        n(this, t),
+        this.length = e,
+        this.debugMetadata = r,
+        this.text = i
+    }
+    ));
+    !function(t) {
+        t[t.Author = 0] = "Author",
+        t[t.Warning = 1] = "Warning",
+        t[t.Error = 2] = "Error"
+    }(b || (b = {}));
+    var E = i((function t() {
+        var e = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null
+          , r = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null
+          , i = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null;
+        n(this, t),
+        this.identifier = e,
+        this.isByReference = r,
+        this.isDivertTarget = i
+    }
+    ));
+    function _(t, e) {
+        return t instanceof e ? x(t) : null
+    }
+    function T(t, e) {
+        if (t instanceof e)
+            return x(t);
+        throw new Error("".concat(t, " is not of type ").concat(e))
+    }
+    function A(t) {
+        return t.hasValidName && t.name ? t : null
+    }
+    function P(t) {
+        return void 0 === t ? null : t
+    }
+    function N(t) {
+        return "object" === e(t) && "function" == typeof t.Equals
+    }
+    function x(t, e) {
+        return t
+    }
+    function O(t) {
+        return null != t
+    }
+    var I, F = function() {
+        function t() {
+            var e = this;
+            n(this, t),
+            this._alreadyHadError = !1,
+            this._alreadyHadWarning = !1,
+            this._debugMetadata = null,
+            this._runtimeObject = null,
+            this.content = [],
+            this.parent = null,
+            this.GetType = function() {
+                return e.typeName
+            }
+            ,
+            this.AddContent = function(t) {
+                null === e.content && (e.content = []);
+                var n, r = S(Array.isArray(t) ? t : [t]);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = n.value;
+                        i.hasOwnProperty("parent") && (i.parent = e),
+                        e.content.push(i)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return Array.isArray(t) ? void 0 : t
+            }
+            ,
+            this.InsertContent = function(t, n) {
+                return null === e.content && (e.content = []),
+                n.parent = e,
+                e.content.splice(t, 0, n),
+                n
+            }
+            ,
+            this.Find = function(t) {
+                return function() {
+                    var n = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null
+                      , r = _(e, t);
+                    if (null !== r && (null === n || !0 === n(r)))
+                        return r;
+                    if (null === e.content)
+                        return null;
+                    var i, a = S(e.content);
+                    try {
+                        for (a.s(); !(i = a.n()).done; ) {
+                            var o = i.value
+                              , s = o.Find && o.Find(t)(n);
+                            if (s)
+                                return s
+                        }
+                    } catch (t) {
+                        a.e(t)
+                    } finally {
+                        a.f()
+                    }
+                    return null
+                }
+            }
+            ,
+            this.FindAll = function(t) {
+                return function(n, r) {
+                    var i = Array.isArray(r) ? r : []
+                      , a = _(e, t);
+                    if (null === a || n && !0 !== n(a) || i.push(a),
+                    null === e.content)
+                        return [];
+                    var o, s = S(e.content);
+                    try {
+                        for (s.s(); !(o = s.n()).done; ) {
+                            var l = o.value;
+                            l.FindAll && l.FindAll(t)(n, i)
+                        }
+                    } catch (t) {
+                        s.e(t)
+                    } finally {
+                        s.f()
+                    }
+                    return i
+                }
+            }
+            ,
+            this.Warning = function(t) {
+                var n = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null;
+                e.Error(t, n, !0)
+            }
+        }
+        return i(t, [{
+            key: "debugMetadata",
+            get: function() {
+                return null === this._debugMetadata && this.parent ? this.parent.debugMetadata : this._debugMetadata
+            },
+            set: function(t) {
+                this._debugMetadata = t
+            }
+        }, {
+            key: "hasOwnDebugMetadata",
+            get: function() {
+                return Boolean(this.debugMetadata)
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "ParsedObject"
+            }
+        }, {
+            key: "story",
+            get: function() {
+                for (var t = this; t.parent; )
+                    t = t.parent;
+                return t
+            }
+        }, {
+            key: "runtimeObject",
+            get: function() {
+                return this._runtimeObject || (this._runtimeObject = this.GenerateRuntimeObject(),
+                this._runtimeObject && (this._runtimeObject.debugMetadata = this.debugMetadata)),
+                this._runtimeObject
+            },
+            set: function(t) {
+                this._runtimeObject = t
+            }
+        }, {
+            key: "runtimePath",
+            get: function() {
+                if (!this.runtimeObject.path)
+                    throw new Error;
+                return this.runtimeObject.path
+            }
+        }, {
+            key: "containerForCounting",
+            get: function() {
+                return this.runtimeObject
+            }
+        }, {
+            key: "ancestry",
+            get: function() {
+                for (var t = [], e = this.parent; e; )
+                    t.push(e),
+                    e = e.parent;
+                return t = t.reverse()
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (null !== this.content) {
+                    var e, n = S(this.content);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            e.value.ResolveReferences(t)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+            }
+        }, {
+            key: "Error",
+            value: function(t) {
+                function e(e) {
+                    return t.apply(this, arguments)
+                }
+                return e.toString = function() {
+                    return t.toString()
+                }
+                ,
+                e
+            }((function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null
+                  , n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                if (null === e && (e = this),
+                !(e._alreadyHadError && !n || e._alreadyHadWarning && n)) {
+                    if (!this.parent)
+                        throw new Error("No parent object to send error to: ".concat(t));
+                    this.parent.Error(t, e, n),
+                    n ? e._alreadyHadWarning = !0 : e._alreadyHadError = !0
+                }
+            }
+            ))
+        }]),
+        t
+    }(), W = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).warningMessage = t,
+            i.GenerateRuntimeObject = function() {
+                return i.Warning(i.warningMessage),
+                null
+            }
+            ,
+            i
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "AuthorWarning"
+            }
+        }]),
+        r
+    }(F), R = function() {
+        function t() {
+            if (n(this, t),
+            this._components = [],
+            this._componentsString = null,
+            this._isRelative = !1,
+            "string" == typeof arguments[0]) {
+                var e = arguments[0];
+                this.componentsString = e
+            } else if (arguments[0]instanceof t.Component && arguments[1]instanceof t) {
+                var r = arguments[0]
+                  , i = arguments[1];
+                this._components.push(r),
+                this._components = this._components.concat(i._components)
+            } else if (arguments[0]instanceof Array) {
+                var a = arguments[0]
+                  , o = !!arguments[1];
+                this._components = this._components.concat(a),
+                this._isRelative = o
+            }
+        }
+        return i(t, [{
+            key: "isRelative",
+            get: function() {
+                return this._isRelative
+            }
+        }, {
+            key: "componentCount",
+            get: function() {
+                return this._components.length
+            }
+        }, {
+            key: "head",
+            get: function() {
+                return this._components.length > 0 ? this._components[0] : null
+            }
+        }, {
+            key: "tail",
+            get: function() {
+                return this._components.length >= 2 ? new t(this._components.slice(1, this._components.length)) : t.self
+            }
+        }, {
+            key: "length",
+            get: function() {
+                return this._components.length
+            }
+        }, {
+            key: "lastComponent",
+            get: function() {
+                var t = this._components.length - 1;
+                return t >= 0 ? this._components[t] : null
+            }
+        }, {
+            key: "containsNamedComponent",
+            get: function() {
+                for (var t = 0, e = this._components.length; t < e; t++)
+                    if (!this._components[t].isIndex)
+                        return !0;
+                return !1
+            }
+        }, {
+            key: "GetComponent",
+            value: function(t) {
+                return this._components[t]
+            }
+        }, {
+            key: "PathByAppendingPath",
+            value: function(e) {
+                for (var n = new t, r = 0, i = 0; i < e._components.length && e._components[i].isParent; ++i)
+                    r++;
+                for (var a = 0; a < this._components.length - r; ++a)
+                    n._components.push(this._components[a]);
+                for (var o = r; o < e._components.length; ++o)
+                    n._components.push(e._components[o]);
+                return n
+            }
+        }, {
+            key: "componentsString",
+            get: function() {
+                return null == this._componentsString && (this._componentsString = this._components.join("."),
+                this.isRelative && (this._componentsString = "." + this._componentsString)),
+                this._componentsString
+            },
+            set: function(e) {
+                if (this._components.length = 0,
+                this._componentsString = e,
+                null != this._componentsString && "" != this._componentsString) {
+                    "." == this._componentsString[0] && (this._isRelative = !0,
+                    this._componentsString = this._componentsString.substring(1));
+                    var n, r = S(this._componentsString.split("."));
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            var i = n.value;
+                            /^(\-|\+)?([0-9]+|Infinity)$/.test(i) ? this._components.push(new t.Component(parseInt(i))) : this._components.push(new t.Component(i))
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                }
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return this.componentsString
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                if (null == t)
+                    return !1;
+                if (t._components.length != this._components.length)
+                    return !1;
+                if (t.isRelative != this.isRelative)
+                    return !1;
+                for (var e = 0, n = t._components.length; e < n; e++)
+                    if (!t._components[e].Equals(this._components[e]))
+                        return !1;
+                return !0
+            }
+        }, {
+            key: "PathByAppendingComponent",
+            value: function(e) {
+                var n, r = new t;
+                return (n = r._components).push.apply(n, g(this._components)),
+                r._components.push(e),
+                r
+            }
+        }], [{
+            key: "self",
+            get: function() {
+                var e = new t;
+                return e._isRelative = !0,
+                e
+            }
+        }]),
+        t
+    }();
+    R.parentId = "^",
+    function(t) {
+        var e = function() {
+            function e(t) {
+                n(this, e),
+                this.index = -1,
+                this.name = null,
+                "string" == typeof t ? this.name = t : this.index = t
+            }
+            return i(e, [{
+                key: "isIndex",
+                get: function() {
+                    return this.index >= 0
+                }
+            }, {
+                key: "isParent",
+                get: function() {
+                    return this.name == t.parentId
+                }
+            }, {
+                key: "toString",
+                value: function() {
+                    return this.isIndex ? this.index.toString() : this.name
+                }
+            }, {
+                key: "Equals",
+                value: function(t) {
+                    return null != t && t.isIndex == this.isIndex && (this.isIndex ? this.index == t.index : this.name == t.name)
+                }
+            }], [{
+                key: "ToParent",
+                value: function() {
+                    return new e(t.parentId)
+                }
+            }]),
+            e
+        }();
+        t.Component = e
+    }(R || (R = {})),
+    function(t) {
+        function e(t, e) {
+            if (!t)
+                throw void 0 !== e && console.warn(e),
+                console.trace && console.trace(),
+                new Error("")
+        }
+        t.AssertType = function(t, n, r) {
+            e(t instanceof n, r)
+        }
+        ,
+        t.Assert = e
+    }(I || (I = {}));
+    var D = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            return n(this, r),
+            e.apply(this, arguments)
+        }
+        return i(r)
+    }(c(Error));
+    function L(t) {
+        throw new D("".concat(t, " is null or undefined"))
+    }
+    var V = function() {
+        function t() {
+            n(this, t),
+            this.parent = null,
+            this._debugMetadata = null,
+            this._path = null
+        }
+        return i(t, [{
+            key: "debugMetadata",
+            get: function() {
+                return null === this._debugMetadata && this.parent ? this.parent.debugMetadata : this._debugMetadata
+            },
+            set: function(t) {
+                this._debugMetadata = t
+            }
+        }, {
+            key: "ownDebugMetadata",
+            get: function() {
+                return this._debugMetadata
+            }
+        }, {
+            key: "DebugLineNumberOfPath",
+            value: function(t) {
+                if (null === t)
+                    return null;
+                var e = this.rootContentContainer;
+                if (e) {
+                    var n = e.ContentAtPath(t).obj;
+                    if (n) {
+                        var r = n.debugMetadata;
+                        if (null !== r)
+                            return r.startLineNumber
+                    }
+                }
+                return null
+            }
+        }, {
+            key: "path",
+            get: function() {
+                if (null == this._path)
+                    if (null == this.parent)
+                        this._path = new R;
+                    else {
+                        for (var t = [], e = this, n = _(e.parent, tt); null !== n; ) {
+                            var r = A(e);
+                            if (null != r && r.hasValidName) {
+                                if (null === r.name)
+                                    return L("namedChild.name");
+                                t.unshift(new R.Component(r.name))
+                            } else
+                                t.unshift(new R.Component(n.content.indexOf(e)));
+                            e = n,
+                            n = _(n.parent, tt)
+                        }
+                        this._path = new R(t)
+                    }
+                return this._path
+            }
+        }, {
+            key: "ResolvePath",
+            value: function(t) {
+                if (null === t)
+                    return L("path");
+                if (t.isRelative) {
+                    var e = _(this, tt);
+                    return null === e && (I.Assert(null !== this.parent, "Can't resolve relative path because we don't have a parent"),
+                    e = _(this.parent, tt),
+                    I.Assert(null !== e, "Expected parent to be a container"),
+                    I.Assert(t.GetComponent(0).isParent),
+                    t = t.tail),
+                    null === e ? L("nearestContainer") : e.ContentAtPath(t)
+                }
+                var n = this.rootContentContainer;
+                return null === n ? L("contentContainer") : n.ContentAtPath(t)
+            }
+        }, {
+            key: "ConvertPathToRelative",
+            value: function(t) {
+                for (var e = this.path, n = Math.min(t.length, e.length), r = -1, i = 0; i < n; ++i) {
+                    var a = e.GetComponent(i)
+                      , o = t.GetComponent(i);
+                    if (!a.Equals(o))
+                        break;
+                    r = i
+                }
+                if (-1 == r)
+                    return t;
+                for (var s = e.componentCount - 1 - r, l = [], u = 0; u < s; ++u)
+                    l.push(R.Component.ToParent());
+                for (var c = r + 1; c < t.componentCount; ++c)
+                    l.push(t.GetComponent(c));
+                return new R(l,!0)
+            }
+        }, {
+            key: "CompactPathString",
+            value: function(t) {
+                var e = null
+                  , n = null;
+                t.isRelative ? (n = t.componentsString,
+                e = this.path.PathByAppendingPath(t).componentsString) : (n = this.ConvertPathToRelative(t).componentsString,
+                e = t.componentsString);
+                return n.length < e.length ? n : e
+            }
+        }, {
+            key: "rootContentContainer",
+            get: function() {
+                for (var t = this; t.parent; )
+                    t = t.parent;
+                return _(t, tt)
+            }
+        }, {
+            key: "Copy",
+            value: function() {
+                throw Error("Not Implemented: Doesn't support copying")
+            }
+        }, {
+            key: "SetChild",
+            value: function(t, e, n) {
+                t[e] && (t[e] = null),
+                t[e] = n,
+                t[e] && (t[e].parent = this)
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                return t === this
+            }
+        }]),
+        t
+    }()
+      , j = function() {
+        function t(e) {
+            n(this, t),
+            e = void 0 !== e ? e.toString() : "",
+            this.string = e
+        }
+        return i(t, [{
+            key: "Length",
+            get: function() {
+                return this.string.length
+            }
+        }, {
+            key: "Append",
+            value: function(t) {
+                null !== t && (this.string += t)
+            }
+        }, {
+            key: "AppendLine",
+            value: function(t) {
+                void 0 !== t && this.Append(t),
+                this.string += "\n"
+            }
+        }, {
+            key: "AppendFormat",
+            value: function(t) {
+                for (var e = arguments.length, n = new Array(e > 1 ? e - 1 : 0), r = 1; r < e; r++)
+                    n[r - 1] = arguments[r];
+                this.string += t.replace(/{(\d+)}/g, (function(t, e) {
+                    return void 0 !== n[e] ? n[e] : t
+                }
+                ))
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return this.string
+            }
+        }, {
+            key: "Clear",
+            value: function() {
+                this.string = ""
+            }
+        }]),
+        t
+    }()
+      , B = function() {
+        function t() {
+            if (n(this, t),
+            this.originName = null,
+            this.itemName = null,
+            void 0 !== arguments[1]) {
+                var e = arguments[0]
+                  , r = arguments[1];
+                this.originName = e,
+                this.itemName = r
+            } else if (arguments[0]) {
+                var i = arguments[0]
+                  , a = i.toString().split(".");
+                this.originName = a[0],
+                this.itemName = a[1]
+            }
+        }
+        return i(t, [{
+            key: "isNull",
+            get: function() {
+                return null == this.originName && null == this.itemName
+            }
+        }, {
+            key: "fullName",
+            get: function() {
+                return (null !== this.originName ? this.originName : "?") + "." + this.itemName
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return this.fullName
+            }
+        }, {
+            key: "Equals",
+            value: function(e) {
+                if (e instanceof t) {
+                    var n = e;
+                    return n.itemName == this.itemName && n.originName == this.originName
+                }
+                return !1
+            }
+        }, {
+            key: "copy",
+            value: function() {
+                return new t(this.originName,this.itemName)
+            }
+        }, {
+            key: "serialized",
+            value: function() {
+                return JSON.stringify({
+                    originName: this.originName,
+                    itemName: this.itemName
+                })
+            }
+        }], [{
+            key: "Null",
+            get: function() {
+                return new t(null,null)
+            }
+        }, {
+            key: "fromSerializedKey",
+            value: function(e) {
+                var n = JSON.parse(e);
+                if (!t.isLikeInkListItem(n))
+                    return t.Null;
+                var r = n;
+                return new t(r.originName,r.itemName)
+            }
+        }, {
+            key: "isLikeInkListItem",
+            value: function(t) {
+                return "object" === e(t) && (!(!t.hasOwnProperty("originName") || !t.hasOwnProperty("itemName")) && (("string" == typeof t.originName || null === e(t.originName)) && ("string" == typeof t.itemName || null === e(t.itemName))))
+            }
+        }]),
+        t
+    }()
+      , M = function(t) {
+        a(o, t);
+        var r = d(o);
+        function o() {
+            var t, i = arguments;
+            if (n(this, o),
+            (t = r.call(this, i[0]instanceof o ? i[0] : [])).origins = null,
+            t._originNames = [],
+            arguments[0]instanceof o) {
+                var a = arguments[0]
+                  , s = a.originNames;
+                null !== s && (t._originNames = s.slice()),
+                null !== a.origins && (t.origins = a.origins.slice())
+            } else if ("string" == typeof arguments[0]) {
+                var l = arguments[0]
+                  , u = arguments[1];
+                if (t.SetInitialOriginName(l),
+                null === u.listDefinitions)
+                    return f(t, L("originStory.listDefinitions"));
+                var c = u.listDefinitions.TryListGetDefinition(l, null);
+                if (!c.exists)
+                    throw new Error("InkList origin could not be found in story when constructing new list: " + l);
+                if (null === c.result)
+                    return f(t, L("def.result"));
+                t.origins = [c.result]
+            } else if ("object" === e(arguments[0]) && arguments[0].hasOwnProperty("Key") && arguments[0].hasOwnProperty("Value")) {
+                var h = arguments[0];
+                t.Add(h.Key, h.Value)
+            }
+            return t
+        }
+        return i(o, [{
+            key: "AddItem",
+            value: function(t) {
+                if (t instanceof B) {
+                    var e = t;
+                    if (null == e.originName)
+                        return void this.AddItem(e.itemName);
+                    if (null === this.origins)
+                        return L("this.origins");
+                    var n, r = S(this.origins);
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            var i = n.value;
+                            if (i.name == e.originName) {
+                                var a = i.TryGetValueForItem(e, 0);
+                                if (a.exists)
+                                    return void this.Add(e, a.result);
+                                throw new Error("Could not add the item " + e + " to this list because it doesn't exist in the original list definition in ink.")
+                            }
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                    throw new Error("Failed to add item to list because the item was from a new list definition that wasn't previously known to this list. Only items from previously known lists can be used, so that the int value can be found.")
+                }
+                var o = t
+                  , s = null;
+                if (null === this.origins)
+                    return L("this.origins");
+                var l, u = S(this.origins);
+                try {
+                    for (u.s(); !(l = u.n()).done; ) {
+                        var c = l.value;
+                        if (null === o)
+                            return L("itemName");
+                        if (c.ContainsItemWithName(o)) {
+                            if (null != s)
+                                throw new Error("Could not add the item " + o + " to this list because it could come from either " + c.name + " or " + s.name);
+                            s = c
+                        }
+                    }
+                } catch (t) {
+                    u.e(t)
+                } finally {
+                    u.f()
+                }
+                if (null == s)
+                    throw new Error("Could not add the item " + o + " to this list because it isn't known to any list definitions previously associated with this list.");
+                var h = new B(s.name,o)
+                  , f = s.ValueForItem(h);
+                this.Add(h, f)
+            }
+        }, {
+            key: "ContainsItemNamed",
+            value: function(t) {
+                var e, n = S(this);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = m(e.value, 1)[0];
+                        if (B.fromSerializedKey(r).itemName == t)
+                            return !0
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return !1
+            }
+        }, {
+            key: "ContainsKey",
+            value: function(t) {
+                return this.has(t.serialized())
+            }
+        }, {
+            key: "Add",
+            value: function(t, e) {
+                var n = t.serialized();
+                if (this.has(n))
+                    throw new Error("The Map already contains an entry for ".concat(t));
+                this.set(n, e)
+            }
+        }, {
+            key: "Remove",
+            value: function(t) {
+                return this.delete(t.serialized())
+            }
+        }, {
+            key: "Count",
+            get: function() {
+                return this.size
+            }
+        }, {
+            key: "originOfMaxItem",
+            get: function() {
+                if (null == this.origins)
+                    return null;
+                var t = this.maxItem.Key.originName
+                  , e = null;
+                return this.origins.every((function(n) {
+                    return n.name != t || (e = n,
+                    !1)
+                }
+                )),
+                e
+            }
+        }, {
+            key: "originNames",
+            get: function() {
+                if (this.Count > 0) {
+                    null == this._originNames && this.Count > 0 ? this._originNames = [] : (this._originNames || (this._originNames = []),
+                    this._originNames.length = 0);
+                    var t, e = S(this);
+                    try {
+                        for (e.s(); !(t = e.n()).done; ) {
+                            var n = m(t.value, 1)[0]
+                              , r = B.fromSerializedKey(n);
+                            if (null === r.originName)
+                                return L("item.originName");
+                            this._originNames.push(r.originName)
+                        }
+                    } catch (t) {
+                        e.e(t)
+                    } finally {
+                        e.f()
+                    }
+                }
+                return this._originNames
+            }
+        }, {
+            key: "SetInitialOriginName",
+            value: function(t) {
+                this._originNames = [t]
+            }
+        }, {
+            key: "SetInitialOriginNames",
+            value: function(t) {
+                this._originNames = null == t ? null : t.slice()
+            }
+        }, {
+            key: "maxItem",
+            get: function() {
+                var t, e = {
+                    Key: B.Null,
+                    Value: 0
+                }, n = S(this);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        var r = m(t.value, 2)
+                          , i = r[0]
+                          , a = r[1]
+                          , o = B.fromSerializedKey(i);
+                        (e.Key.isNull || a > e.Value) && (e = {
+                            Key: o,
+                            Value: a
+                        })
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return e
+            }
+        }, {
+            key: "minItem",
+            get: function() {
+                var t, e = {
+                    Key: B.Null,
+                    Value: 0
+                }, n = S(this);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        var r = m(t.value, 2)
+                          , i = r[0]
+                          , a = r[1]
+                          , o = B.fromSerializedKey(i);
+                        (e.Key.isNull || a < e.Value) && (e = {
+                            Key: o,
+                            Value: a
+                        })
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return e
+            }
+        }, {
+            key: "inverse",
+            get: function() {
+                var t = new o;
+                if (null != this.origins) {
+                    var e, n = S(this.origins);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r, i = S(e.value.items);
+                            try {
+                                for (i.s(); !(r = i.n()).done; ) {
+                                    var a = m(r.value, 2)
+                                      , s = a[0]
+                                      , l = a[1]
+                                      , u = B.fromSerializedKey(s);
+                                    this.ContainsKey(u) || t.Add(u, l)
+                                }
+                            } catch (t) {
+                                i.e(t)
+                            } finally {
+                                i.f()
+                            }
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+                return t
+            }
+        }, {
+            key: "all",
+            get: function() {
+                var t = new o;
+                if (null != this.origins) {
+                    var e, n = S(this.origins);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r, i = S(e.value.items);
+                            try {
+                                for (i.s(); !(r = i.n()).done; ) {
+                                    var a = m(r.value, 2)
+                                      , s = a[0]
+                                      , l = a[1]
+                                      , u = B.fromSerializedKey(s);
+                                    t.set(u.serialized(), l)
+                                }
+                            } catch (t) {
+                                i.e(t)
+                            } finally {
+                                i.f()
+                            }
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+                return t
+            }
+        }, {
+            key: "Union",
+            value: function(t) {
+                var e, n = new o(this), r = S(t);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i = m(e.value, 2)
+                          , a = i[0]
+                          , s = i[1];
+                        n.set(a, s)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return n
+            }
+        }, {
+            key: "Intersect",
+            value: function(t) {
+                var e, n = new o, r = S(this);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i = m(e.value, 2)
+                          , a = i[0]
+                          , s = i[1];
+                        t.has(a) && n.set(a, s)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return n
+            }
+        }, {
+            key: "HasIntersection",
+            value: function(t) {
+                var e, n = S(this);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = m(e.value, 1)[0];
+                        if (t.has(r))
+                            return !0
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return !1
+            }
+        }, {
+            key: "Without",
+            value: function(t) {
+                var e, n = new o(this), r = S(t);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i = m(e.value, 1)[0];
+                        n.delete(i)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return n
+            }
+        }, {
+            key: "Contains",
+            value: function(t) {
+                if ("string" == typeof t)
+                    return this.ContainsItemNamed(t);
+                var e = t;
+                if (0 == e.size || 0 == this.size)
+                    return !1;
+                var n, r = S(e);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = m(n.value, 1)[0];
+                        if (!this.has(i))
+                            return !1
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return !0
+            }
+        }, {
+            key: "GreaterThan",
+            value: function(t) {
+                return 0 != this.Count && (0 == t.Count || this.minItem.Value > t.maxItem.Value)
+            }
+        }, {
+            key: "GreaterThanOrEquals",
+            value: function(t) {
+                return 0 != this.Count && (0 == t.Count || this.minItem.Value >= t.minItem.Value && this.maxItem.Value >= t.maxItem.Value)
+            }
+        }, {
+            key: "LessThan",
+            value: function(t) {
+                return 0 != t.Count && (0 == this.Count || this.maxItem.Value < t.minItem.Value)
+            }
+        }, {
+            key: "LessThanOrEquals",
+            value: function(t) {
+                return 0 != t.Count && (0 == this.Count || this.maxItem.Value <= t.maxItem.Value && this.minItem.Value <= t.minItem.Value)
+            }
+        }, {
+            key: "MaxAsList",
+            value: function() {
+                return this.Count > 0 ? new o(this.maxItem) : new o
+            }
+        }, {
+            key: "MinAsList",
+            value: function() {
+                return this.Count > 0 ? new o(this.minItem) : new o
+            }
+        }, {
+            key: "ListWithSubRange",
+            value: function(t, e) {
+                if (0 == this.Count)
+                    return new o;
+                var n = this.orderedItems
+                  , r = 0
+                  , i = Number.MAX_SAFE_INTEGER;
+                Number.isInteger(t) ? r = t : t instanceof o && t.Count > 0 && (r = t.minItem.Value),
+                Number.isInteger(e) ? i = e : t instanceof o && t.Count > 0 && (i = e.maxItem.Value);
+                var a = new o;
+                a.SetInitialOriginNames(this.originNames);
+                var s, l = S(n);
+                try {
+                    for (l.s(); !(s = l.n()).done; ) {
+                        var u = s.value;
+                        u.Value >= r && u.Value <= i && a.Add(u.Key, u.Value)
+                    }
+                } catch (t) {
+                    l.e(t)
+                } finally {
+                    l.f()
+                }
+                return a
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                if (t instanceof o == !1)
+                    return !1;
+                if (t.Count != this.Count)
+                    return !1;
+                var e, n = S(this);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = m(e.value, 1)[0];
+                        if (!t.has(r))
+                            return !1
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return !0
+            }
+        }, {
+            key: "orderedItems",
+            get: function() {
+                var t, e = new Array, n = S(this);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        var r = m(t.value, 2)
+                          , i = r[0]
+                          , a = r[1]
+                          , o = B.fromSerializedKey(i);
+                        e.push({
+                            Key: o,
+                            Value: a
+                        })
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return e.sort((function(t, e) {
+                    return null === t.Key.originName ? L("x.Key.originName") : null === e.Key.originName ? L("y.Key.originName") : t.Value == e.Value ? t.Key.originName.localeCompare(e.Key.originName) : t.Value < e.Value ? -1 : t.Value > e.Value ? 1 : 0
+                }
+                )),
+                e
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                for (var t = this.orderedItems, e = new j, n = 0; n < t.length; n++) {
+                    n > 0 && e.Append(", ");
+                    var r = t[n].Key;
+                    if (null === r.itemName)
+                        return L("item.itemName");
+                    e.Append(r.itemName)
+                }
+                return e.toString()
+            }
+        }, {
+            key: "valueOf",
+            value: function() {
+                return NaN
+            }
+        }], [{
+            key: "FromString",
+            value: function(t, e) {
+                var n, r = null === (n = e.listDefinitions) || void 0 === n ? void 0 : n.FindSingleItemListWithName(t);
+                if (r)
+                    return null === r.value ? L("listValue.value") : new o(r.value);
+                throw new Error("Could not find the InkListItem from the string '" + t + "' to create an InkList because it doesn't exist in the original list definition in ink.")
+            }
+        }]),
+        o
+    }(c(Map))
+      , G = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this, t)).useEndLineNumber = !1,
+            i.message = t,
+            i.name = "StoryException",
+            i
+        }
+        return i(r)
+    }(c(Error));
+    function q(t, e, n) {
+        if (null === t)
+            return {
+                result: n,
+                exists: !1
+            };
+        var r = t.get(e);
+        return void 0 === r ? {
+            result: n,
+            exists: !1
+        } : {
+            result: r,
+            exists: !0
+        }
+    }
+    var U, K = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).value = t,
+            i
+        }
+        return i(r, [{
+            key: "valueObject",
+            get: function() {
+                return this.value
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return null === this.value ? L("Value.value") : this.value.toString()
+            }
+        }]),
+        r
+    }(function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            return n(this, r),
+            e.apply(this, arguments)
+        }
+        return i(r, [{
+            key: "Copy",
+            value: function() {
+                return T(r.Create(this.valueObject), V)
+            }
+        }, {
+            key: "BadCastException",
+            value: function(t) {
+                return new G("Can't cast " + this.valueObject + " from " + this.valueType + " to " + t)
+            }
+        }], [{
+            key: "Create",
+            value: function(t, e) {
+                if (e) {
+                    if (e === U.Int && Number.isInteger(Number(t)))
+                        return new J(Number(t));
+                    if (e === U.Float && !isNaN(t))
+                        return new z(Number(t))
+                }
+                return "boolean" == typeof t ? new H(Boolean(t)) : "string" == typeof t ? new $(String(t)) : Number.isInteger(Number(t)) ? new J(Number(t)) : isNaN(t) ? t instanceof R ? new X(T(t, R)) : t instanceof M ? new Z(T(t, M)) : null : new z(Number(t))
+            }
+        }]),
+        r
+    }(V)), H = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            return n(this, r),
+            e.call(this, t || !1)
+        }
+        return i(r, [{
+            key: "isTruthy",
+            get: function() {
+                return Boolean(this.value)
+            }
+        }, {
+            key: "valueType",
+            get: function() {
+                return U.Bool
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (null === this.value)
+                    return L("Value.value");
+                if (t == this.valueType)
+                    return this;
+                if (t == U.Int)
+                    return new J(this.value ? 1 : 0);
+                if (t == U.Float)
+                    return new z(this.value ? 1 : 0);
+                if (t == U.String)
+                    return new $(this.value ? "true" : "false");
+                throw this.BadCastException(t)
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return this.value ? "true" : "false"
+            }
+        }]),
+        r
+    }(K), J = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            return n(this, r),
+            e.call(this, t || 0)
+        }
+        return i(r, [{
+            key: "isTruthy",
+            get: function() {
+                return 0 != this.value
+            }
+        }, {
+            key: "valueType",
+            get: function() {
+                return U.Int
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (null === this.value)
+                    return L("Value.value");
+                if (t == this.valueType)
+                    return this;
+                if (t == U.Bool)
+                    return new H(0 !== this.value);
+                if (t == U.Float)
+                    return new z(this.value);
+                if (t == U.String)
+                    return new $("" + this.value);
+                throw this.BadCastException(t)
+            }
+        }]),
+        r
+    }(K), z = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            return n(this, r),
+            e.call(this, t || 0)
+        }
+        return i(r, [{
+            key: "isTruthy",
+            get: function() {
+                return 0 != this.value
+            }
+        }, {
+            key: "valueType",
+            get: function() {
+                return U.Float
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (null === this.value)
+                    return L("Value.value");
+                if (t == this.valueType)
+                    return this;
+                if (t == U.Bool)
+                    return new H(0 !== this.value);
+                if (t == U.Int)
+                    return new J(this.value);
+                if (t == U.String)
+                    return new $("" + this.value);
+                throw this.BadCastException(t)
+            }
+        }]),
+        r
+    }(K), $ = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this, t || ""))._isNewline = "\n" == i.value,
+            i._isInlineWhitespace = !0,
+            null === i.value ? f(i, L("Value.value")) : (i.value.length > 0 && i.value.split("").every((function(t) {
+                return " " == t || "\t" == t || (i._isInlineWhitespace = !1,
+                !1)
+            }
+            )),
+            i)
+        }
+        return i(r, [{
+            key: "valueType",
+            get: function() {
+                return U.String
+            }
+        }, {
+            key: "isTruthy",
+            get: function() {
+                return null === this.value ? L("Value.value") : this.value.length > 0
+            }
+        }, {
+            key: "isNewline",
+            get: function() {
+                return this._isNewline
+            }
+        }, {
+            key: "isInlineWhitespace",
+            get: function() {
+                return this._isInlineWhitespace
+            }
+        }, {
+            key: "isNonWhitespace",
+            get: function() {
+                return !this.isNewline && !this.isInlineWhitespace
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (t == this.valueType)
+                    return this;
+                if (t == U.Int) {
+                    var e = function(t) {
+                        var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0
+                          , n = parseInt(t);
+                        return Number.isNaN(n) ? {
+                            result: e,
+                            exists: !1
+                        } : {
+                            result: n,
+                            exists: !0
+                        }
+                    }(this.value);
+                    if (e.exists)
+                        return new J(e.result);
+                    throw this.BadCastException(t)
+                }
+                if (t == U.Float) {
+                    var n = function(t) {
+                        var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0
+                          , n = parseFloat(t);
+                        return Number.isNaN(n) ? {
+                            result: e,
+                            exists: !1
+                        } : {
+                            result: n,
+                            exists: !0
+                        }
+                    }(this.value);
+                    if (n.exists)
+                        return new z(n.result);
+                    throw this.BadCastException(t)
+                }
+                throw this.BadCastException(t)
+            }
+        }]),
+        r
+    }(K), X = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+            return n(this, r),
+            e.call(this, t)
+        }
+        return i(r, [{
+            key: "valueType",
+            get: function() {
+                return U.DivertTarget
+            }
+        }, {
+            key: "targetPath",
+            get: function() {
+                return null === this.value ? L("Value.value") : this.value
+            },
+            set: function(t) {
+                this.value = t
+            }
+        }, {
+            key: "isTruthy",
+            get: function() {
+                throw new Error("Shouldn't be checking the truthiness of a divert target")
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (t == this.valueType)
+                    return this;
+                throw this.BadCastException(t)
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return "DivertTargetValue(" + this.targetPath + ")"
+            }
+        }]),
+        r
+    }(K), Y = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i, a = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1;
+            return n(this, r),
+            (i = e.call(this, t))._contextIndex = a,
+            i
+        }
+        return i(r, [{
+            key: "contextIndex",
+            get: function() {
+                return this._contextIndex
+            },
+            set: function(t) {
+                this._contextIndex = t
+            }
+        }, {
+            key: "variableName",
+            get: function() {
+                return null === this.value ? L("Value.value") : this.value
+            },
+            set: function(t) {
+                this.value = t
+            }
+        }, {
+            key: "valueType",
+            get: function() {
+                return U.VariablePointer
+            }
+        }, {
+            key: "isTruthy",
+            get: function() {
+                throw new Error("Shouldn't be checking the truthiness of a variable pointer")
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (t == this.valueType)
+                    return this;
+                throw this.BadCastException(t)
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return "VariablePointerValue(" + this.variableName + ")"
+            }
+        }, {
+            key: "Copy",
+            value: function() {
+                return new r(this.variableName,this.contextIndex)
+            }
+        }]),
+        r
+    }(K), Z = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            a = e.call(this, null),
+            t || i ? t instanceof M ? a.value = new M(t) : t instanceof B && "number" == typeof i && (a.value = new M({
+                Key: t,
+                Value: i
+            })) : a.value = new M,
+            a
+        }
+        return i(r, [{
+            key: "isTruthy",
+            get: function() {
+                return null === this.value ? L("this.value") : this.value.Count > 0
+            }
+        }, {
+            key: "valueType",
+            get: function() {
+                return U.List
+            }
+        }, {
+            key: "Cast",
+            value: function(t) {
+                if (null === this.value)
+                    return L("Value.value");
+                if (t == U.Int) {
+                    var e = this.value.maxItem;
+                    return e.Key.isNull ? new J(0) : new J(e.Value)
+                }
+                if (t == U.Float) {
+                    var n = this.value.maxItem;
+                    return n.Key.isNull ? new z(0) : new z(n.Value)
+                }
+                if (t == U.String) {
+                    var r = this.value.maxItem;
+                    return r.Key.isNull ? new $("") : new $(r.Key.toString())
+                }
+                if (t == this.valueType)
+                    return this;
+                throw this.BadCastException(t)
+            }
+        }], [{
+            key: "RetainListOriginsForAssignment",
+            value: function(t, e) {
+                var n = _(t, r)
+                  , i = _(e, r);
+                return i && null === i.value ? L("newList.value") : n && null === n.value ? L("oldList.value") : void (n && i && 0 == i.value.Count && i.value.SetInitialOriginNames(n.value.originNames))
+            }
+        }]),
+        r
+    }(K);
+    !function(t) {
+        t[t.Bool = -1] = "Bool",
+        t[t.Int = 0] = "Int",
+        t[t.Float = 1] = "Float",
+        t[t.List = 2] = "List",
+        t[t.String = 3] = "String",
+        t[t.DivertTarget = 4] = "DivertTarget",
+        t[t.VariablePointer = 5] = "VariablePointer"
+    }(U || (U = {}));
+    var Q = function() {
+        function t() {
+            n(this, t),
+            this.obj = null,
+            this.approximate = !1
+        }
+        return i(t, [{
+            key: "correctObj",
+            get: function() {
+                return this.approximate ? null : this.obj
+            }
+        }, {
+            key: "container",
+            get: function() {
+                return this.obj instanceof tt ? this.obj : null
+            }
+        }, {
+            key: "copy",
+            value: function() {
+                var e = new t;
+                return e.obj = this.obj,
+                e.approximate = this.approximate,
+                e
+            }
+        }]),
+        t
+    }()
+      , tt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t;
+            return n(this, r),
+            (t = e.apply(this, arguments)).name = null,
+            t._content = [],
+            t.namedContent = new Map,
+            t.visitsShouldBeCounted = !1,
+            t.turnIndexShouldBeCounted = !1,
+            t.countingAtStartOnly = !1,
+            t._pathToFirstLeafContent = null,
+            t
+        }
+        return i(r, [{
+            key: "hasValidName",
+            get: function() {
+                return null != this.name && this.name.length > 0
+            }
+        }, {
+            key: "content",
+            get: function() {
+                return this._content
+            },
+            set: function(t) {
+                this.AddContent(t)
+            }
+        }, {
+            key: "namedOnlyContent",
+            get: function() {
+                var t, e = new Map, n = S(this.namedContent);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        var r = m(t.value, 2)
+                          , i = r[0]
+                          , a = T(r[1], V);
+                        e.set(i, a)
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                var o, s = S(this.content);
+                try {
+                    for (s.s(); !(o = s.n()).done; ) {
+                        var l = A(o.value);
+                        null != l && l.hasValidName && e.delete(l.name)
+                    }
+                } catch (t) {
+                    s.e(t)
+                } finally {
+                    s.f()
+                }
+                return 0 == e.size && (e = null),
+                e
+            },
+            set: function(t) {
+                var e = this.namedOnlyContent;
+                if (null != e) {
+                    var n, r = S(e);
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            var i = m(n.value, 1)[0];
+                            this.namedContent.delete(i)
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                }
+                if (null != t) {
+                    var a, o = S(t);
+                    try {
+                        for (o.s(); !(a = o.n()).done; ) {
+                            var s = A(m(a.value, 2)[1]);
+                            null != s && this.AddToNamedContentOnly(s)
+                        }
+                    } catch (t) {
+                        o.e(t)
+                    } finally {
+                        o.f()
+                    }
+                }
+            }
+        }, {
+            key: "countFlags",
+            get: function() {
+                var t = 0;
+                return this.visitsShouldBeCounted && (t |= r.CountFlags.Visits),
+                this.turnIndexShouldBeCounted && (t |= r.CountFlags.Turns),
+                this.countingAtStartOnly && (t |= r.CountFlags.CountStartOnly),
+                t == r.CountFlags.CountStartOnly && (t = 0),
+                t
+            },
+            set: function(t) {
+                var e = t;
+                (e & r.CountFlags.Visits) > 0 && (this.visitsShouldBeCounted = !0),
+                (e & r.CountFlags.Turns) > 0 && (this.turnIndexShouldBeCounted = !0),
+                (e & r.CountFlags.CountStartOnly) > 0 && (this.countingAtStartOnly = !0)
+            }
+        }, {
+            key: "pathToFirstLeafContent",
+            get: function() {
+                return null == this._pathToFirstLeafContent && (this._pathToFirstLeafContent = this.path.PathByAppendingPath(this.internalPathToFirstLeafContent)),
+                this._pathToFirstLeafContent
+            }
+        }, {
+            key: "internalPathToFirstLeafContent",
+            get: function() {
+                for (var t = [], e = this; e instanceof r; )
+                    e.content.length > 0 && (t.push(new R.Component(0)),
+                    e = e.content[0]);
+                return new R(t)
+            }
+        }, {
+            key: "AddContent",
+            value: function(t) {
+                if (t instanceof Array) {
+                    var e, n = S(t);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r = e.value;
+                            this.AddContent(r)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                } else {
+                    var i = t;
+                    if (this._content.push(i),
+                    i.parent)
+                        throw new Error("content is already in " + i.parent);
+                    i.parent = this,
+                    this.TryAddNamedContent(i)
+                }
+            }
+        }, {
+            key: "TryAddNamedContent",
+            value: function(t) {
+                var e = A(t);
+                null != e && e.hasValidName && this.AddToNamedContentOnly(e)
+            }
+        }, {
+            key: "AddToNamedContentOnly",
+            value: function(t) {
+                if (I.AssertType(t, V, "Can only add Runtime.Objects to a Runtime.Container"),
+                T(t, V).parent = this,
+                null === t.name)
+                    return L("namedContentObj.name");
+                this.namedContent.set(t.name, t)
+            }
+        }, {
+            key: "ContentAtPath",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0
+                  , n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : -1;
+                -1 == n && (n = t.length);
+                var i = new Q;
+                i.approximate = !1;
+                for (var a = this, o = this, s = e; s < n; ++s) {
+                    var l = t.GetComponent(s);
+                    if (null == a) {
+                        i.approximate = !0;
+                        break
+                    }
+                    var u = a.ContentWithPathComponent(l);
+                    if (null == u) {
+                        i.approximate = !0;
+                        break
+                    }
+                    o = u,
+                    a = _(u, r)
+                }
+                return i.obj = o,
+                i
+            }
+        }, {
+            key: "InsertContent",
+            value: function(t, e) {
+                if (this.content.splice(e, 0, t),
+                t.parent)
+                    throw new Error("content is already in " + t.parent);
+                t.parent = this,
+                this.TryAddNamedContent(t)
+            }
+        }, {
+            key: "AddContentsOfContainer",
+            value: function(t) {
+                var e;
+                (e = this.content).push.apply(e, g(t.content));
+                var n, r = S(t.content);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = n.value;
+                        i.parent = this,
+                        this.TryAddNamedContent(i)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+            }
+        }, {
+            key: "ContentWithPathComponent",
+            value: function(t) {
+                if (t.isIndex)
+                    return t.index >= 0 && t.index < this.content.length ? this.content[t.index] : null;
+                if (t.isParent)
+                    return this.parent;
+                if (null === t.name)
+                    return L("component.name");
+                var e = q(this.namedContent, t.name, null);
+                return e.exists ? T(e.result, V) : null
+            }
+        }, {
+            key: "BuildStringOfHierarchy",
+            value: function() {
+                var t;
+                if (0 == arguments.length)
+                    return t = new j,
+                    this.BuildStringOfHierarchy(t, 0, null),
+                    t.toString();
+                t = arguments[0];
+                var e = arguments[1]
+                  , n = arguments[2];
+                function i() {
+                    for (var n = 0; n < 4 * e; ++n)
+                        t.Append(" ")
+                }
+                i(),
+                t.Append("["),
+                this.hasValidName && t.AppendFormat(" ({0})", this.name),
+                this == n && t.Append("  <---"),
+                t.AppendLine(),
+                e++;
+                for (var a = 0; a < this.content.length; ++a) {
+                    var o = this.content[a];
+                    if (o instanceof r) {
+                        var s = o;
+                        s.BuildStringOfHierarchy(t, e, n)
+                    } else
+                        i(),
+                        o instanceof $ ? (t.Append('"'),
+                        t.Append(o.toString().replace("\n", "\\n")),
+                        t.Append('"')) : t.Append(o.toString());
+                    a != this.content.length - 1 && t.Append(","),
+                    o instanceof r || o != n || t.Append("  <---"),
+                    t.AppendLine()
+                }
+                var l, u = new Map, c = S(this.namedContent);
+                try {
+                    for (c.s(); !(l = c.n()).done; ) {
+                        var h = m(l.value, 2)
+                          , f = h[0]
+                          , d = h[1];
+                        this.content.indexOf(T(d, V)) >= 0 || u.set(f, d)
+                    }
+                } catch (t) {
+                    c.e(t)
+                } finally {
+                    c.f()
+                }
+                if (u.size > 0) {
+                    i(),
+                    t.AppendLine("-- named: --");
+                    var v, p = S(u);
+                    try {
+                        for (p.s(); !(v = p.n()).done; ) {
+                            var g = m(v.value, 2)
+                              , y = g[1];
+                            I.AssertType(y, r, "Can only print out named Containers");
+                            var C = y;
+                            C.BuildStringOfHierarchy(t, e, n),
+                            t.AppendLine()
+                        }
+                    } catch (t) {
+                        p.e(t)
+                    } finally {
+                        p.f()
+                    }
+                }
+                e--,
+                i(),
+                t.Append("]")
+            }
+        }]),
+        r
+    }(V);
+    !function(t) {
+        var e;
+        (e = t.CountFlags || (t.CountFlags = {}))[e.Visits = 1] = "Visits",
+        e[e.Turns = 2] = "Turns",
+        e[e.CountStartOnly = 4] = "CountStartOnly"
+    }(tt || (tt = {}));
+    var et = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t, i = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : r.CommandType.NotSet;
+            return n(this, r),
+            (t = e.call(this))._commandType = i,
+            t
+        }
+        return i(r, [{
+            key: "commandType",
+            get: function() {
+                return this._commandType
+            }
+        }, {
+            key: "Copy",
+            value: function() {
+                return new r(this.commandType)
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return this.commandType.toString()
+            }
+        }], [{
+            key: "EvalStart",
+            value: function() {
+                return new r(r.CommandType.EvalStart)
+            }
+        }, {
+            key: "EvalOutput",
+            value: function() {
+                return new r(r.CommandType.EvalOutput)
+            }
+        }, {
+            key: "EvalEnd",
+            value: function() {
+                return new r(r.CommandType.EvalEnd)
+            }
+        }, {
+            key: "Duplicate",
+            value: function() {
+                return new r(r.CommandType.Duplicate)
+            }
+        }, {
+            key: "PopEvaluatedValue",
+            value: function() {
+                return new r(r.CommandType.PopEvaluatedValue)
+            }
+        }, {
+            key: "PopFunction",
+            value: function() {
+                return new r(r.CommandType.PopFunction)
+            }
+        }, {
+            key: "PopTunnel",
+            value: function() {
+                return new r(r.CommandType.PopTunnel)
+            }
+        }, {
+            key: "BeginString",
+            value: function() {
+                return new r(r.CommandType.BeginString)
+            }
+        }, {
+            key: "EndString",
+            value: function() {
+                return new r(r.CommandType.EndString)
+            }
+        }, {
+            key: "NoOp",
+            value: function() {
+                return new r(r.CommandType.NoOp)
+            }
+        }, {
+            key: "ChoiceCount",
+            value: function() {
+                return new r(r.CommandType.ChoiceCount)
+            }
+        }, {
+            key: "Turns",
+            value: function() {
+                return new r(r.CommandType.Turns)
+            }
+        }, {
+            key: "TurnsSince",
+            value: function() {
+                return new r(r.CommandType.TurnsSince)
+            }
+        }, {
+            key: "ReadCount",
+            value: function() {
+                return new r(r.CommandType.ReadCount)
+            }
+        }, {
+            key: "Random",
+            value: function() {
+                return new r(r.CommandType.Random)
+            }
+        }, {
+            key: "SeedRandom",
+            value: function() {
+                return new r(r.CommandType.SeedRandom)
+            }
+        }, {
+            key: "VisitIndex",
+            value: function() {
+                return new r(r.CommandType.VisitIndex)
+            }
+        }, {
+            key: "SequenceShuffleIndex",
+            value: function() {
+                return new r(r.CommandType.SequenceShuffleIndex)
+            }
+        }, {
+            key: "StartThread",
+            value: function() {
+                return new r(r.CommandType.StartThread)
+            }
+        }, {
+            key: "Done",
+            value: function() {
+                return new r(r.CommandType.Done)
+            }
+        }, {
+            key: "End",
+            value: function() {
+                return new r(r.CommandType.End)
+            }
+        }, {
+            key: "ListFromInt",
+            value: function() {
+                return new r(r.CommandType.ListFromInt)
+            }
+        }, {
+            key: "ListRange",
+            value: function() {
+                return new r(r.CommandType.ListRange)
+            }
+        }, {
+            key: "ListRandom",
+            value: function() {
+                return new r(r.CommandType.ListRandom)
+            }
+        }, {
+            key: "BeginTag",
+            value: function() {
+                return new r(r.CommandType.BeginTag)
+            }
+        }, {
+            key: "EndTag",
+            value: function() {
+                return new r(r.CommandType.EndTag)
+            }
+        }]),
+        r
+    }(V);
+    !function(t) {
+        var e;
+        (e = t.CommandType || (t.CommandType = {}))[e.NotSet = -1] = "NotSet",
+        e[e.EvalStart = 0] = "EvalStart",
+        e[e.EvalOutput = 1] = "EvalOutput",
+        e[e.EvalEnd = 2] = "EvalEnd",
+        e[e.Duplicate = 3] = "Duplicate",
+        e[e.PopEvaluatedValue = 4] = "PopEvaluatedValue",
+        e[e.PopFunction = 5] = "PopFunction",
+        e[e.PopTunnel = 6] = "PopTunnel",
+        e[e.BeginString = 7] = "BeginString",
+        e[e.EndString = 8] = "EndString",
+        e[e.NoOp = 9] = "NoOp",
+        e[e.ChoiceCount = 10] = "ChoiceCount",
+        e[e.Turns = 11] = "Turns",
+        e[e.TurnsSince = 12] = "TurnsSince",
+        e[e.ReadCount = 13] = "ReadCount",
+        e[e.Random = 14] = "Random",
+        e[e.SeedRandom = 15] = "SeedRandom",
+        e[e.VisitIndex = 16] = "VisitIndex",
+        e[e.SequenceShuffleIndex = 17] = "SequenceShuffleIndex",
+        e[e.StartThread = 18] = "StartThread",
+        e[e.Done = 19] = "Done",
+        e[e.End = 20] = "End",
+        e[e.ListFromInt = 21] = "ListFromInt",
+        e[e.ListRange = 22] = "ListRange",
+        e[e.ListRandom = 23] = "ListRandom",
+        e[e.BeginTag = 24] = "BeginTag",
+        e[e.EndTag = 25] = "EndTag",
+        e[e.TOTAL_VALUES = 26] = "TOTAL_VALUES"
+    }(et || (et = {}));
+    var nt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t;
+            return n(this, r),
+            (t = e.apply(this, arguments))._prototypeRuntimeConstantExpression = null,
+            t.outputWhenComplete = !1,
+            t.GenerateRuntimeObject = function() {
+                var e = new tt;
+                return e.AddContent(et.EvalStart()),
+                t.GenerateIntoContainer(e),
+                t.outputWhenComplete && e.AddContent(et.EvalOutput()),
+                e.AddContent(et.EvalEnd()),
+                e
+            }
+            ,
+            t.GenerateConstantIntoContainer = function(e) {
+                null === t._prototypeRuntimeConstantExpression && (t._prototypeRuntimeConstantExpression = new tt,
+                t.GenerateIntoContainer(t._prototypeRuntimeConstantExpression));
+                var n, r = S(t._prototypeRuntimeConstantExpression.content);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = n.value.Copy();
+                        i && e.AddContent(i)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+            }
+            ,
+            t.toString = function() {
+                return "No string value in JavaScript."
+            }
+            ,
+            t
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Expression"
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                return !1
+            }
+        }]),
+        r
+    }(F)
+      , rt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            return n(this, r),
+            e.apply(this, arguments)
+        }
+        return i(r)
+    }(V)
+      , it = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t;
+            if (n(this, r),
+            (t = e.call(this))._name = null,
+            t._numberOfParameters = 0,
+            t._prototype = null,
+            t._isPrototype = !1,
+            t._operationFuncs = null,
+            0 === arguments.length)
+                r.GenerateNativeFunctionsIfNecessary();
+            else if (1 === arguments.length) {
+                var i = arguments[0];
+                r.GenerateNativeFunctionsIfNecessary(),
+                t.name = i
+            } else if (2 === arguments.length) {
+                var a = arguments[0]
+                  , o = arguments[1];
+                t._isPrototype = !0,
+                t.name = a,
+                t.numberOfParameters = o
+            }
+            return t
+        }
+        return i(r, [{
+            key: "name",
+            get: function() {
+                return null === this._name ? L("NativeFunctionCall._name") : this._name
+            },
+            set: function(t) {
+                this._name = t,
+                this._isPrototype || (null === r._nativeFunctions ? L("NativeFunctionCall._nativeFunctions") : this._prototype = r._nativeFunctions.get(this._name) || null)
+            }
+        }, {
+            key: "numberOfParameters",
+            get: function() {
+                return this._prototype ? this._prototype.numberOfParameters : this._numberOfParameters
+            },
+            set: function(t) {
+                this._numberOfParameters = t
+            }
+        }, {
+            key: "Call",
+            value: function(t) {
+                if (this._prototype)
+                    return this._prototype.Call(t);
+                if (this.numberOfParameters != t.length)
+                    throw new Error("Unexpected number of parameters");
+                var e, n = !1, r = S(t);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i = e.value;
+                        if (i instanceof rt)
+                            throw new G('Attempting to perform operation on a void value. Did you forget to "return" a value from a function you called here?');
+                        i instanceof Z && (n = !0)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                if (2 == t.length && n)
+                    return this.CallBinaryListOperation(t);
+                var a = this.CoerceValuesToSingleType(t)
+                  , o = a[0].valueType;
+                return o == U.Int || o == U.Float || o == U.String || o == U.DivertTarget || o == U.List ? this.CallType(a) : null
+            }
+        }, {
+            key: "CallType",
+            value: function(t) {
+                var e = T(t[0], K)
+                  , n = e.valueType
+                  , i = e
+                  , a = t.length;
+                if (2 == a || 1 == a) {
+                    if (null === this._operationFuncs)
+                        return L("NativeFunctionCall._operationFuncs");
+                    var o = this._operationFuncs.get(n);
+                    if (!o) {
+                        var s = U[n];
+                        throw new G("Cannot perform operation " + this.name + " on " + s)
+                    }
+                    if (2 == a) {
+                        var l = T(t[1], K)
+                          , u = o;
+                        if (null === i.value || null === l.value)
+                            return L("NativeFunctionCall.Call BinaryOp values");
+                        var c = u(i.value, l.value);
+                        return K.Create(c)
+                    }
+                    var h = o;
+                    if (null === i.value)
+                        return L("NativeFunctionCall.Call UnaryOp value");
+                    var f = h(i.value);
+                    return this.name === r.Int ? K.Create(f, U.Int) : this.name === r.Float ? K.Create(f, U.Float) : K.Create(f, e.valueType)
+                }
+                throw new Error("Unexpected number of parameters to NativeFunctionCall: " + t.length)
+            }
+        }, {
+            key: "CallBinaryListOperation",
+            value: function(t) {
+                if (("+" == this.name || "-" == this.name) && t[0]instanceof Z && t[1]instanceof J)
+                    return this.CallListIncrementOperation(t);
+                var e = T(t[0], K)
+                  , n = T(t[1], K);
+                if (!("&&" != this.name && "||" != this.name || e.valueType == U.List && n.valueType == U.List)) {
+                    if (null === this._operationFuncs)
+                        return L("NativeFunctionCall._operationFuncs");
+                    var r = this._operationFuncs.get(U.Int);
+                    if (null === r)
+                        return L("NativeFunctionCall.CallBinaryListOperation op");
+                    var i = function(t) {
+                        if ("boolean" == typeof t)
+                            return t;
+                        throw new Error("".concat(t, " is not a boolean"))
+                    }(r(e.isTruthy ? 1 : 0, n.isTruthy ? 1 : 0));
+                    return new H(i)
+                }
+                if (e.valueType == U.List && n.valueType == U.List)
+                    return this.CallType([e, n]);
+                throw new G("Can not call use " + this.name + " operation on " + U[e.valueType] + " and " + U[n.valueType])
+            }
+        }, {
+            key: "CallListIncrementOperation",
+            value: function(t) {
+                var e = T(t[0], Z)
+                  , n = T(t[1], J)
+                  , r = new M;
+                if (null === e.value)
+                    return L("NativeFunctionCall.CallListIncrementOperation listVal.value");
+                var i, a = S(e.value);
+                try {
+                    for (a.s(); !(i = a.n()).done; ) {
+                        var o = m(i.value, 2)
+                          , s = o[0]
+                          , l = o[1]
+                          , u = B.fromSerializedKey(s);
+                        if (null === this._operationFuncs)
+                            return L("NativeFunctionCall._operationFuncs");
+                        var c = this._operationFuncs.get(U.Int);
+                        if (null === n.value)
+                            return L("NativeFunctionCall.CallListIncrementOperation intVal.value");
+                        var h = c(l, n.value)
+                          , f = null;
+                        if (null === e.value.origins)
+                            return L("NativeFunctionCall.CallListIncrementOperation listVal.value.origins");
+                        var d, v = S(e.value.origins);
+                        try {
+                            for (v.s(); !(d = v.n()).done; ) {
+                                var p = d.value;
+                                if (p.name == u.originName) {
+                                    f = p;
+                                    break
+                                }
+                            }
+                        } catch (t) {
+                            v.e(t)
+                        } finally {
+                            v.f()
+                        }
+                        if (null != f) {
+                            var g = f.TryGetItemWithValue(h, B.Null);
+                            g.exists && r.Add(g.result, h)
+                        }
+                    }
+                } catch (t) {
+                    a.e(t)
+                } finally {
+                    a.f()
+                }
+                return new Z(r)
+            }
+        }, {
+            key: "CoerceValuesToSingleType",
+            value: function(t) {
+                var e, n = U.Int, r = null, i = S(t);
+                try {
+                    for (i.s(); !(e = i.n()).done; ) {
+                        var a = T(e.value, K);
+                        a.valueType > n && (n = a.valueType),
+                        a.valueType == U.List && (r = _(a, Z))
+                    }
+                } catch (t) {
+                    i.e(t)
+                } finally {
+                    i.f()
+                }
+                var o = [];
+                if (U[n] == U[U.List]) {
+                    var s, l = S(t);
+                    try {
+                        for (l.s(); !(s = l.n()).done; ) {
+                            var u = T(s.value, K);
+                            if (u.valueType == U.List)
+                                o.push(u);
+                            else {
+                                if (u.valueType != U.Int) {
+                                    var c = U[u.valueType];
+                                    throw new G("Cannot mix Lists and " + c + " values in this operation")
+                                }
+                                var h = parseInt(u.valueObject);
+                                if (null === (r = T(r, Z)).value)
+                                    return L("NativeFunctionCall.CoerceValuesToSingleType specialCaseList.value");
+                                var f = r.value.originOfMaxItem;
+                                if (null === f)
+                                    return L("NativeFunctionCall.CoerceValuesToSingleType list");
+                                var d = f.TryGetItemWithValue(h, B.Null);
+                                if (!d.exists)
+                                    throw new G("Could not find List item with the value " + h + " in " + f.name);
+                                var v = new Z(d.result,h);
+                                o.push(v)
+                            }
+                        }
+                    } catch (t) {
+                        l.e(t)
+                    } finally {
+                        l.f()
+                    }
+                } else {
+                    var p, m = S(t);
+                    try {
+                        for (m.s(); !(p = m.n()).done; ) {
+                            var g = T(p.value, K).Cast(n);
+                            o.push(g)
+                        }
+                    } catch (t) {
+                        m.e(t)
+                    } finally {
+                        m.f()
+                    }
+                }
+                return o
+            }
+        }, {
+            key: "AddOpFuncForType",
+            value: function(t, e) {
+                null == this._operationFuncs && (this._operationFuncs = new Map),
+                this._operationFuncs.set(t, e)
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return 'Native "' + this.name + '"'
+            }
+        }], [{
+            key: "CallWithName",
+            value: function(t) {
+                return new r(t)
+            }
+        }, {
+            key: "CallExistsWithName",
+            value: function(t) {
+                return this.GenerateNativeFunctionsIfNecessary(),
+                this._nativeFunctions.get(t)
+            }
+        }, {
+            key: "Identity",
+            value: function(t) {
+                return t
+            }
+        }, {
+            key: "GenerateNativeFunctionsIfNecessary",
+            value: function() {
+                if (null == this._nativeFunctions) {
+                    this._nativeFunctions = new Map,
+                    this.AddIntBinaryOp(this.Add, (function(t, e) {
+                        return t + e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Subtract, (function(t, e) {
+                        return t - e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Multiply, (function(t, e) {
+                        return t * e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Divide, (function(t, e) {
+                        return Math.floor(t / e)
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Mod, (function(t, e) {
+                        return t % e
+                    }
+                    )),
+                    this.AddIntUnaryOp(this.Negate, (function(t) {
+                        return -t
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Equal, (function(t, e) {
+                        return t == e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Greater, (function(t, e) {
+                        return t > e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Less, (function(t, e) {
+                        return t < e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.GreaterThanOrEquals, (function(t, e) {
+                        return t >= e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.LessThanOrEquals, (function(t, e) {
+                        return t <= e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.NotEquals, (function(t, e) {
+                        return t != e
+                    }
+                    )),
+                    this.AddIntUnaryOp(this.Not, (function(t) {
+                        return 0 == t
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.And, (function(t, e) {
+                        return 0 != t && 0 != e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Or, (function(t, e) {
+                        return 0 != t || 0 != e
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Max, (function(t, e) {
+                        return Math.max(t, e)
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Min, (function(t, e) {
+                        return Math.min(t, e)
+                    }
+                    )),
+                    this.AddIntBinaryOp(this.Pow, (function(t, e) {
+                        return Math.pow(t, e)
+                    }
+                    )),
+                    this.AddIntUnaryOp(this.Floor, r.Identity),
+                    this.AddIntUnaryOp(this.Ceiling, r.Identity),
+                    this.AddIntUnaryOp(this.Int, r.Identity),
+                    this.AddIntUnaryOp(this.Float, (function(t) {
+                        return t
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Add, (function(t, e) {
+                        return t + e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Subtract, (function(t, e) {
+                        return t - e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Multiply, (function(t, e) {
+                        return t * e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Divide, (function(t, e) {
+                        return t / e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Mod, (function(t, e) {
+                        return t % e
+                    }
+                    )),
+                    this.AddFloatUnaryOp(this.Negate, (function(t) {
+                        return -t
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Equal, (function(t, e) {
+                        return t == e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Greater, (function(t, e) {
+                        return t > e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Less, (function(t, e) {
+                        return t < e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.GreaterThanOrEquals, (function(t, e) {
+                        return t >= e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.LessThanOrEquals, (function(t, e) {
+                        return t <= e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.NotEquals, (function(t, e) {
+                        return t != e
+                    }
+                    )),
+                    this.AddFloatUnaryOp(this.Not, (function(t) {
+                        return 0 == t
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.And, (function(t, e) {
+                        return 0 != t && 0 != e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Or, (function(t, e) {
+                        return 0 != t || 0 != e
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Max, (function(t, e) {
+                        return Math.max(t, e)
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Min, (function(t, e) {
+                        return Math.min(t, e)
+                    }
+                    )),
+                    this.AddFloatBinaryOp(this.Pow, (function(t, e) {
+                        return Math.pow(t, e)
+                    }
+                    )),
+                    this.AddFloatUnaryOp(this.Floor, (function(t) {
+                        return Math.floor(t)
+                    }
+                    )),
+                    this.AddFloatUnaryOp(this.Ceiling, (function(t) {
+                        return Math.ceil(t)
+                    }
+                    )),
+                    this.AddFloatUnaryOp(this.Int, (function(t) {
+                        return Math.floor(t)
+                    }
+                    )),
+                    this.AddFloatUnaryOp(this.Float, r.Identity),
+                    this.AddStringBinaryOp(this.Add, (function(t, e) {
+                        return t + e
+                    }
+                    )),
+                    this.AddStringBinaryOp(this.Equal, (function(t, e) {
+                        return t === e
+                    }
+                    )),
+                    this.AddStringBinaryOp(this.NotEquals, (function(t, e) {
+                        return !(t === e)
+                    }
+                    )),
+                    this.AddStringBinaryOp(this.Has, (function(t, e) {
+                        return t.includes(e)
+                    }
+                    )),
+                    this.AddStringBinaryOp(this.Hasnt, (function(t, e) {
+                        return !t.includes(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Add, (function(t, e) {
+                        return t.Union(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Subtract, (function(t, e) {
+                        return t.Without(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Has, (function(t, e) {
+                        return t.Contains(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Hasnt, (function(t, e) {
+                        return !t.Contains(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Intersect, (function(t, e) {
+                        return t.Intersect(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Equal, (function(t, e) {
+                        return t.Equals(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Greater, (function(t, e) {
+                        return t.GreaterThan(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Less, (function(t, e) {
+                        return t.LessThan(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.GreaterThanOrEquals, (function(t, e) {
+                        return t.GreaterThanOrEquals(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.LessThanOrEquals, (function(t, e) {
+                        return t.LessThanOrEquals(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.NotEquals, (function(t, e) {
+                        return !t.Equals(e)
+                    }
+                    )),
+                    this.AddListBinaryOp(this.And, (function(t, e) {
+                        return t.Count > 0 && e.Count > 0
+                    }
+                    )),
+                    this.AddListBinaryOp(this.Or, (function(t, e) {
+                        return t.Count > 0 || e.Count > 0
+                    }
+                    )),
+                    this.AddListUnaryOp(this.Not, (function(t) {
+                        return 0 == t.Count ? 1 : 0
+                    }
+                    )),
+                    this.AddListUnaryOp(this.Invert, (function(t) {
+                        return t.inverse
+                    }
+                    )),
+                    this.AddListUnaryOp(this.All, (function(t) {
+                        return t.all
+                    }
+                    )),
+                    this.AddListUnaryOp(this.ListMin, (function(t) {
+                        return t.MinAsList()
+                    }
+                    )),
+                    this.AddListUnaryOp(this.ListMax, (function(t) {
+                        return t.MaxAsList()
+                    }
+                    )),
+                    this.AddListUnaryOp(this.Count, (function(t) {
+                        return t.Count
+                    }
+                    )),
+                    this.AddListUnaryOp(this.ValueOfList, (function(t) {
+                        return t.maxItem.Value
+                    }
+                    ));
+                    this.AddOpToNativeFunc(this.Equal, 2, U.DivertTarget, (function(t, e) {
+                        return t.Equals(e)
+                    }
+                    )),
+                    this.AddOpToNativeFunc(this.NotEquals, 2, U.DivertTarget, (function(t, e) {
+                        return !t.Equals(e)
+                    }
+                    ))
+                }
+            }
+        }, {
+            key: "AddOpToNativeFunc",
+            value: function(t, e, n, i) {
+                if (null === this._nativeFunctions)
+                    return L("NativeFunctionCall._nativeFunctions");
+                var a = this._nativeFunctions.get(t);
+                a || (a = new r(t,e),
+                this._nativeFunctions.set(t, a)),
+                a.AddOpFuncForType(n, i)
+            }
+        }, {
+            key: "AddIntBinaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 2, U.Int, e)
+            }
+        }, {
+            key: "AddIntUnaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 1, U.Int, e)
+            }
+        }, {
+            key: "AddFloatBinaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 2, U.Float, e)
+            }
+        }, {
+            key: "AddFloatUnaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 1, U.Float, e)
+            }
+        }, {
+            key: "AddStringBinaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 2, U.String, e)
+            }
+        }, {
+            key: "AddListBinaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 2, U.List, e)
+            }
+        }, {
+            key: "AddListUnaryOp",
+            value: function(t, e) {
+                this.AddOpToNativeFunc(t, 1, U.List, e)
+            }
+        }]),
+        r
+    }(V);
+    it.Add = "+",
+    it.Subtract = "-",
+    it.Divide = "/",
+    it.Multiply = "*",
+    it.Mod = "%",
+    it.Negate = "_",
+    it.Equal = "==",
+    it.Greater = ">",
+    it.Less = "<",
+    it.GreaterThanOrEquals = ">=",
+    it.LessThanOrEquals = "<=",
+    it.NotEquals = "!=",
+    it.Not = "!",
+    it.And = "&&",
+    it.Or = "||",
+    it.Min = "MIN",
+    it.Max = "MAX",
+    it.Pow = "POW",
+    it.Floor = "FLOOR",
+    it.Ceiling = "CEILING",
+    it.Int = "INT",
+    it.Float = "FLOAT",
+    it.Has = "?",
+    it.Hasnt = "!?",
+    it.Intersect = "^",
+    it.ListMin = "LIST_MIN",
+    it.ListMax = "LIST_MAX",
+    it.All = "LIST_ALL",
+    it.Count = "LIST_COUNT",
+    it.ValueOfList = "LIST_VALUE",
+    it.Invert = "LIST_INVERT",
+    it._nativeFunctions = null;
+    var at = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            if (n(this, r),
+            (a = e.call(this)).isInt = function() {
+                return "int" == a.subtype
+            }
+            ,
+            a.isFloat = function() {
+                return "float" == a.subtype
+            }
+            ,
+            a.isBool = function() {
+                return "bool" == a.subtype
+            }
+            ,
+            a.GenerateIntoContainer = function(t) {
+                a.isInt() ? t.AddContent(new J(a.value)) : a.isFloat() ? t.AddContent(new z(a.value)) : a.isBool() && t.AddContent(new H(a.value))
+            }
+            ,
+            a.toString = function() {
+                return String(a.value)
+            }
+            ,
+            ("number" != typeof t || Number.isNaN(t)) && "boolean" != typeof t)
+                throw new Error("Unexpected object type in NumberExpression.");
+            return a.value = t,
+            a.subtype = i,
+            a
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Number"
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                var e = _(t, r);
+                return !!e && (e.subtype == this.subtype && e.value == this.value)
+            }
+        }]),
+        r
+    }(nt)
+      , ot = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this)).op = i,
+            a.GenerateIntoContainer = function(t) {
+                a.innerExpression.GenerateIntoContainer(t),
+                t.AddContent(it.CallWithName(a.nativeNameForOp))
+            }
+            ,
+            a.toString = function() {
+                return a.nativeNameForOp + a.innerExpression
+            }
+            ,
+            a.innerExpression = a.AddContent(t),
+            a
+        }
+        return i(r, [{
+            key: "nativeNameForOp",
+            get: function() {
+                return "-" === this.op ? "_" : "not" === this.op ? "!" : this.op
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "UnaryExpression"
+            }
+        }]),
+        r
+    }(nt);
+    ot.WithInner = function(t, e) {
+        var n = _(t, at);
+        if (n) {
+            if ("-" === e) {
+                if (n.isInt())
+                    return new at(-n.value,"int");
+                if (n.isFloat())
+                    return new at(-n.value,"float")
+            } else if ("!" == e || "not" == e) {
+                if (n.isInt())
+                    return new at(0 == n.value,"bool");
+                if (n.isFloat())
+                    return new at(0 == n.value,"bool");
+                if (n.isBool())
+                    return new at(!n.value,"bool")
+            }
+            throw new Error("Unexpected operation or number type")
+        }
+        return new ot(t,e)
+    }
+    ;
+    var st = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i, a) {
+            var o;
+            return n(this, r),
+            (o = e.call(this)).opName = a,
+            o.GenerateIntoContainer = function(t) {
+                o.leftExpression.GenerateIntoContainer(t),
+                o.rightExpression.GenerateIntoContainer(t),
+                o.opName = o.NativeNameForOp(o.opName),
+                t.AddContent(it.CallWithName(o.opName))
+            }
+            ,
+            o.NativeNameForOp = function(t) {
+                return "and" === t ? "&&" : "or" === t ? "||" : "mod" === t ? "%" : "has" === t ? "?" : "hasnt" === t ? "!?" : t
+            }
+            ,
+            o.toString = function() {
+                return "(".concat(o.leftExpression, " ").concat(o.opName, " ").concat(o.rightExpression, ")")
+            }
+            ,
+            o.leftExpression = o.AddContent(t),
+            o.rightExpression = o.AddContent(i),
+            o.opName = a,
+            o
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "BinaryExpression"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                "?" === this.NativeNameForOp(this.opName)) {
+                    var e = _(this.leftExpression, ot);
+                    null === e || "not" !== e.op && "!" !== e.op || this.Error("Using 'not' or '!' here negates '".concat(e.innerExpression, "' rather than the result of the '?' or 'has' operator. You need to add parentheses around the (A ? B) expression."))
+                }
+            }
+        }]),
+        r
+    }(nt)
+      , lt = i((function t(e) {
+        var r = this;
+        n(this, t),
+        this.set = new Set,
+        this.Add = function(t) {
+            return r.set.add(t)
+        }
+        ,
+        this.AddRange = function(t, e) {
+            for (var n = t.charCodeAt(0); n <= e.charCodeAt(0); ++n)
+                r.Add(String.fromCharCode(n));
+            return r
+        }
+        ,
+        this.AddCharacters = function(t) {
+            if ("string" == typeof t || Array.isArray(t)) {
+                var e, n = S(t);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var i = e.value;
+                        r.Add(i)
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+            } else {
+                var a, o = S(t.set);
+                try {
+                    for (o.s(); !(a = o.n()).done; ) {
+                        var s = a.value;
+                        r.Add(s)
+                    }
+                } catch (t) {
+                    o.e(t)
+                } finally {
+                    o.f()
+                }
+            }
+            return r
+        }
+        ,
+        e && this.AddCharacters(e)
+    }
+    ));
+    lt.FromRange = function(t, e) {
+        return (new lt).AddRange(t, e)
+    }
+    ;
+    var ut = function() {
+        function t(e, r) {
+            var i = this
+              , a = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : [];
+            if (n(this, t),
+            this._start = e,
+            this._end = r,
+            this._correspondingCharSet = new lt,
+            this._excludes = new Set,
+            this.ToCharacterSet = function() {
+                if (0 === i._correspondingCharSet.set.size)
+                    for (var t = i.start.charCodeAt(0), e = String.fromCharCode(t); t <= i.end.charCodeAt(0); t += 1)
+                        i._excludes.has(e) || i._correspondingCharSet.AddCharacters(e);
+                return i._correspondingCharSet
+            }
+            ,
+            a instanceof lt)
+                this._excludes = a.set;
+            else {
+                var o, s = S(a);
+                try {
+                    for (s.s(); !(o = s.n()).done; ) {
+                        var l = o.value;
+                        this._excludes.add(l)
+                    }
+                } catch (t) {
+                    s.e(t)
+                } finally {
+                    s.f()
+                }
+            }
+        }
+        return i(t, [{
+            key: "start",
+            get: function() {
+                return this._start
+            }
+        }, {
+            key: "end",
+            get: function() {
+                return this._end
+            }
+        }]),
+        t
+    }();
+    ut.Define = function(t, e) {
+        var n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : [];
+        return new ut(t,e,n)
+    }
+    ;
+    var ct, ht = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t, i = !(arguments.length > 0 && void 0 !== arguments[0]) || arguments[0];
+            return n(this, r),
+            (t = e.call(this))._pathOnChoice = null,
+            t.hasCondition = !1,
+            t.hasStartContent = !1,
+            t.hasChoiceOnlyContent = !1,
+            t.isInvisibleDefault = !1,
+            t.onceOnly = !0,
+            t.onceOnly = i,
+            t
+        }
+        return i(r, [{
+            key: "pathOnChoice",
+            get: function() {
+                if (null != this._pathOnChoice && this._pathOnChoice.isRelative) {
+                    var t = this.choiceTarget;
+                    t && (this._pathOnChoice = t.path)
+                }
+                return this._pathOnChoice
+            },
+            set: function(t) {
+                this._pathOnChoice = t
+            }
+        }, {
+            key: "choiceTarget",
+            get: function() {
+                return null === this._pathOnChoice ? L("ChoicePoint._pathOnChoice") : this.ResolvePath(this._pathOnChoice).container
+            }
+        }, {
+            key: "pathStringOnChoice",
+            get: function() {
+                return null === this.pathOnChoice ? L("ChoicePoint.pathOnChoice") : this.CompactPathString(this.pathOnChoice)
+            },
+            set: function(t) {
+                this.pathOnChoice = new R(t)
+            }
+        }, {
+            key: "flags",
+            get: function() {
+                var t = 0;
+                return this.hasCondition && (t |= 1),
+                this.hasStartContent && (t |= 2),
+                this.hasChoiceOnlyContent && (t |= 4),
+                this.isInvisibleDefault && (t |= 8),
+                this.onceOnly && (t |= 16),
+                t
+            },
+            set: function(t) {
+                this.hasCondition = (1 & t) > 0,
+                this.hasStartContent = (2 & t) > 0,
+                this.hasChoiceOnlyContent = (4 & t) > 0,
+                this.isInvisibleDefault = (8 & t) > 0,
+                this.onceOnly = (16 & t) > 0
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return null === this.pathOnChoice ? L("ChoicePoint.pathOnChoice") : "Choice: -> " + this.pathOnChoice.toString()
+            }
+        }]),
+        r
+    }(V);
+    !function(t) {
+        t[t.Tunnel = 0] = "Tunnel",
+        t[t.Function = 1] = "Function",
+        t[t.FunctionEvaluationFromGame = 2] = "FunctionEvaluationFromGame"
+    }(ct || (ct = {}));
+    var ft, dt = function() {
+        function t() {
+            n(this, t),
+            this.container = null,
+            this.index = -1,
+            2 === arguments.length && (this.container = arguments[0],
+            this.index = arguments[1])
+        }
+        return i(t, [{
+            key: "Resolve",
+            value: function() {
+                return this.index < 0 ? this.container : null == this.container ? null : 0 == this.container.content.length ? this.container : this.index >= this.container.content.length ? null : this.container.content[this.index]
+            }
+        }, {
+            key: "isNull",
+            get: function() {
+                return null == this.container
+            }
+        }, {
+            key: "path",
+            get: function() {
+                return this.isNull ? null : this.index >= 0 ? this.container.path.PathByAppendingComponent(new R.Component(this.index)) : this.container.path
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return this.container ? "Ink Pointer -> " + this.container.path.toString() + " -- index " + this.index : "Ink Pointer (null)"
+            }
+        }, {
+            key: "copy",
+            value: function() {
+                return new t(this.container,this.index)
+            }
+        }], [{
+            key: "StartOf",
+            value: function(e) {
+                return new t(e,0)
+            }
+        }, {
+            key: "Null",
+            get: function() {
+                return new t(null,-1)
+            }
+        }]),
+        t
+    }(), vt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this))._targetPath = null,
+            i._targetPointer = dt.Null,
+            i.variableDivertName = null,
+            i.pushesToStack = !1,
+            i.stackPushType = 0,
+            i.isExternal = !1,
+            i.externalArgs = 0,
+            i.isConditional = !1,
+            i.pushesToStack = !1,
+            void 0 !== t && (i.pushesToStack = !0,
+            i.stackPushType = t),
+            i
+        }
+        return i(r, [{
+            key: "targetPath",
+            get: function() {
+                if (null != this._targetPath && this._targetPath.isRelative) {
+                    var t = this.targetPointer.Resolve();
+                    t && (this._targetPath = t.path)
+                }
+                return this._targetPath
+            },
+            set: function(t) {
+                this._targetPath = t,
+                this._targetPointer = dt.Null
+            }
+        }, {
+            key: "targetPointer",
+            get: function() {
+                if (this._targetPointer.isNull) {
+                    var t = this.ResolvePath(this._targetPath).obj;
+                    if (null === this._targetPath)
+                        return L("this._targetPath");
+                    if (null === this._targetPath.lastComponent)
+                        return L("this._targetPath.lastComponent");
+                    if (this._targetPath.lastComponent.isIndex) {
+                        if (null === t)
+                            return L("targetObj");
+                        this._targetPointer.container = t.parent instanceof tt ? t.parent : null,
+                        this._targetPointer.index = this._targetPath.lastComponent.index
+                    } else
+                        this._targetPointer = dt.StartOf(t instanceof tt ? t : null)
+                }
+                return this._targetPointer.copy()
+            }
+        }, {
+            key: "targetPathString",
+            get: function() {
+                return null == this.targetPath ? null : this.CompactPathString(this.targetPath)
+            },
+            set: function(t) {
+                this.targetPath = null == t ? null : new R(t)
+            }
+        }, {
+            key: "hasVariableTarget",
+            get: function() {
+                return null != this.variableDivertName
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                var e = t;
+                return e instanceof r && this.hasVariableTarget == e.hasVariableTarget && (this.hasVariableTarget ? this.variableDivertName == e.variableDivertName : null === this.targetPath ? L("this.targetPath") : this.targetPath.Equals(e.targetPath))
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                if (this.hasVariableTarget)
+                    return "Divert(variable: " + this.variableDivertName + ")";
+                if (null == this.targetPath)
+                    return "Divert(null)";
+                var t = new j
+                  , e = this.targetPath.toString();
+                return t.Append("Divert"),
+                this.isConditional && t.Append("?"),
+                this.pushesToStack && (this.stackPushType == ct.Function ? t.Append(" function") : t.Append(" tunnel")),
+                t.Append(" -> "),
+                t.Append(this.targetPathString),
+                t.Append(" ("),
+                t.Append(e),
+                t.Append(")"),
+                t.toString()
+            }
+        }]),
+        r
+    }(V);
+    !function(t) {
+        t[t.Knot = 0] = "Knot",
+        t[t.List = 1] = "List",
+        t[t.ListItem = 2] = "ListItem",
+        t[t.Var = 3] = "Var",
+        t[t.SubFlowAndWeave = 4] = "SubFlowAndWeave",
+        t[t.Arg = 5] = "Arg",
+        t[t.Temp = 6] = "Temp"
+    }(ft || (ft = {}));
+    var pt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this)).variableName = t || null,
+            a.isNewDeclaration = !!i,
+            a.isGlobal = !1,
+            a
+        }
+        return i(r, [{
+            key: "toString",
+            value: function() {
+                return "VarAssign to " + this.variableName
+            }
+        }]),
+        r
+    }(V)
+      , mt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i, a) {
+            var o;
+            return n(this, r),
+            (o = e.call(this))._condition = null,
+            o._innerContentContainer = null,
+            o._outerContainer = null,
+            o._runtimeChoice = null,
+            o._returnToR1 = null,
+            o._returnToR2 = null,
+            o._r1Label = null,
+            o._r2Label = null,
+            o._divertToStartContentOuter = null,
+            o._divertToStartContentInner = null,
+            o._startContentRuntimeContainer = null,
+            o.isInvisibleDefault = !1,
+            o.hasWeaveStyleInlineBrackets = !1,
+            o.GenerateRuntimeObject = function() {
+                if (o._outerContainer = new tt,
+                o._runtimeChoice = new ht(o.onceOnly),
+                o._runtimeChoice.isInvisibleDefault = o.isInvisibleDefault,
+                (o.startContent || o.choiceOnlyContent || o.condition) && o._outerContainer.AddContent(et.EvalStart()),
+                o.startContent) {
+                    o._returnToR1 = new X,
+                    o._outerContainer.AddContent(o._returnToR1);
+                    var t = new pt("$r",!0);
+                    o._outerContainer.AddContent(t),
+                    o._outerContainer.AddContent(et.BeginString()),
+                    o._divertToStartContentOuter = new vt,
+                    o._outerContainer.AddContent(o._divertToStartContentOuter),
+                    o._startContentRuntimeContainer = o.startContent.GenerateRuntimeObject(),
+                    o._startContentRuntimeContainer.name = "s";
+                    var e = new vt;
+                    e.variableDivertName = "$r",
+                    o._startContentRuntimeContainer.AddContent(e),
+                    o._outerContainer.AddToNamedContentOnly(o._startContentRuntimeContainer),
+                    o._r1Label = new tt,
+                    o._r1Label.name = "$r1",
+                    o._outerContainer.AddContent(o._r1Label),
+                    o._outerContainer.AddContent(et.EndString()),
+                    o._runtimeChoice.hasStartContent = !0
+                }
+                if (o.choiceOnlyContent) {
+                    o._outerContainer.AddContent(et.BeginString());
+                    var n = o.choiceOnlyContent.GenerateRuntimeObject();
+                    o._outerContainer.AddContentsOfContainer(n),
+                    o._outerContainer.AddContent(et.EndString()),
+                    o._runtimeChoice.hasChoiceOnlyContent = !0
+                }
+                if (o.condition && (o.condition.GenerateIntoContainer(o._outerContainer),
+                o._runtimeChoice.hasCondition = !0),
+                (o.startContent || o.choiceOnlyContent || o.condition) && o._outerContainer.AddContent(et.EvalEnd()),
+                o._outerContainer.AddContent(o._runtimeChoice),
+                o._innerContentContainer = new tt,
+                o.startContent) {
+                    o._returnToR2 = new X,
+                    o._innerContentContainer.AddContent(et.EvalStart()),
+                    o._innerContentContainer.AddContent(o._returnToR2),
+                    o._innerContentContainer.AddContent(et.EvalEnd());
+                    var r = new pt("$r",!0);
+                    o._innerContentContainer.AddContent(r),
+                    o._divertToStartContentInner = new vt,
+                    o._innerContentContainer.AddContent(o._divertToStartContentInner),
+                    o._r2Label = new tt,
+                    o._r2Label.name = "$r2",
+                    o._innerContentContainer.AddContent(o._r2Label)
+                }
+                if (o.innerContent) {
+                    var i = o.innerContent.GenerateRuntimeObject();
+                    o._innerContentContainer.AddContentsOfContainer(i)
+                }
+                return o.story.countAllVisits && (o._innerContentContainer.visitsShouldBeCounted = !0),
+                o._innerContentContainer.countingAtStartOnly = !0,
+                o._outerContainer
+            }
+            ,
+            o.toString = function() {
+                return null !== o.choiceOnlyContent ? "* ".concat(o.startContent, "[").concat(o.choiceOnlyContent, "]...") : "* ".concat(o.startContent, "...")
+            }
+            ,
+            o.startContent = t,
+            o.choiceOnlyContent = i,
+            o.innerContent = a,
+            o.indentationDepth = 1,
+            t && o.AddContent(o.startContent),
+            i && o.AddContent(o.choiceOnlyContent),
+            a && o.AddContent(o.innerContent),
+            o.onceOnly = !0,
+            o
+        }
+        return i(r, [{
+            key: "runtimeChoice",
+            get: function() {
+                if (!this._runtimeChoice)
+                    throw new Error;
+                return this._runtimeChoice
+            }
+        }, {
+            key: "name",
+            get: function() {
+                var t;
+                return (null === (t = this.identifier) || void 0 === t ? void 0 : t.name) || null
+            }
+        }, {
+            key: "condition",
+            get: function() {
+                return this._condition
+            },
+            set: function(t) {
+                this._condition = t,
+                t && this.AddContent(t)
+            }
+        }, {
+            key: "runtimeContainer",
+            get: function() {
+                return this._innerContentContainer
+            }
+        }, {
+            key: "innerContentContainer",
+            get: function() {
+                return this._innerContentContainer
+            }
+        }, {
+            key: "containerForCounting",
+            get: function() {
+                return this._innerContentContainer
+            }
+        }, {
+            key: "runtimePath",
+            get: function() {
+                if (!this.innerContentContainer || !this.innerContentContainer.path)
+                    throw new Error;
+                return this.innerContentContainer.path
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Choice"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                var e;
+                if (this._innerContentContainer && (this.runtimeChoice.pathOnChoice = this._innerContentContainer.path,
+                this.onceOnly && (this._innerContentContainer.visitsShouldBeCounted = !0)),
+                this._returnToR1) {
+                    if (!this._r1Label)
+                        throw new Error;
+                    this._returnToR1.targetPath = this._r1Label.path
+                }
+                if (this._returnToR2) {
+                    if (!this._r2Label)
+                        throw new Error;
+                    this._returnToR2.targetPath = this._r2Label.path
+                }
+                if (this._divertToStartContentOuter) {
+                    if (!this._startContentRuntimeContainer)
+                        throw new Error;
+                    this._divertToStartContentOuter.targetPath = this._startContentRuntimeContainer.path
+                }
+                if (this._divertToStartContentInner) {
+                    if (!this._startContentRuntimeContainer)
+                        throw new Error;
+                    this._divertToStartContentInner.targetPath = this._startContentRuntimeContainer.path
+                }
+                p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                this.identifier && ((null === (e = this.identifier) || void 0 === e ? void 0 : e.name) || "").length > 0 && t.CheckForNamingCollisions(this, this.identifier, ft.SubFlowAndWeave)
+            }
+        }]),
+        r
+    }(F)
+      , gt = i((function t() {
+        var e = this;
+        n(this, t),
+        this.characterIndex = 0,
+        this.characterInLineIndex = 0,
+        this.lineIndex = 0,
+        this.reportedErrorInScope = !1,
+        this.uniqueId = 0,
+        this.customFlags = 0,
+        this.CopyFrom = function(n) {
+            t._uniqueIdCounter++,
+            e.uniqueId = t._uniqueIdCounter,
+            e.characterIndex = n.characterIndex,
+            e.characterInLineIndex = n.characterInLineIndex,
+            e.lineIndex = n.lineIndex,
+            e.customFlags = n.customFlags,
+            e.reportedErrorInScope = !1
+        }
+        ,
+        this.SquashFrom = function(t) {
+            e.characterIndex = t.characterIndex,
+            e.characterInLineIndex = t.characterInLineIndex,
+            e.lineIndex = t.lineIndex,
+            e.reportedErrorInScope = t.reportedErrorInScope,
+            e.customFlags = t.customFlags
+        }
+    }
+    ));
+    gt._uniqueIdCounter = 1e3;
+    var yt = function() {
+        function t() {
+            var e = this;
+            n(this, t),
+            this._stack = [],
+            this._numElements = 0,
+            this.StringParserState = function() {
+                e._stack = new Array(200);
+                for (var t = 0; t < 200; ++t)
+                    e._stack[t] = new gt;
+                e._numElements = 1
+            }
+            ,
+            this.Push = function() {
+                if (e._numElements >= e._stack.length && e._numElements > 0)
+                    throw new Error("Stack overflow in parser state.");
+                var t = e._stack[e._numElements - 1]
+                  , n = e._stack[e._numElements];
+                return e._numElements++,
+                n.CopyFrom(t),
+                n.uniqueId
+            }
+            ,
+            this.Pop = function(t) {
+                if (1 == e._numElements)
+                    throw new Error("Attempting to remove final stack element is illegal! Mismatched Begin/Succceed/Fail?");
+                if (e.currentElement.uniqueId != t)
+                    throw new Error("Mismatched rule IDs while Poping - do you have mismatched Begin/Succeed/Fail?");
+                e._numElements -= 1
+            }
+            ,
+            this.Peek = function(t) {
+                if (e.currentElement.uniqueId != t)
+                    throw new Error("Mismatched rule IDs while Peeking - do you have mismatched Begin/Succeed/Fail?");
+                return e._stack[e._numElements - 1]
+            }
+            ,
+            this.PeekPenultimate = function() {
+                return e._numElements >= 2 ? e._stack[e._numElements - 2] : null
+            }
+            ,
+            this.Squash = function() {
+                if (e._numElements < 2)
+                    throw new Error("Attempting to remove final stack element is illegal! Mismatched Begin/Succceed/Fail?");
+                var t = e._stack[e._numElements - 2]
+                  , n = e._stack[e._numElements - 1];
+                t.SquashFrom(n),
+                e._numElements -= 1
+            }
+            ,
+            this.NoteErrorReported = function() {
+                var t, n = S(e._stack);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        t.value.reportedErrorInScope = !0
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+            }
+            ;
+            for (var r = 0; r < 200; r++)
+                this._stack[r] = new gt;
+            this._numElements = 1
+        }
+        return i(t, [{
+            key: "currentElement",
+            get: function() {
+                return this._stack[this._numElements - 1]
+            }
+        }, {
+            key: "lineIndex",
+            get: function() {
+                return this.currentElement.lineIndex
+            },
+            set: function(t) {
+                this.currentElement.lineIndex = t
+            }
+        }, {
+            key: "characterIndex",
+            get: function() {
+                return this.currentElement.characterIndex
+            },
+            set: function(t) {
+                this.currentElement.characterIndex = t
+            }
+        }, {
+            key: "characterInLineIndex",
+            get: function() {
+                return this.currentElement.characterInLineIndex
+            },
+            set: function(t) {
+                this.currentElement.characterInLineIndex = t
+            }
+        }, {
+            key: "customFlags",
+            get: function() {
+                return this.currentElement.customFlags
+            },
+            set: function(t) {
+                this.currentElement.customFlags = t
+            }
+        }, {
+            key: "errorReportedAlreadyInScope",
+            get: function() {
+                return this.currentElement.reportedErrorInScope
+            }
+        }, {
+            key: "stackHeight",
+            get: function() {
+                return this._numElements
+            }
+        }]),
+        t
+    }()
+      , Ct = Symbol("ParseSuccessStruct")
+      , St = function() {
+        function t(e) {
+            var r = this;
+            n(this, t),
+            this.ParseRule = null,
+            this.errorHandler = null,
+            this.hadError = !1,
+            this.BeginRule = function() {
+                return r.state.Push()
+            }
+            ,
+            this.FailRule = function(t) {
+                return r.state.Pop(t),
+                null
+            }
+            ,
+            this.CancelRule = function(t) {
+                r.state.Pop(t)
+            }
+            ,
+            this.SucceedRule = function(e) {
+                var n = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null
+                  , i = r.state.Peek(e)
+                  , a = r.state.PeekPenultimate();
+                r.RuleDidSucceed && r.RuleDidSucceed(n, a, i),
+                r.state.Squash();
+                var o = n;
+                return null === o && (o = t.ParseSuccess),
+                o
+            }
+            ,
+            this.Expect = function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null
+                  , n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null
+                  , i = r.ParseObject(t);
+                if (null === i) {
+                    var a;
+                    null === e && (e = t.name);
+                    var o = r.LineRemainder();
+                    a = null === o || 0 === o.length ? "end of line" : "'".concat(o, "'"),
+                    r.Error("Expected ".concat(e, " but saw ").concat(a)),
+                    null !== n && (i = n())
+                }
+                return i
+            }
+            ,
+            this.Error = function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] && arguments[1];
+                r.ErrorOnLine(t, r.lineIndex + 1, e)
+            }
+            ,
+            this.ErrorWithParsedObject = function(t, e) {
+                var n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                r.ErrorOnLine(t, e.debugMetadata ? e.debugMetadata.startLineNumber : -1, n)
+            }
+            ,
+            this.ErrorOnLine = function(t, e, n) {
+                if (!r.state.errorReportedAlreadyInScope) {
+                    var i = n ? "Warning" : "Error";
+                    if (!r.errorHandler)
+                        throw new Error("".concat(i, " on line ").concat(e, ": ").concat(t));
+                    r.errorHandler(t, r.index, e - 1, n),
+                    r.state.NoteErrorReported()
+                }
+                n || (r.hadError = !0)
+            }
+            ,
+            this.Warning = function(t) {
+                return r.Error(t, !0)
+            }
+            ,
+            this.LineRemainder = function() {
+                return r.Peek((function() {
+                    return r.ParseUntilCharactersFromString("\n\r")
+                }
+                ))
+            }
+            ,
+            this.SetFlag = function(t, e) {
+                e ? r.state.customFlags |= t : r.state.customFlags &= ~t
+            }
+            ,
+            this.GetFlag = function(t) {
+                return Boolean(r.state.customFlags & t)
+            }
+            ,
+            this.ParseObject = function(t) {
+                var e = r.BeginRule()
+                  , n = r.state.stackHeight
+                  , i = t();
+                if (n !== r.state.stackHeight)
+                    throw new Error("Mismatched Begin/Fail/Succeed rules");
+                return null === i ? r.FailRule(e) : (r.SucceedRule(e, i),
+                i)
+            }
+            ,
+            this.Parse = function(t) {
+                var e = r.BeginRule()
+                  , n = t();
+                return null === n ? (r.FailRule(e),
+                null) : (r.SucceedRule(e, n),
+                n)
+            }
+            ,
+            this.OneOf = function(t) {
+                var e, n = S(t);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var i = e.value
+                          , a = r.ParseObject(i);
+                        if (null !== a)
+                            return a
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return null
+            }
+            ,
+            this.OneOrMore = function(t) {
+                var e = []
+                  , n = null;
+                do {
+                    null !== (n = r.ParseObject(t)) && e.push(n)
+                } while (null !== n);
+                return e.length > 0 ? e : null
+            }
+            ,
+            this.Optional = function(e) {
+                return function() {
+                    var n = r.ParseObject(e);
+                    return null === n ? t.ParseSuccess : n
+                }
+            }
+            ,
+            this.Exclude = function(e) {
+                return function() {
+                    return r.ParseObject(e) && t.ParseSuccess
+                }
+            }
+            ,
+            this.OptionalExclude = function(e) {
+                return function() {
+                    return r.ParseObject(e),
+                    t.ParseSuccess
+                }
+            }
+            ,
+            this.String = function(t) {
+                return function() {
+                    return r.ParseString(t)
+                }
+            }
+            ,
+            this.TryAddResultToList = function(e, n) {
+                var r = !(arguments.length > 2 && void 0 !== arguments[2]) || arguments[2];
+                if (e !== t.ParseSuccess) {
+                    if (r && Array.isArray(e)) {
+                        var i = e;
+                        if (null !== i) {
+                            var a, o = S(i);
+                            try {
+                                for (o.s(); !(a = o.n()).done; ) {
+                                    var s = a.value;
+                                    n.push(s)
+                                }
+                            } catch (t) {
+                                o.e(t)
+                            } finally {
+                                o.f()
+                            }
+                            return
+                        }
+                    }
+                    n.push(e)
+                }
+            }
+            ,
+            this.Interleave = function(e, n) {
+                var i = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null
+                  , a = !(arguments.length > 3 && void 0 !== arguments[3]) || arguments[3]
+                  , o = r.BeginRule()
+                  , s = []
+                  , l = r.ParseObject(e);
+                if (null === l)
+                    return r.FailRule(o);
+                r.TryAddResultToList(l, s, a);
+                var u = null
+                  , c = null;
+                do {
+                    if (null !== i && null !== r.Peek(i))
+                        break;
+                    if (null === (u = r.ParseObject(n)))
+                        break;
+                    if (r.TryAddResultToList(u, s, a),
+                    c = null,
+                    null !== u) {
+                        if (null === (c = r.ParseObject(e)))
+                            break;
+                        r.TryAddResultToList(c, s, a)
+                    }
+                } while ((null !== u || null !== c) && (u !== t.ParseSuccess || c != t.ParseSuccess) && r.remainingLength > 0);
+                return 0 === s.length ? r.FailRule(o) : r.SucceedRule(o, s)
+            }
+            ,
+            this.ParseString = function(t) {
+                if (t.length > r.remainingLength)
+                    return null;
+                for (var e = r.BeginRule(), n = r.index, i = r.characterInLineIndex, a = r.lineIndex, o = !0, s = 0; s < t.length; s += 1) {
+                    var l = t[s];
+                    if (r._chars[n] !== l) {
+                        o = !1;
+                        break
+                    }
+                    "\n" === l && (a++,
+                    i = -1),
+                    n++,
+                    i++
+                }
+                return r.index = n,
+                r.characterInLineIndex = i,
+                r.lineIndex = a,
+                o ? r.SucceedRule(e, t) : r.FailRule(e)
+            }
+            ,
+            this.ParseSingleCharacter = function() {
+                if (r.remainingLength > 0) {
+                    var t = r._chars[r.index];
+                    return "\n" === t && (r.lineIndex += 1,
+                    r.characterInLineIndex = -1),
+                    r.index += 1,
+                    r.characterInLineIndex += 1,
+                    t
+                }
+                return "0"
+            }
+            ,
+            this.ParseUntilCharactersFromString = function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1;
+                return r.ParseCharactersFromString(t, !1, e)
+            }
+            ,
+            this.ParseUntilCharactersFromCharSet = function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1;
+                return r.ParseCharactersFromCharSet(t, !1, e)
+            }
+            ,
+            this.ParseCharactersFromString = function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1
+                  , n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : -1
+                  , i = new lt(t);
+                return "number" == typeof e ? r.ParseCharactersFromCharSet(i, !0, e) : r.ParseCharactersFromCharSet(i, e, n)
+            }
+            ,
+            this.ParseCharactersFromCharSet = function(t) {
+                var e = !(arguments.length > 1 && void 0 !== arguments[1]) || arguments[1]
+                  , n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : -1;
+                -1 === n && (n = Number.MAX_SAFE_INTEGER);
+                for (var i = r.index, a = r.index, o = r.characterInLineIndex, s = r.lineIndex, l = 0; a < r._chars.length && t.set.has(r._chars[a]) === e && l < n; )
+                    "\n" === r._chars[a] && (s += 1,
+                    o = -1),
+                    a += 1,
+                    o += 1,
+                    l += 1;
+                r.index = a,
+                r.characterInLineIndex = o,
+                r.lineIndex = s;
+                var u = r.index;
+                return u > i ? r._chars.slice(i, r.index).join("") : null
+            }
+            ,
+            this.Peek = function(t) {
+                var e = r.BeginRule()
+                  , n = t();
+                return r.CancelRule(e),
+                n
+            }
+            ,
+            this.ParseInt = function() {
+                var e = r.index
+                  , n = r.characterInLineIndex
+                  , i = null !== r.ParseString("-");
+                r.ParseCharactersFromString(" \t");
+                var a, o = r.ParseCharactersFromCharSet(t.numbersCharacterSet);
+                return null === o ? (r.index = e,
+                r.characterInLineIndex = n,
+                null) : Number.isNaN(Number(o)) ? (r.Error("Failed to read integer value: " + o + ". Perhaps it's out of the range of acceptable numbers ink supports? (" + Number.MIN_SAFE_INTEGER + " to " + Number.MAX_SAFE_INTEGER + ")"),
+                null) : (a = Number(o),
+                i ? -a : a)
+            }
+            ,
+            this.ParseFloat = function() {
+                var e = r.index
+                  , n = r.characterInLineIndex
+                  , i = r.ParseInt();
+                if (null !== i && null !== r.ParseString(".")) {
+                    var a = r.ParseCharactersFromCharSet(t.numbersCharacterSet);
+                    return Number("".concat(i, ".").concat(a))
+                }
+                return r.index = e,
+                r.characterInLineIndex = n,
+                null
+            }
+            ,
+            this.ParseNewline = function() {
+                var t = r.BeginRule();
+                return r.ParseString("\r"),
+                null === r.ParseString("\n") ? r.FailRule(t) : r.SucceedRule(t, "\n")
+            }
+            ;
+            var i = this.PreProcessInputString(e);
+            this.state = new yt,
+            this._chars = e ? i.split("") : [],
+            this.inputString = i
+        }
+        return i(t, [{
+            key: "currentCharacter",
+            get: function() {
+                return this.index >= 0 && this.remainingLength > 0 ? this._chars[this.index] : "0"
+            }
+        }, {
+            key: "PreProcessInputString",
+            value: function(t) {
+                return t
+            }
+        }, {
+            key: "endOfInput",
+            get: function() {
+                return this.index >= this._chars.length
+            }
+        }, {
+            key: "remainingString",
+            get: function() {
+                return this._chars.slice(this.index, this.index + this.remainingLength).join("")
+            }
+        }, {
+            key: "remainingLength",
+            get: function() {
+                return this._chars.length - this.index
+            }
+        }, {
+            key: "lineIndex",
+            get: function() {
+                return this.state.lineIndex
+            },
+            set: function(t) {
+                this.state.lineIndex = t
+            }
+        }, {
+            key: "characterInLineIndex",
+            get: function() {
+                return this.state.characterInLineIndex
+            },
+            set: function(t) {
+                this.state.characterInLineIndex = t
+            }
+        }, {
+            key: "index",
+            get: function() {
+                return this.state.characterIndex
+            },
+            set: function(t) {
+                this.state.characterIndex = t
+            }
+        }, {
+            key: "ParseUntil",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null
+                  , n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null
+                  , r = this.BeginRule()
+                  , i = new lt;
+                null !== e && (i.set = new Set([].concat(g(i.set.values()), g(e.set.values())))),
+                null !== n && (i.set = new Set([].concat(g(i.set.values()), g(n.set.values()))));
+                for (var a = ""; ; ) {
+                    var o = this.ParseUntilCharactersFromCharSet(i);
+                    if (o && (a += o),
+                    null !== this.Peek(t))
+                        break;
+                    if (this.endOfInput)
+                        break;
+                    var s = this.currentCharacter;
+                    if (null === e || !e.set.has(s))
+                        break;
+                    a += s,
+                    "\n" === s && (this.lineIndex += 1,
+                    this.characterInLineIndex = -1),
+                    this.index += 1,
+                    this.characterInLineIndex += 1
+                }
+                return a.length > 0 ? this.SucceedRule(r, String(a)) : this.FailRule(r)
+            }
+        }]),
+        t
+    }();
+    St.ParseSuccess = Ct,
+    St.numbersCharacterSet = new lt("0123456789");
+    var bt, wt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t;
+            return n(this, r),
+            (t = e.apply(this, arguments))._commentOrNewlineStartCharacter = new lt("/\r\n"),
+            t._commentBlockEndCharacter = new lt("*"),
+            t._newlineCharacters = new lt("\n\r"),
+            t.Process = function() {
+                var e = t.Interleave(t.Optional(t.CommentsAndNewlines), t.Optional(t.MainInk));
+                return null !== e ? e.join("") : ""
+            }
+            ,
+            t.MainInk = function() {
+                return t.ParseUntil(t.CommentsAndNewlines, t._commentOrNewlineStartCharacter, null)
+            }
+            ,
+            t.CommentsAndNewlines = function() {
+                var e = t.Interleave(t.Optional(t.ParseNewline), t.Optional(t.ParseSingleComment));
+                return null !== e ? e.join("") : null
+            }
+            ,
+            t.ParseSingleComment = function() {
+                return t.OneOf([t.EndOfLineComment, t.BlockComment])
+            }
+            ,
+            t.EndOfLineComment = function() {
+                return null === t.ParseString("//") ? null : (t.ParseUntilCharactersFromCharSet(t._newlineCharacters),
+                "")
+            }
+            ,
+            t.BlockComment = function() {
+                if (null === t.ParseString("/*"))
+                    return null;
+                var e = t.lineIndex
+                  , n = t.ParseUntil(t.String("*/"), t._commentBlockEndCharacter, null);
+                return t.endOfInput || t.ParseString("*/"),
+                null != n ? "\n".repeat(t.lineIndex - e) : null
+            }
+            ,
+            t
+        }
+        return i(r, [{
+            key: "PreProcessInputString",
+            value: function(t) {
+                return t
+            }
+        }]),
+        r
+    }(St), kt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this)).initialCondition = t,
+            a.branches = i,
+            a._reJoinTarget = null,
+            a.GenerateRuntimeObject = function() {
+                var t = new tt;
+                a.initialCondition && t.AddContent(a.initialCondition.runtimeObject);
+                var e, n = S(a.branches);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = e.value.runtimeObject;
+                        t.AddContent(r)
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return null === a.initialCondition || null === a.branches[0].ownExpression || a.branches[a.branches.length - 1].isElse || t.AddContent(et.PopEvaluatedValue()),
+                a._reJoinTarget = et.NoOp(),
+                t.AddContent(a._reJoinTarget),
+                t
+            }
+            ,
+            a.initialCondition && a.AddContent(a.initialCondition),
+            null !== a.branches && a.AddContent(a.branches),
+            a
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Conditional"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                var e, n = this._reJoinTarget.path, i = S(this.branches);
+                try {
+                    for (i.s(); !(e = i.n()).done; ) {
+                        var a = e.value;
+                        if (!a.returnDivert)
+                            throw new Error;
+                        a.returnDivert.targetPath = n
+                    }
+                } catch (t) {
+                    i.e(t)
+                } finally {
+                    i.f()
+                }
+                p(o(r.prototype), "ResolveReferences", this).call(this, t)
+            }
+        }]),
+        r
+    }(F), Et = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).text = t,
+            i.GenerateRuntimeObject = function() {
+                return new $(i.text)
+            }
+            ,
+            i.toString = function() {
+                return i.text
+            }
+            ,
+            i
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Text"
+            }
+        }]),
+        r
+    }(F), _t = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this))._expression = null,
+            a.GenerateRuntimeObject = function() {
+                return null
+            }
+            ,
+            a.constantIdentifier = t,
+            i && (a._expression = a.AddContent(i)),
+            a
+        }
+        return i(r, [{
+            key: "constantName",
+            get: function() {
+                var t;
+                return null === (t = this.constantIdentifier) || void 0 === t ? void 0 : t.name
+            }
+        }, {
+            key: "expression",
+            get: function() {
+                if (!this._expression)
+                    throw new Error;
+                return this._expression
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "CONST"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                t.CheckForNamingCollisions(this, this.constantIdentifier, ft.Var)
+            }
+        }]),
+        r
+    }(F);
+    !function(t) {
+        t[t.Story = 0] = "Story",
+        t[t.Knot = 1] = "Knot",
+        t[t.Stitch = 2] = "Stitch",
+        t[t.WeavePoint = 3] = "WeavePoint"
+    }(bt || (bt = {}));
+    var Tt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this)).indentationDepth = i,
+            a.GenerateRuntimeObject = function() {
+                var t = new tt;
+                if (t.name = a.name,
+                a.story.countAllVisits && (t.visitsShouldBeCounted = !0),
+                t.countingAtStartOnly = !0,
+                a.content) {
+                    var e, n = S(a.content);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r = e.value;
+                            t.AddContent(r.runtimeObject)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+                return t
+            }
+            ,
+            a.toString = function() {
+                var t, e;
+                return "- ".concat((null === (t = a.identifier) || void 0 === t ? void 0 : t.name) ? "(" + (null === (e = a.identifier) || void 0 === e ? void 0 : e.name) + ")" : "gather")
+            }
+            ,
+            t && (a.identifier = t),
+            a
+        }
+        return i(r, [{
+            key: "name",
+            get: function() {
+                var t;
+                return (null === (t = this.identifier) || void 0 === t ? void 0 : t.name) || null
+            }
+        }, {
+            key: "runtimeContainer",
+            get: function() {
+                return this.runtimeObject
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Gather"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                this.identifier && (this.identifier.name || "").length > 0 && t.CheckForNamingCollisions(this, this.identifier, ft.SubFlowAndWeave)
+            }
+        }]),
+        r
+    }(F)
+      , At = function() {
+        function t(e, r) {
+            var i = this;
+            n(this, t),
+            this._dotSeparatedComponents = null,
+            this.toString = function() {
+                return null === i.components || 0 === i.components.length ? i.baseTargetLevel === bt.WeavePoint ? "-> <next gather point>" : "<invalid Path>" : "-> ".concat(i.dotSeparatedComponents)
+            }
+            ,
+            this.ResolveFromContext = function(t) {
+                if (null == i.components || 0 == i.components.length)
+                    return null;
+                var e = i.ResolveBaseTarget(t);
+                return null === e ? null : i.components.length > 1 ? i.ResolveTailComponents(e) : e
+            }
+            ,
+            this.ResolveBaseTarget = function(t) {
+                for (var e = i.firstComponent, n = t; n; ) {
+                    var r = n === t
+                      , a = i.GetChildFromContext(n, e, null, r);
+                    if (a)
+                        return a;
+                    n = n.parent
+                }
+                return null
+            }
+            ,
+            this.ResolveTailComponents = function(t) {
+                var e = t;
+                if (!i.components)
+                    return null;
+                for (var n = 1; n < i.components.length; ++n) {
+                    var r = i.components[n].name
+                      , a = void 0
+                      , o = _(e, Ot);
+                    if (a = null !== o ? o.flowLevel + 1 : bt.WeavePoint,
+                    null === (e = i.GetChildFromContext(e, r, a)))
+                        break
+                }
+                return e
+            }
+            ,
+            this.GetChildFromContext = function(t, e, n) {
+                var r = arguments.length > 3 && void 0 !== arguments[3] && arguments[3]
+                  , i = null === n
+                  , a = _(t, zt);
+                if (e && null !== a && (i || n === bt.WeavePoint))
+                    return a.WeavePointNamed(e);
+                var o = _(t, Ot);
+                if (e && null !== o) {
+                    var s = r || o.flowLevel === bt.Knot;
+                    return o.ContentWithNameAtLevel(e, n, s)
+                }
+                return null
+            }
+            ,
+            Object.values(bt).includes(e) ? (this._baseTargetLevel = e,
+            this.components = r || []) : Array.isArray(e) ? (this._baseTargetLevel = null,
+            this.components = e || []) : (this._baseTargetLevel = null,
+            this.components = [e])
+        }
+        return i(t, [{
+            key: "baseTargetLevel",
+            get: function() {
+                return this.baseLevelIsAmbiguous ? bt.Story : this._baseTargetLevel
+            }
+        }, {
+            key: "baseLevelIsAmbiguous",
+            get: function() {
+                return !this._baseTargetLevel
+            }
+        }, {
+            key: "firstComponent",
+            get: function() {
+                return null != this.components && this.components.length ? this.components[0].name : null
+            }
+        }, {
+            key: "numberOfComponents",
+            get: function() {
+                return this.components ? this.components.length : 0
+            }
+        }, {
+            key: "dotSeparatedComponents",
+            get: function() {
+                return null == this._dotSeparatedComponents && (this._dotSeparatedComponents = (this.components ? this.components : []).map((function(t) {
+                    return t.name
+                }
+                )).filter(O).join(".")),
+                this._dotSeparatedComponents
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Path"
+            }
+        }]),
+        t
+    }()
+      , Pt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t, i = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+            return n(this, r),
+            (t = e.call(this)).returnedExpression = null,
+            t.GenerateRuntimeObject = function() {
+                var e = new tt;
+                return t.returnedExpression ? e.AddContent(t.returnedExpression.runtimeObject) : (e.AddContent(et.EvalStart()),
+                e.AddContent(new rt),
+                e.AddContent(et.EvalEnd())),
+                e.AddContent(et.PopFunction()),
+                e
+            }
+            ,
+            i && (t.returnedExpression = t.AddContent(i)),
+            t
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "ReturnType"
+            }
+        }]),
+        r
+    }(F);
+    function Nt(t) {
+        for (var e = t.parent; e; ) {
+            if (e.hasOwnProperty("iamFlowbase") && e.iamFlowbase())
+                return e;
+            e = e.parent
+        }
+        return null
+    }
+    var xt = function() {
+        function t(e) {
+            var r = this;
+            n(this, t),
+            this.debugMetadata = null,
+            this.toString = function() {
+                return r.name || "undefined identifer"
+            }
+            ,
+            this.name = e
+        }
+        return i(t, [{
+            key: "typeName",
+            get: function() {
+                return "Identifier"
+            }
+        }], [{
+            key: "Done",
+            value: function() {
+                return new t("DONE")
+            }
+        }]),
+        t
+    }()
+      , Ot = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i, a = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null, o = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null, s = arguments.length > 3 && void 0 !== arguments[3] && arguments[3], l = arguments.length > 4 && void 0 !== arguments[4] && arguments[4];
+            return n(this, r),
+            (i = e.call(this)).isFunction = s,
+            i._rootWeave = null,
+            i._subFlowsByName = new Map,
+            i._startingSubFlowDivert = null,
+            i._startingSubFlowRuntime = null,
+            i._firstChildFlow = null,
+            i.variableDeclarations = new Map,
+            i.identifier = null,
+            i.args = null,
+            i.iamFlowbase = function() {
+                return !0
+            }
+            ,
+            i.SplitWeaveAndSubFlowContent = function(t, e) {
+                var n, a, o = [], s = [];
+                i._subFlowsByName = new Map;
+                var l, u = S(t);
+                try {
+                    for (u.s(); !(l = u.n()).done; ) {
+                        var c = l.value
+                          , h = _(c, r);
+                        h ? (null === i._firstChildFlow && (i._firstChildFlow = h),
+                        s.push(c),
+                        (null === (n = h.identifier) || void 0 === n ? void 0 : n.name) && i._subFlowsByName.set(null === (a = h.identifier) || void 0 === a ? void 0 : a.name, h)) : o.push(c)
+                    }
+                } catch (t) {
+                    u.e(t)
+                } finally {
+                    u.f()
+                }
+                e && o.push(new Tt(null,1), new jt(new At(xt.Done())));
+                var f = [];
+                return o.length > 0 && (i._rootWeave = new zt(o,0),
+                f.push(i._rootWeave)),
+                s.length > 0 && f.push.apply(f, s),
+                f
+            }
+            ,
+            i.ResolveVariableWithName = function(t, e) {
+                var n, r = {}, a = null === e ? h(i) : Nt(e);
+                if (a) {
+                    if (null !== a.args) {
+                        var o, s = S(a.args);
+                        try {
+                            for (s.s(); !(o = s.n()).done; ) {
+                                if ((null === (n = o.value.identifier) || void 0 === n ? void 0 : n.name) === t)
+                                    return r.found = !0,
+                                    r.isArgument = !0,
+                                    r.ownerFlow = a,
+                                    r
+                            }
+                        } catch (t) {
+                            s.e(t)
+                        } finally {
+                            s.f()
+                        }
+                    }
+                    if (a !== i.story && a.variableDeclarations.has(t))
+                        return r.found = !0,
+                        r.ownerFlow = a,
+                        r.isTemporary = !0,
+                        r
+                }
+                return i.story.variableDeclarations.has(t) ? (r.found = !0,
+                r.ownerFlow = i.story,
+                r.isGlobal = !0,
+                r) : (r.found = !1,
+                r)
+            }
+            ,
+            i.AddNewVariableDeclaration = function(t) {
+                var e = t.variableName;
+                if (i.variableDeclarations.has(e)) {
+                    var n = i.variableDeclarations.get(e)
+                      , r = "";
+                    return n.debugMetadata && (r = " (".concat(n.debugMetadata, ")")),
+                    void i.Error("found declaration variable '".concat(e, "' that was already declared").concat(r), t, !1)
+                }
+                i.variableDeclarations.set(t.variableName, t)
+            }
+            ,
+            i.ResolveWeavePointNaming = function() {
+                i._rootWeave && i._rootWeave.ResolveWeavePointNaming();
+                var t, e = S(i._subFlowsByName);
+                try {
+                    for (e.s(); !(t = e.n()).done; ) {
+                        var n = m(t.value, 2)[1];
+                        n.hasOwnProperty("ResolveWeavePointNaming") && n.ResolveWeavePointNaming()
+                    }
+                } catch (t) {
+                    e.e(t)
+                } finally {
+                    e.f()
+                }
+            }
+            ,
+            i.GenerateRuntimeObject = function() {
+                var t, e = null;
+                i.isFunction ? i.CheckForDisallowedFunctionFlowControl() : i.flowLevel !== bt.Knot && i.flowLevel !== bt.Stitch || null !== (e = i.Find(Pt)()) && i.Error("Return statements can only be used in knots that are declared as functions: == function ".concat(i.identifier, " =="), e);
+                var n = new tt;
+                n.name = null === (t = i.identifier) || void 0 === t ? void 0 : t.name,
+                i.story.countAllVisits && (n.visitsShouldBeCounted = !0),
+                i.GenerateArgumentVariableAssignments(n);
+                for (var a = 0; null !== i.content && a < i.content.length; ) {
+                    var o = i.content[a];
+                    if (o instanceof r) {
+                        var s = o
+                          , l = s.runtimeObject;
+                        0 !== a || s.hasParameters || i.flowLevel !== bt.Knot || (i._startingSubFlowDivert = new vt,
+                        n.AddContent(i._startingSubFlowDivert),
+                        i._startingSubFlowRuntime = l);
+                        var u = l
+                          , c = n.namedContent.get(u.name) || null;
+                        if (c) {
+                            var h = "".concat(i.GetType(), " already contains flow named '").concat(u.name, "' (at ").concat(c.debugMetadata, ")");
+                            i.Error(h, s)
+                        }
+                        n.AddToNamedContentOnly(u)
+                    } else
+                        o && n.AddContent(o.runtimeObject);
+                    a += 1
+                }
+                return i.flowLevel === bt.Story || i.isFunction || null === i._rootWeave || null !== e || i._rootWeave.ValidateTermination(i.WarningInTermination),
+                n
+            }
+            ,
+            i.GenerateArgumentVariableAssignments = function(t) {
+                var e;
+                if (null !== i.args && 0 !== i.args.length)
+                    for (var n = i.args.length - 1; n >= 0; --n) {
+                        var r = (null === (e = i.args[n].identifier) || void 0 === e ? void 0 : e.name) || null
+                          , a = new pt(r,!0);
+                        t.AddContent(a)
+                    }
+            }
+            ,
+            i.ContentWithNameAtLevel = function(t) {
+                var e, n = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null, r = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                if ((n === i.flowLevel || null === n) && t === (null === (e = i.identifier) || void 0 === e ? void 0 : e.name))
+                    return h(i);
+                if (n === bt.WeavePoint || null === n) {
+                    var a = null;
+                    if (i._rootWeave && (a = i._rootWeave.WeavePointNamed(t)))
+                        return a;
+                    if (n === bt.WeavePoint)
+                        return r ? i.DeepSearchForAnyLevelContent(t) : null
+                }
+                if (null !== n && n < i.flowLevel)
+                    return null;
+                var o = i._subFlowsByName.get(t) || null;
+                return !o || null !== n && n !== o.flowLevel ? r ? i.DeepSearchForAnyLevelContent(t) : null : o
+            }
+            ,
+            i.DeepSearchForAnyLevelContent = function(t) {
+                var e = i.ContentWithNameAtLevel(t, bt.WeavePoint, !1);
+                if (e)
+                    return e;
+                var n, r = S(i._subFlowsByName);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var a = m(n.value, 2)[1].ContentWithNameAtLevel(t, null, !0);
+                        if (a)
+                            return a
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return null
+            }
+            ,
+            i.CheckForDisallowedFunctionFlowControl = function() {
+                i.flowLevel !== bt.Knot && i.Error("Functions cannot be stitches - i.e. they should be defined as '== function myFunc ==' rather than internal to another knot.");
+                var t, e = S(i._subFlowsByName);
+                try {
+                    for (e.s(); !(t = e.n()).done; ) {
+                        var n = m(t.value, 2)
+                          , r = n[0]
+                          , a = n[1];
+                        i.Error("Functions may not contain stitches, but saw '".concat(r, "' within the function '").concat(i.identifier, "'"), a)
+                    }
+                } catch (t) {
+                    e.e(t)
+                } finally {
+                    e.f()
+                }
+                if (!i._rootWeave)
+                    throw new Error;
+                var o, s = S(i._rootWeave.FindAll(jt)());
+                try {
+                    for (s.s(); !(o = s.n()).done; ) {
+                        var l = o.value;
+                        l.isFunctionCall || l.parent instanceof Vt || i.Error("Functions may not contain diverts, but saw '".concat(l, "'"), l)
+                    }
+                } catch (t) {
+                    s.e(t)
+                } finally {
+                    s.f()
+                }
+                var u, c = S(i._rootWeave.FindAll(mt)());
+                try {
+                    for (c.s(); !(u = c.n()).done; ) {
+                        var h = u.value;
+                        i.Error("Functions may not contain choices, but saw '".concat(h, "'"), h)
+                    }
+                } catch (t) {
+                    c.e(t)
+                } finally {
+                    c.f()
+                }
+            }
+            ,
+            i.WarningInTermination = function(t) {
+                var e = "Apparent loose end exists where the flow runs out. Do you need a '-> DONE' statement, choice or divert?";
+                t.parent === i._rootWeave && i._firstChildFlow && (e = "".concat(e, " Note that if you intend to enter '").concat(i._firstChildFlow.identifier, "' next, you need to divert to it explicitly."));
+                var n = _(t, jt);
+                n && n.isTunnel && (e += " When final tunnel to '".concat(n.target, " ->' returns it won't have anywhere to go.")),
+                i.Warning(e, t)
+            }
+            ,
+            i.toString = function() {
+                return "".concat(i.typeName, " '").concat(i.identifier, "'")
+            }
+            ,
+            i.identifier = t,
+            i.args = o,
+            null === a && (a = []),
+            i.PreProcessTopLevelObjects(a),
+            a = i.SplitWeaveAndSubFlowContent(a, "Story" == i.GetType() && !l),
+            i.AddContent(a),
+            i
+        }
+        return i(r, [{
+            key: "hasParameters",
+            get: function() {
+                return null !== this.args && this.args.length > 0
+            }
+        }, {
+            key: "subFlowsByName",
+            get: function() {
+                return this._subFlowsByName
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return this.isFunction ? "Function" : String(this.flowLevel)
+            }
+        }, {
+            key: "name",
+            get: function() {
+                var t;
+                return (null === (t = this.identifier) || void 0 === t ? void 0 : t.name) || null
+            }
+        }, {
+            key: "PreProcessTopLevelObjects",
+            value: function(t) {}
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                var e, n;
+                if (this._startingSubFlowDivert) {
+                    if (!this._startingSubFlowRuntime)
+                        throw new Error;
+                    this._startingSubFlowDivert.targetPath = this._startingSubFlowRuntime.path
+                }
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                null !== this.args) {
+                    var i, a = S(this.args);
+                    try {
+                        for (a.s(); !(i = a.n()).done; ) {
+                            var s = i.value;
+                            t.CheckForNamingCollisions(this, s.identifier, ft.Arg, "argument")
+                        }
+                    } catch (t) {
+                        a.e(t)
+                    } finally {
+                        a.f()
+                    }
+                    for (var l = 0; l < this.args.length; l += 1)
+                        for (var u = l + 1; u < this.args.length; u += 1)
+                            (null === (e = this.args[l].identifier) || void 0 === e ? void 0 : e.name) == (null === (n = this.args[u].identifier) || void 0 === n ? void 0 : n.name) && this.Error("Multiple arguments with the same name: '".concat(this.args[l].identifier, "'"))
+                }
+                if (this.flowLevel !== bt.Story) {
+                    var c = this.flowLevel === bt.Knot ? ft.Knot : ft.SubFlowAndWeave;
+                    t.CheckForNamingCollisions(this, this.identifier, c)
+                }
+            }
+        }]),
+        r
+    }(F)
+      , It = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            n(this, r),
+            (i = e.call(this)).dontFlatten = !1,
+            i.TrimTrailingWhitespace = function() {
+                for (var t = i.content.length - 1; t >= 0; --t) {
+                    var e = _(i.content[t], Et);
+                    if (null === e)
+                        break;
+                    if (e.text = e.text.replace(new RegExp(/[ \t]/g), ""),
+                    0 !== e.text.length)
+                        break;
+                    i.content.splice(t, 1)
+                }
+            }
+            ,
+            i.GenerateRuntimeObject = function() {
+                var t = new tt;
+                if (null !== i.content) {
+                    var e, n = S(i.content);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r = e.value.runtimeObject;
+                            r && t.AddContent(r)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+                return i.dontFlatten && i.story.DontFlattenContainer(t),
+                t
+            }
+            ,
+            i.toString = function() {
+                return "ContentList(".concat(i.content.join(", "), ")")
+            }
+            ,
+            t && i.AddContent(t);
+            for (var a = arguments.length, o = new Array(a > 1 ? a - 1 : 0), s = 1; s < a; s++)
+                o[s - 1] = arguments[s];
+            return o && i.AddContent(o),
+            i
+        }
+        return i(r, [{
+            key: "runtimeContainer",
+            get: function() {
+                return this.runtimeObject
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "ContentList"
+            }
+        }]),
+        r
+    }(F)
+      , Ft = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t, i = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+            return n(this, r),
+            (t = e.call(this)).pathForCount = null,
+            t.name = i,
+            t
+        }
+        return i(r, [{
+            key: "containerForCount",
+            get: function() {
+                return null === this.pathForCount ? null : this.ResolvePath(this.pathForCount).container
+            }
+        }, {
+            key: "pathStringForCount",
+            get: function() {
+                return null === this.pathForCount ? null : this.CompactPathString(this.pathForCount)
+            },
+            set: function(t) {
+                this.pathForCount = null === t ? null : new R(t)
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return null != this.name ? "var(" + this.name + ")" : "read_count(" + this.pathStringForCount + ")"
+            }
+        }]),
+        r
+    }(V)
+      , Wt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).pathIdentifiers = t,
+            i._runtimeVarRef = null,
+            i.isConstantReference = !1,
+            i.isListItemReference = !1,
+            i.GenerateIntoContainer = function(t) {
+                var e = i.story.constants.get(i.name);
+                if (e)
+                    return e.GenerateConstantIntoContainer(t),
+                    void (i.isConstantReference = !0);
+                if (i._runtimeVarRef = new Ft(i.name),
+                1 === i.path.length || 2 === i.path.length) {
+                    var n = ""
+                      , r = "";
+                    1 === i.path.length ? n = i.path[0] : (r = i.path[0],
+                    n = i.path[1]),
+                    i.story.ResolveListItem(r, n, h(i)) && (i.isListItemReference = !0)
+                }
+                t.AddContent(i._runtimeVarRef)
+            }
+            ,
+            i.toString = function() {
+                return "{".concat(i.path.join("."), "}")
+            }
+            ,
+            i
+        }
+        return i(r, [{
+            key: "name",
+            get: function() {
+                return this.path.join(".")
+            }
+        }, {
+            key: "path",
+            get: function() {
+                return this.pathIdentifiers.map((function(t) {
+                    return t.name
+                }
+                )).filter(O)
+            }
+        }, {
+            key: "identifier",
+            get: function() {
+                if (!this.pathIdentifiers || 0 == this.pathIdentifiers.length)
+                    return null;
+                var t = this.path.join(".");
+                return new xt(t)
+            }
+        }, {
+            key: "runtimeVarRef",
+            get: function() {
+                return this._runtimeVarRef
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "ref"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                !this.isConstantReference && !this.isListItemReference) {
+                    var e = new At(this.pathIdentifiers)
+                      , n = e.ResolveFromContext(this);
+                    if (n) {
+                        if (!n.containerForCounting)
+                            throw new Error;
+                        if (n.containerForCounting.visitsShouldBeCounted = !0,
+                        null === this._runtimeVarRef)
+                            return;
+                        this._runtimeVarRef.pathForCount = n.runtimePath,
+                        this._runtimeVarRef.name = null;
+                        var i = _(n, Ot);
+                        i && i.isFunction && (this.parent instanceof zt || this.parent instanceof It || this.parent instanceof Ot) && this.Warning("'".concat(i.identifier, "' being used as read count rather than being called as function. Perhaps you intended to write ").concat(i.identifier, "()"))
+                    } else {
+                        if (this.path.length > 1) {
+                            var a = "Could not find target for read count: ".concat(e);
+                            return this.path.length <= 2 && (a += ", or couldn't find list item with the name ".concat(this.path.join(","))),
+                            void this.Error(a)
+                        }
+                        t.ResolveVariableWithName(this.name, this).found || this.Error("Unresolved variable: ".concat(this.name), this)
+                    }
+                }
+            }
+        }]),
+        r
+    }(nt)
+      , Rt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this))._divertTargetToCount = null,
+            a._variableReferenceToCount = null,
+            a.shouldPopReturnedValue = !1,
+            a.GenerateIntoContainer = function(t) {
+                var e = a.story.ResolveList(a.name)
+                  , n = !1;
+                if (a.isChoiceCount)
+                    a.args.length > 0 && a.Error("The CHOICE_COUNT() function shouldn't take any arguments"),
+                    t.AddContent(et.ChoiceCount());
+                else if (a.isTurns)
+                    a.args.length > 0 && a.Error("The TURNS() function shouldn't take any arguments"),
+                    t.AddContent(et.Turns());
+                else if (a.isTurnsSince || a.isReadCount) {
+                    var r = _(a.args[0], Vt)
+                      , i = _(a.args[0], Wt);
+                    if (1 !== a.args.length || null === r && null === i)
+                        return void a.Error("The ".concat(a.name, "() function should take one argument: a divert target to the target knot, stitch, gather or choice you want to check. e.g. TURNS_SINCE(-> myKnot)"));
+                    r ? (a._divertTargetToCount = r,
+                    a.AddContent(a._divertTargetToCount),
+                    a._divertTargetToCount.GenerateIntoContainer(t)) : i && (a._variableReferenceToCount = i,
+                    a.AddContent(a._variableReferenceToCount),
+                    a._variableReferenceToCount.GenerateIntoContainer(t)),
+                    a.isTurnsSince ? t.AddContent(et.TurnsSince()) : t.AddContent(et.ReadCount())
+                } else if (a.isRandom) {
+                    2 !== a.args.length && a.Error("RANDOM should take 2 parameters: a minimum and a maximum integer");
+                    for (var o = 0; o < a.args.length; o += 1) {
+                        var s = _(a.args[o], at);
+                        if (s && !s.isInt()) {
+                            var l = 0 === o ? "minimum" : "maximum";
+                            a.Error("RANDOM's ".concat(l, " parameter should be an integer"))
+                        }
+                        a.args[o].GenerateIntoContainer(t)
+                    }
+                    t.AddContent(et.Random())
+                } else if (a.isSeedRandom) {
+                    1 !== a.args.length && a.Error("SEED_RANDOM should take 1 parameter - an integer seed");
+                    var u = _(a.args[0], at);
+                    u && !u.isInt() && a.Error("SEED_RANDOM's parameter should be an integer seed"),
+                    a.args[0].GenerateIntoContainer(t),
+                    t.AddContent(et.SeedRandom())
+                } else if (a.isListRange) {
+                    3 !== a.args.length && a.Error("LIST_RANGE should take 3 parameters - a list, a min and a max");
+                    for (var c = 0; c < a.args.length; c += 1)
+                        a.args[c].GenerateIntoContainer(t);
+                    t.AddContent(et.ListRange())
+                } else if (a.isListRandom)
+                    1 !== a.args.length && a.Error("LIST_RANDOM should take 1 parameter - a list"),
+                    a.args[0].GenerateIntoContainer(t),
+                    t.AddContent(et.ListRandom());
+                else if (it.CallExistsWithName(a.name)) {
+                    var h = it.CallWithName(a.name);
+                    if (h.numberOfParameters !== a.args.length) {
+                        var f = "".concat(name, " should take ").concat(h.numberOfParameters, " parameter");
+                        h.numberOfParameters > 1 && (f += "s"),
+                        a.Error(f)
+                    }
+                    for (var d = 0; d < a.args.length; d += 1)
+                        a.args[d].GenerateIntoContainer(t);
+                    t.AddContent(it.CallWithName(a.name))
+                } else if (null !== e)
+                    if (a.args.length > 1 && a.Error("Can currently only construct a list from one integer (or an empty list from a given list definition)"),
+                    1 === a.args.length)
+                        t.AddContent(new $(a.name)),
+                        a.args[0].GenerateIntoContainer(t),
+                        t.AddContent(et.ListFromInt());
+                    else {
+                        var v = new M;
+                        v.SetInitialOriginName(a.name),
+                        t.AddContent(new Z(v))
+                    }
+                else
+                    t.AddContent(a._proxyDivert.runtimeObject),
+                    n = !0;
+                n || a.content.splice(a.content.indexOf(a._proxyDivert), 1),
+                a.shouldPopReturnedValue && t.AddContent(et.PopEvaluatedValue())
+            }
+            ,
+            a.toString = function() {
+                var t = a.args.join(", ");
+                return "".concat(a.name, "(").concat(t, ")")
+            }
+            ,
+            a._proxyDivert = new jt(new At(t),i),
+            a._proxyDivert.isFunctionCall = !0,
+            a.AddContent(a._proxyDivert),
+            a
+        }
+        return i(r, [{
+            key: "proxyDivert",
+            get: function() {
+                return this._proxyDivert
+            }
+        }, {
+            key: "name",
+            get: function() {
+                return this._proxyDivert.target.firstComponent || ""
+            }
+        }, {
+            key: "args",
+            get: function() {
+                return this._proxyDivert.args
+            }
+        }, {
+            key: "runtimeDivert",
+            get: function() {
+                return this._proxyDivert.runtimeDivert
+            }
+        }, {
+            key: "isChoiceCount",
+            get: function() {
+                return "CHOICE_COUNT" === this.name
+            }
+        }, {
+            key: "isTurns",
+            get: function() {
+                return "TURNS" === this.name
+            }
+        }, {
+            key: "isTurnsSince",
+            get: function() {
+                return "TURNS_SINCE" === this.name
+            }
+        }, {
+            key: "isRandom",
+            get: function() {
+                return "RANDOM" === this.name
+            }
+        }, {
+            key: "isSeedRandom",
+            get: function() {
+                return "SEED_RANDOM" === this.name
+            }
+        }, {
+            key: "isListRange",
+            get: function() {
+                return "LIST_RANGE" === this.name
+            }
+        }, {
+            key: "isListRandom",
+            get: function() {
+                return "LIST_RANDOM" === this.name
+            }
+        }, {
+            key: "isReadCount",
+            get: function() {
+                return "READ_COUNT" === this.name
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "FunctionCall"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                !this.content.includes(this._proxyDivert) && null !== this.args) {
+                    var e, n = S(this.args);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            e.value.ResolveReferences(t)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+                if (this._divertTargetToCount) {
+                    var i = this._divertTargetToCount.divert
+                      , a = null != i.runtimeDivert.variableDivertName;
+                    if (a)
+                        return void this.Error("When getting the TURNS_SINCE() of a variable target, remove the '->' - i.e. it should just be TURNS_SINCE(".concat(i.runtimeDivert.variableDivertName, ")"));
+                    var s = i.targetContent;
+                    if (null === s)
+                        a || this.Error("Failed to find target for TURNS_SINCE: '".concat(i.target, "'"));
+                    else {
+                        if (!s.containerForCounting)
+                            throw new Error;
+                        s.containerForCounting.turnIndexShouldBeCounted = !0
+                    }
+                } else if (this._variableReferenceToCount) {
+                    var l = this._variableReferenceToCount.runtimeVarRef;
+                    if (!l)
+                        throw new Error;
+                    null !== l.pathForCount && this.Error("Should be '".concat(name, "'(-> '").concat(this._variableReferenceToCount.name, "). Usage without the '->' only makes sense for variable targets."))
+                }
+            }
+        }]),
+        r
+    }(nt);
+    Rt.IsBuiltIn = function(t) {
+        return !!it.CallExistsWithName(t) || ("CHOICE_COUNT" === t || "TURNS_SINCE" === t || "TURNS" === t || "RANDOM" === t || "SEED_RANDOM" === t || "LIST_VALUE" === t || "LIST_RANDOM" === t || "READ_COUNT" === t)
+    }
+    ;
+    var Dt, Lt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).GenerateIntoContainer = function(t) {
+                var e, n = !0, r = S(i.subExpressions);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        e.value.GenerateIntoContainer(t),
+                        n || t.AddContent(it.CallWithName("&&")),
+                        n = !1
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+            }
+            ,
+            i.AddContent(t),
+            i
+        }
+        return i(r, [{
+            key: "subExpressions",
+            get: function() {
+                return this.content
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "MultipleConditionExpression"
+            }
+        }]),
+        r
+    }(nt), Vt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this))._runtimeDivert = null,
+            i._runtimeDivertTargetValue = null,
+            i.GenerateIntoContainer = function(t) {
+                i.divert.GenerateRuntimeObject(),
+                i._runtimeDivert = i.divert.runtimeDivert,
+                i._runtimeDivertTargetValue = new X,
+                t.AddContent(i.runtimeDivertTargetValue)
+            }
+            ,
+            i.Equals = function(t) {
+                var e = _(t, r);
+                return !!(e && i.divert.target && e.divert.target) && i.divert.target.dotSeparatedComponents === e.divert.target.dotSeparatedComponents
+            }
+            ,
+            i.divert = i.AddContent(t),
+            i
+        }
+        return i(r, [{
+            key: "runtimeDivert",
+            get: function() {
+                if (!this._runtimeDivert)
+                    throw new Error;
+                return this._runtimeDivert
+            }
+        }, {
+            key: "runtimeDivertTargetValue",
+            get: function() {
+                if (!this._runtimeDivertTargetValue)
+                    throw new Error;
+                return this._runtimeDivertTargetValue
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "DivertTarget"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                this.divert.isDone || this.divert.isEnd)
+                    this.Error("Can't use -> DONE or -> END as variable divert targets", this);
+                else {
+                    for (var e = this; e && e instanceof nt; ) {
+                        var n = !1
+                          , i = !1
+                          , a = e.parent;
+                        if (a instanceof st) {
+                            var s = a;
+                            "==" !== s.opName && "!=" !== s.opName ? n = !0 : (s.leftExpression instanceof r || s.leftExpression instanceof Wt) && (s.rightExpression instanceof r || s.rightExpression instanceof Wt) || (n = !0),
+                            i = !0
+                        } else if (a instanceof Rt) {
+                            var l = a;
+                            l.isTurnsSince || l.isReadCount || (n = !0),
+                            i = !0
+                        } else
+                            (a instanceof nt || a instanceof Lt || a instanceof mt && a.condition === e || a instanceof kt || a instanceof $t) && (n = !0,
+                            i = !0);
+                        if (n && this.Error("Can't use a divert target like that. Did you intend to call '".concat(this.divert.target, "' as a function: likeThis(), or check the read count: likeThis, with no arrows?"), this),
+                        i)
+                            break;
+                        e = a
+                    }
+                    if (this.runtimeDivert.hasVariableTarget) {
+                        if (!this.divert.target)
+                            throw new Error;
+                        this.Error("Since '".concat(this.divert.target.dotSeparatedComponents, "' is a variable, it shouldn't be preceded by '->' here."))
+                    }
+                    this.runtimeDivert.targetPath && (this.runtimeDivertTargetValue.targetPath = this.runtimeDivert.targetPath);
+                    var u = this.divert.targetContent;
+                    if (null !== u) {
+                        var c = u.containerForCounting;
+                        if (null !== c) {
+                            var h = _(this.parent, Rt);
+                            h && h.isTurnsSince || (c.visitsShouldBeCounted = !0),
+                            c.turnIndexShouldBeCounted = !0
+                        }
+                        var f = _(u, Ot);
+                        if (null != f && null !== f.args) {
+                            var d, v = S(f.args);
+                            try {
+                                for (v.s(); !(d = v.n()).done; ) {
+                                    var m = d.value;
+                                    m.isByReference && this.Error("Can't store a divert target to a knot or function that has by-reference arguments ('".concat(f.identifier, "' has 'ref ").concat(m.identifier, "')."))
+                                }
+                            } catch (t) {
+                                v.e(t)
+                            } finally {
+                                v.f()
+                            }
+                        }
+                    }
+                }
+            }
+        }]),
+        r
+    }(nt), jt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this)).args = [],
+            a.target = null,
+            a.targetContent = null,
+            a._runtimeDivert = null,
+            a.isFunctionCall = !1,
+            a.isEmpty = !1,
+            a.isTunnel = !1,
+            a.isThread = !1,
+            a.GenerateRuntimeObject = function() {
+                if (a.isEnd)
+                    return et.End();
+                if (a.isDone)
+                    return et.Done();
+                a.runtimeDivert = new vt,
+                a.ResolveTargetContent(),
+                a.CheckArgumentValidity();
+                var t = null !== a.args && a.args.length > 0;
+                if (t || a.isFunctionCall || a.isTunnel || a.isThread) {
+                    var e = new tt;
+                    if (t) {
+                        a.isFunctionCall || e.AddContent(et.EvalStart());
+                        var n = null;
+                        a.targetContent && (n = a.targetContent.args);
+                        for (var r = 0; r < a.args.length; ++r) {
+                            var i = a.args[r]
+                              , o = null;
+                            if (n && r < n.length && (o = n[r]),
+                            o && o.isByReference) {
+                                var s = _(i, Wt);
+                                if (!s) {
+                                    a.Error("Expected variable name to pass by reference to 'ref ".concat(o.identifier, "' but saw ").concat(i));
+                                    break
+                                }
+                                var l = new At(s.pathIdentifiers);
+                                if (l.ResolveFromContext(h(a))) {
+                                    a.Error("can't pass a read count by reference. '".concat(l.dotSeparatedComponents, "' is a knot/stitch/label, but '").concat(a.target.dotSeparatedComponents, "' requires the name of a VAR to be passed."));
+                                    break
+                                }
+                                var u = new Y(s.name);
+                                e.AddContent(u)
+                            } else
+                                i.GenerateIntoContainer(e)
+                        }
+                        a.isFunctionCall || e.AddContent(et.EvalEnd())
+                    }
+                    return a.isThread ? e.AddContent(et.StartThread()) : (a.isFunctionCall || a.isTunnel) && (a.runtimeDivert.pushesToStack = !0,
+                    a.runtimeDivert.stackPushType = a.isFunctionCall ? ct.Function : ct.Tunnel),
+                    e.AddContent(a.runtimeDivert),
+                    e
+                }
+                return a.runtimeDivert
+            }
+            ,
+            a.PathAsVariableName = function() {
+                return a.target ? a.target.firstComponent : null
+            }
+            ,
+            a.ResolveTargetContent = function() {
+                if (!a.isEmpty && !a.isEnd && null === a.targetContent) {
+                    var t = a.PathAsVariableName();
+                    if (null !== t) {
+                        var e = _(Nt(h(a)), Ot);
+                        if (e) {
+                            var n = e.ResolveVariableWithName(t, h(a));
+                            if (n.found) {
+                                if (n.isArgument && n.ownerFlow && n.ownerFlow.args) {
+                                    var r = n.ownerFlow.args.find((function(e) {
+                                        var n;
+                                        return (null === (n = e.identifier) || void 0 === n ? void 0 : n.name) == t
+                                    }
+                                    ));
+                                    r && !r.isDivertTarget && a.Error("Since '".concat(r.identifier, "' is used as a variable divert target (on ").concat(a.debugMetadata, "), it should be marked as: -> ").concat(r.identifier), n.ownerFlow)
+                                }
+                                return void (a.runtimeDivert.variableDivertName = t)
+                            }
+                        }
+                    }
+                    if (!a.target)
+                        throw new Error;
+                    a.targetContent = a.target.ResolveFromContext(h(a))
+                }
+            }
+            ,
+            a.CheckArgumentValidity = function() {
+                if (!a.isEmpty) {
+                    var t = 0;
+                    if (null !== a.args && a.args.length > 0 && (t = a.args.length),
+                    null !== a.targetContent) {
+                        var e = _(a.targetContent, Ot);
+                        if (0 !== t || null !== e && e.hasParameters)
+                            if (null === e && t > 0)
+                                a.Error("target needs to be a knot or stitch in order to pass arguments");
+                            else if (null !== e && (null === e.args || !e.args && t > 0))
+                                a.Error("target (".concat(e.name, ") doesn't take parameters"));
+                            else if (a.parent instanceof Vt)
+                                t > 0 && a.Error("can't store arguments in a divert target variable");
+                            else {
+                                var n, r = e.args.length;
+                                if (r !== t)
+                                    return n = 0 === t ? "but there weren't any passed to it" : t < r ? "but only got ".concat(t) : "but got ".concat(t),
+                                    void a.Error("to '".concat(e.identifier, "' requires ").concat(r, " arguments, ").concat(n));
+                                for (var i = 0; i < r; ++i) {
+                                    var o = e.args[i]
+                                      , s = a.args[i];
+                                    if (o.isDivertTarget) {
+                                        var l = _(s, Wt);
+                                        if (s instanceof Vt || null !== l) {
+                                            if (l) {
+                                                var u = new At(l.pathIdentifiers);
+                                                u.ResolveFromContext(l) && a.Error("Passing read count of '".concat(u.dotSeparatedComponents, "' instead of a divert target. You probably meant '").concat(u, "'"))
+                                            }
+                                        } else
+                                            a.Error("Target '".concat(e.identifier, "' expects a divert target for the parameter named -> ").concat(o.identifier, " but saw ").concat(s), s)
+                                    }
+                                }
+                                null !== e || a.Error("Can't call as a function or with arguments unless it's a knot or stitch")
+                            }
+                    }
+                }
+            }
+            ,
+            a.CheckExternalArgumentValidity = function(t) {
+                var e = a.target ? a.target.firstComponent : null
+                  , n = t.externals.get(e);
+                if (!n)
+                    throw new Error("external not found");
+                var r = n.argumentNames.length
+                  , i = 0;
+                a.args && (i = a.args.length),
+                i !== r && a.Error("incorrect number of arguments sent to external function '".concat(e, "'. Expected ").concat(r, " but got ").concat(i))
+            }
+            ,
+            a.toString = function() {
+                var t = "";
+                return null === a.target ? "-> <empty divert>" : (t += a.target.toString(),
+                a.isTunnel && (t += " ->"),
+                a.isFunctionCall && (t += " ()"),
+                t)
+            }
+            ,
+            t && (a.target = t),
+            i && (a.args = i,
+            a.AddContent(i)),
+            a
+        }
+        return i(r, [{
+            key: "runtimeDivert",
+            get: function() {
+                if (!this._runtimeDivert)
+                    throw new Error;
+                return this._runtimeDivert
+            },
+            set: function(t) {
+                this._runtimeDivert = t
+            }
+        }, {
+            key: "isEnd",
+            get: function() {
+                return Boolean(this.target && "END" === this.target.dotSeparatedComponents)
+            }
+        }, {
+            key: "isDone",
+            get: function() {
+                return Boolean(this.target && "DONE" === this.target.dotSeparatedComponents)
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Divert"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (!(this.isEmpty || this.isEnd || this.isDone)) {
+                    if (!this.runtimeDivert)
+                        throw new Error;
+                    this.targetContent && (this.runtimeDivert.targetPath = this.targetContent.runtimePath),
+                    p(o(r.prototype), "ResolveReferences", this).call(this, t);
+                    var e = _(this.targetContent, Ot);
+                    e && (!e.isFunction && this.isFunctionCall ? p(o(r.prototype), "Error", this).call(this, "".concat(e.identifier, " hasn't been marked as a function, but it's being called as one. Do you need to delcare the knot as '== function ").concat(e.identifier, " =='?")) : !e.isFunction || this.isFunctionCall || this.parent instanceof Vt || p(o(r.prototype), "Error", this).call(this, e.identifier + " can't be diverted to. It can only be called as a function since it's been marked as such: '" + e.identifier + "(...)'"));
+                    var n = null !== this.targetContent
+                      , i = !1
+                      , a = !1;
+                    if (!this.target)
+                        throw new Error;
+                    if (1 === this.target.numberOfComponents) {
+                        if (!this.target.firstComponent)
+                            throw new Error;
+                        if (i = Rt.IsBuiltIn(this.target.firstComponent),
+                        a = t.IsExternal(this.target.firstComponent),
+                        i || a)
+                            return this.isFunctionCall || p(o(r.prototype), "Error", this).call(this, "".concat(this.target.firstComponent, " must be called as a function: ~ ").concat(this.target.firstComponent, "()")),
+                            void (a && (this.runtimeDivert.isExternal = !0,
+                            null !== this.args && (this.runtimeDivert.externalArgs = this.args.length),
+                            this.runtimeDivert.pushesToStack = !1,
+                            this.runtimeDivert.targetPath = new R(this.target.firstComponent),
+                            this.CheckExternalArgumentValidity(t)))
+                    }
+                    null == this.runtimeDivert.variableDivertName && (n || i || a || this.Error("target not found: '".concat(this.target, "'")))
+                }
+            }
+        }, {
+            key: "Error",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null
+                  , n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                e !== this && e ? p(o(r.prototype), "Error", this).call(this, t, e) : this.isFunctionCall ? p(o(r.prototype), "Error", this).call(this, "Function call ".concat(t), e, n) : p(o(r.prototype), "Error", this).call(this, "Divert ".concat(t), e, n)
+            }
+        }]),
+        r
+    }(F), Bt = i((function t(e, r) {
+        n(this, t),
+        this.divert = e,
+        this.targetRuntimeObj = r
+    }
+    )), Mt = i((function t(e, r) {
+        n(this, t),
+        this.divert = e,
+        this.targetContent = r
+    }
+    ));
+    !function(t) {
+        t[t.Stopping = 1] = "Stopping",
+        t[t.Cycle = 2] = "Cycle",
+        t[t.Shuffle = 4] = "Shuffle",
+        t[t.Once = 8] = "Once"
+    }(Dt || (Dt = {}));
+    var Gt, qt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            n(this, r),
+            (a = e.call(this)).sequenceType = i,
+            a._sequenceDivertsToResolve = [],
+            a.GenerateRuntimeObject = function() {
+                var t = new tt;
+                t.visitsShouldBeCounted = !0,
+                t.countingAtStartOnly = !0,
+                a._sequenceDivertsToResolve = [],
+                t.AddContent(et.EvalStart()),
+                t.AddContent(et.VisitIndex());
+                var e = (a.sequenceType & Dt.Once) > 0
+                  , n = (a.sequenceType & Dt.Cycle) > 0
+                  , r = (a.sequenceType & Dt.Stopping) > 0
+                  , i = (a.sequenceType & Dt.Shuffle) > 0
+                  , o = a.sequenceElements.length;
+                if (e && (o += 1),
+                r || e ? (t.AddContent(new J(o - 1)),
+                t.AddContent(it.CallWithName("MIN"))) : n && (t.AddContent(new J(a.sequenceElements.length)),
+                t.AddContent(it.CallWithName("%"))),
+                i) {
+                    var s = et.NoOp();
+                    if (e || r) {
+                        var l = r ? a.sequenceElements.length - 1 : a.sequenceElements.length;
+                        t.AddContent(et.Duplicate()),
+                        t.AddContent(new J(l)),
+                        t.AddContent(it.CallWithName("=="));
+                        var u = new vt;
+                        u.isConditional = !0,
+                        t.AddContent(u),
+                        a.AddDivertToResolve(u, s)
+                    }
+                    var c = a.sequenceElements.length;
+                    r && (c -= 1),
+                    t.AddContent(new J(c)),
+                    t.AddContent(et.SequenceShuffleIndex()),
+                    (e || r) && t.AddContent(s)
+                }
+                t.AddContent(et.EvalEnd());
+                for (var h = et.NoOp(), f = 0; f < o; f += 1) {
+                    t.AddContent(et.EvalStart()),
+                    t.AddContent(et.Duplicate()),
+                    t.AddContent(new J(f)),
+                    t.AddContent(it.CallWithName("==")),
+                    t.AddContent(et.EvalEnd());
+                    var d = new vt;
+                    d.isConditional = !0,
+                    t.AddContent(d);
+                    var v = void 0;
+                    if (f < a.sequenceElements.length)
+                        v = a.sequenceElements[f].runtimeObject;
+                    else
+                        v = new tt;
+                    v.name = "s".concat(f),
+                    v.InsertContent(et.PopEvaluatedValue(), 0);
+                    var p = new vt;
+                    v.AddContent(p),
+                    t.AddToNamedContentOnly(v),
+                    a.AddDivertToResolve(d, v),
+                    a.AddDivertToResolve(p, h)
+                }
+                return t.AddContent(h),
+                t
+            }
+            ,
+            a.AddDivertToResolve = function(t, e) {
+                a._sequenceDivertsToResolve.push(new Mt(t,e))
+            }
+            ,
+            a.sequenceType = i,
+            a.sequenceElements = [];
+            var o, s = S(t);
+            try {
+                for (s.s(); !(o = s.n()).done; ) {
+                    var l = o.value
+                      , u = l.content
+                      , c = null;
+                    c = null === u || 0 === u.length ? l : new zt(u),
+                    a.sequenceElements.push(c),
+                    a.AddContent(c)
+                }
+            } catch (t) {
+                s.e(t)
+            } finally {
+                s.f()
+            }
+            return a
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Sequence"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t);
+                var e, n = S(this._sequenceDivertsToResolve);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var i = e.value;
+                        i.divert.targetPath = i.targetContent.path
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+            }
+        }]),
+        r
+    }(F), Ut = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t;
+            return n(this, r),
+            (t = e.apply(this, arguments))._overrideDivertTarget = null,
+            t._divertAfter = null,
+            t.GenerateRuntimeObject = function() {
+                var e = new tt;
+                if (e.AddContent(et.EvalStart()),
+                t.divertAfter) {
+                    var n = t.divertAfter.GenerateRuntimeObject()
+                      , r = n;
+                    if (r) {
+                        var i = t.divertAfter.args;
+                        if (null !== i && i.length > 0) {
+                            for (var a = -1, o = -1, s = 0; s < r.content.length; s += 1) {
+                                var l = r.content[s];
+                                l && (-1 == a && l.commandType === et.CommandType.EvalStart ? a = s : l.commandType === et.CommandType.EvalEnd && (o = s))
+                            }
+                            for (var u = a + 1; u < o; u += 1) {
+                                r.content[u].parent = null,
+                                e.AddContent(r.content[u])
+                            }
+                        }
+                    }
+                    var c = _(n, vt);
+                    if (null != c && c.hasVariableTarget) {
+                        var h = new Ft(c.variableDivertName);
+                        e.AddContent(h)
+                    } else
+                        t._overrideDivertTarget = new X,
+                        e.AddContent(t._overrideDivertTarget)
+                } else
+                    e.AddContent(new rt);
+                return e.AddContent(et.EvalEnd()),
+                e.AddContent(et.PopTunnel()),
+                e
+            }
+            ,
+            t.toString = function() {
+                return " -> ".concat(t._divertAfter)
+            }
+            ,
+            t
+        }
+        return i(r, [{
+            key: "divertAfter",
+            get: function() {
+                return this._divertAfter
+            },
+            set: function(t) {
+                this._divertAfter = t,
+                this._divertAfter && this.AddContent(this._divertAfter)
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "TunnelOnwards"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                this.divertAfter && this.divertAfter.targetContent && (this._overrideDivertTarget.targetPath = this.divertAfter.targetContent.runtimePath)
+            }
+        }]),
+        r
+    }(F), Kt = function() {
+        function t(e, r) {
+            n(this, t),
+            this._name = e || "",
+            this._items = null,
+            this._itemNameToValues = r || new Map
+        }
+        return i(t, [{
+            key: "name",
+            get: function() {
+                return this._name
+            }
+        }, {
+            key: "items",
+            get: function() {
+                if (null == this._items) {
+                    this._items = new Map;
+                    var t, e = S(this._itemNameToValues);
+                    try {
+                        for (e.s(); !(t = e.n()).done; ) {
+                            var n = m(t.value, 2)
+                              , r = n[0]
+                              , i = n[1]
+                              , a = new B(this.name,r);
+                            this._items.set(a.serialized(), i)
+                        }
+                    } catch (t) {
+                        e.e(t)
+                    } finally {
+                        e.f()
+                    }
+                }
+                return this._items
+            }
+        }, {
+            key: "ValueForItem",
+            value: function(t) {
+                if (!t.itemName)
+                    return 0;
+                var e = this._itemNameToValues.get(t.itemName);
+                return void 0 !== e ? e : 0
+            }
+        }, {
+            key: "ContainsItem",
+            value: function(t) {
+                return !!t.itemName && (t.originName == this.name && this._itemNameToValues.has(t.itemName))
+            }
+        }, {
+            key: "ContainsItemWithName",
+            value: function(t) {
+                return this._itemNameToValues.has(t)
+            }
+        }, {
+            key: "TryGetItemWithValue",
+            value: function(t, e) {
+                var n, r = S(this._itemNameToValues);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = m(n.value, 2)
+                          , a = i[0];
+                        if (i[1] == t)
+                            return {
+                                result: new B(this.name,a),
+                                exists: !0
+                            }
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return {
+                    result: B.Null,
+                    exists: !1
+                }
+            }
+        }, {
+            key: "TryGetValueForItem",
+            value: function(t, e) {
+                if (!t.itemName)
+                    return {
+                        result: 0,
+                        exists: !1
+                    };
+                var n = this._itemNameToValues.get(t.itemName);
+                return n ? {
+                    result: n,
+                    exists: !0
+                } : {
+                    result: 0,
+                    exists: !1
+                }
+            }
+        }]),
+        t
+    }(), Ht = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            n(this, r),
+            (i = e.call(this)).itemDefinitions = t,
+            i.identifier = null,
+            i.variableAssignment = null,
+            i._elementsByName = null,
+            i.ItemNamed = function(t) {
+                if (null === i._elementsByName) {
+                    i._elementsByName = new Map;
+                    var e, n = S(i.itemDefinitions);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r = e.value;
+                            i._elementsByName.set(r.name, r)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                }
+                return i._elementsByName.get(t) || null
+            }
+            ,
+            i.GenerateRuntimeObject = function() {
+                var t, e, n, r = new M, a = S(i.itemDefinitions);
+                try {
+                    for (a.s(); !(n = a.n()).done; ) {
+                        var o = n.value;
+                        if (o.inInitialList) {
+                            var s = new B((null === (t = i.identifier) || void 0 === t ? void 0 : t.name) || null,o.name || null);
+                            r.Add(s, o.seriesValue)
+                        }
+                    }
+                } catch (t) {
+                    a.e(t)
+                } finally {
+                    a.f()
+                }
+                return r.SetInitialOriginName((null === (e = i.identifier) || void 0 === e ? void 0 : e.name) || ""),
+                new Z(r)
+            }
+            ;
+            var a, o = 1, s = S(i.itemDefinitions);
+            try {
+                for (s.s(); !(a = s.n()).done; ) {
+                    var l = a.value;
+                    null !== l.explicitValue && (o = l.explicitValue),
+                    l.seriesValue = o,
+                    o += 1
+                }
+            } catch (t) {
+                s.e(t)
+            } finally {
+                s.f()
+            }
+            return i.AddContent(t),
+            i
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "ListDefinition"
+            }
+        }, {
+            key: "runtimeListDefinition",
+            get: function() {
+                var t, e, n = new Map, r = S(this.itemDefinitions);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i = e.value;
+                        n.has(i.name) ? this.Error("List '".concat(this.identifier, "' contains duplicate items called '").concat(i.name, "'")) : n.set(i.name, i.seriesValue)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return new Kt((null === (t = this.identifier) || void 0 === t ? void 0 : t.name) || "",n)
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                t.CheckForNamingCollisions(this, this.identifier, ft.List)
+            }
+        }]),
+        r
+    }(F), Jt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i, a = t.assignedExpression, o = t.isGlobalDeclaration, s = t.isTemporaryNewDeclaration, l = t.listDef, u = t.variableIdentifier;
+            return n(this, r),
+            (i = e.call(this))._runtimeAssignment = null,
+            i.expression = null,
+            i.listDefinition = null,
+            i.GenerateRuntimeObject = function() {
+                var t = null;
+                if (i.isGlobalDeclaration ? t = i.story : i.isNewTemporaryDeclaration && (t = Nt(h(i))),
+                t && t.AddNewVariableDeclaration(h(i)),
+                i.isGlobalDeclaration)
+                    return null;
+                var e = new tt;
+                return i.expression ? e.AddContent(i.expression.runtimeObject) : i.listDefinition && e.AddContent(i.listDefinition.runtimeObject),
+                i._runtimeAssignment = new pt(i.variableName,i.isNewTemporaryDeclaration),
+                e.AddContent(i._runtimeAssignment),
+                e
+            }
+            ,
+            i.toString = function() {
+                return "".concat(i.isGlobalDeclaration ? "VAR" : i.isNewTemporaryDeclaration ? "~ temp" : "", " ").concat(i.variableName)
+            }
+            ,
+            i.variableIdentifier = u,
+            i.isGlobalDeclaration = Boolean(o),
+            i.isNewTemporaryDeclaration = Boolean(s),
+            l instanceof Ht ? (i.listDefinition = i.AddContent(l),
+            i.listDefinition.variableAssignment = h(i),
+            i.isGlobalDeclaration = !0) : a && (i.expression = i.AddContent(a)),
+            i
+        }
+        return i(r, [{
+            key: "variableName",
+            get: function() {
+                return this.variableIdentifier.name
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return this.isNewTemporaryDeclaration ? "temp" : this.isGlobalDeclaration ? null !== this.listDefinition ? "LIST" : "VAR" : "variable assignment"
+            }
+        }, {
+            key: "isDeclaration",
+            get: function() {
+                return this.isGlobalDeclaration || this.isNewTemporaryDeclaration
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                this.isDeclaration && null === this.listDefinition && t.CheckForNamingCollisions(this, this.variableIdentifier, this.isGlobalDeclaration ? ft.Var : ft.Temp),
+                this.isGlobalDeclaration) {
+                    var e = _(this.expression, Wt);
+                    !e || e.isConstantReference || e.isListItemReference || this.Error("global variable assignments cannot refer to other variables, only literal values, constants and list items")
+                }
+                if (!this.isNewTemporaryDeclaration) {
+                    var n = t.ResolveVariableWithName(this.variableName, this);
+                    n.found || (this.variableName in this.story.constants ? this.Error("Can't re-assign to a constant (do you need to use VAR when declaring '".concat(this.variableName, "'?)"), this) : this.Error("Variable could not be found to assign to: '".concat(this.variableName, "'"), this)),
+                    this._runtimeAssignment && (this._runtimeAssignment.isGlobal = n.isGlobal)
+                }
+            }
+        }]),
+        r
+    }(F), zt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i, a = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1;
+            return n(this, r),
+            (i = e.call(this)).previousWeavePoint = null,
+            i.addContentToPreviousWeavePoint = !1,
+            i.hasSeenChoiceInSection = !1,
+            i.currentContainer = null,
+            i._unnamedGatherCount = 0,
+            i._choiceCount = 0,
+            i._rootContainer = null,
+            i._namedWeavePoints = new Map,
+            i.looseEnds = [],
+            i.gatherPointsToResolve = [],
+            i.ResolveWeavePointNaming = function() {
+                var t, e, n, r = [].concat(g(i.FindAll(Tt)((function(t) {
+                    return !(null === t.name || void 0 === t.name)
+                }
+                ))), g(i.FindAll(mt)((function(t) {
+                    return !(null === t.name || void 0 === t.name)
+                }
+                ))));
+                i._namedWeavePoints = new Map;
+                var a, o = S(r);
+                try {
+                    for (o.s(); !(a = o.n()).done; ) {
+                        var s = a.value
+                          , l = i.namedWeavePoints.get((null === (t = s.identifier) || void 0 === t ? void 0 : t.name) || "");
+                        if (l) {
+                            var u = l instanceof Tt ? "gather" : "choice"
+                              , c = l;
+                            i.Error("A ".concat(u, " with the same label name '").concat(s.name, "' already exists in this context on line ").concat(c.debugMetadata ? c.debugMetadata.startLineNumber : "NO DEBUG METADATA AVAILABLE"), s)
+                        }
+                        (null === (e = s.identifier) || void 0 === e ? void 0 : e.name) && i.namedWeavePoints.set(null === (n = s.identifier) || void 0 === n ? void 0 : n.name, s)
+                    }
+                } catch (t) {
+                    o.e(t)
+                } finally {
+                    o.f()
+                }
+            }
+            ,
+            i.ConstructWeaveHierarchyFromIndentation = function() {
+                for (var t = 0; t < i.content.length; ) {
+                    var e = i.content[t];
+                    if (e instanceof mt || e instanceof Tt) {
+                        var n = e.indentationDepth - 1;
+                        if (n > i.baseIndentIndex) {
+                            for (var a = t; t < i.content.length; ) {
+                                var o = _(i.content[t], mt) || _(i.content[t], Tt);
+                                if (null !== o)
+                                    if (o.indentationDepth - 1 <= i.baseIndentIndex)
+                                        break;
+                                t += 1
+                            }
+                            var s = t - a
+                              , l = i.content.slice(a, a + s);
+                            i.content.splice(a, s);
+                            var u = new r(l,n);
+                            i.InsertContent(a, u),
+                            t = a
+                        }
+                    }
+                    t += 1
+                }
+            }
+            ,
+            i.DetermineBaseIndentationFromContent = function(t) {
+                var e, n = S(t);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = e.value;
+                        if (r instanceof mt || r instanceof Tt)
+                            return r.indentationDepth - 1
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return 0
+            }
+            ,
+            i.GenerateRuntimeObject = function() {
+                i._rootContainer = new tt,
+                i.currentContainer = i._rootContainer,
+                i.looseEnds = [],
+                i.gatherPointsToResolve = [];
+                var t, e = S(i.content);
+                try {
+                    for (e.s(); !(t = e.n()).done; ) {
+                        var n = t.value;
+                        if (n instanceof mt || n instanceof Tt)
+                            i.AddRuntimeForWeavePoint(n);
+                        else if (n instanceof r) {
+                            var a, o = n;
+                            i.AddRuntimeForNestedWeave(o),
+                            (a = i.gatherPointsToResolve).splice.apply(a, [0, 0].concat(g(o.gatherPointsToResolve)))
+                        } else
+                            i.AddGeneralRuntimeContent(n.runtimeObject)
+                    }
+                } catch (t) {
+                    e.e(t)
+                } finally {
+                    e.f()
+                }
+                return i.PassLooseEndsToAncestors(),
+                i._rootContainer
+            }
+            ,
+            i.AddRuntimeForGather = function(t) {
+                var e = !i.hasSeenChoiceInSection;
+                i.hasSeenChoiceInSection = !1;
+                var n = t.runtimeContainer;
+                if (t.name || (n.name = "g-".concat(i._unnamedGatherCount),
+                i._unnamedGatherCount += 1),
+                e) {
+                    if (!i.currentContainer)
+                        throw new Error;
+                    i.currentContainer.AddContent(n)
+                } else
+                    i.rootContainer.AddToNamedContentOnly(n);
+                var r, a = S(i.looseEnds);
+                try {
+                    for (a.s(); !(r = a.n()).done; ) {
+                        var o = r.value;
+                        if (o instanceof Tt)
+                            if (o.indentationDepth == t.indentationDepth)
+                                continue;
+                        var s = null;
+                        if (o instanceof jt)
+                            s = o.runtimeObject;
+                        else {
+                            s = new vt;
+                            var l = o;
+                            if (!l.runtimeContainer)
+                                throw new Error;
+                            l.runtimeContainer.AddContent(s)
+                        }
+                        i.gatherPointsToResolve.push(new Bt(s,n))
+                    }
+                } catch (t) {
+                    a.e(t)
+                } finally {
+                    a.f()
+                }
+                i.looseEnds = [],
+                i.currentContainer = n
+            }
+            ,
+            i.AddRuntimeForWeavePoint = function(t) {
+                if (t instanceof Tt)
+                    i.AddRuntimeForGather(t);
+                else if (t instanceof mt) {
+                    if (!i.currentContainer)
+                        throw new Error;
+                    i.previousWeavePoint instanceof Tt && i.looseEnds.splice(i.looseEnds.indexOf(i.previousWeavePoint), 1);
+                    var e = t;
+                    if (i.currentContainer.AddContent(e.runtimeObject),
+                    !e.innerContentContainer)
+                        throw new Error;
+                    e.innerContentContainer.name = "c-".concat(i._choiceCount),
+                    i.currentContainer.AddToNamedContentOnly(e.innerContentContainer),
+                    i._choiceCount += 1,
+                    i.hasSeenChoiceInSection = !0
+                }
+                (i.addContentToPreviousWeavePoint = !1,
+                i.WeavePointHasLooseEnd(t)) && (i.looseEnds.push(t),
+                _(t, mt) && (i.addContentToPreviousWeavePoint = !0));
+                i.previousWeavePoint = t
+            }
+            ,
+            i.AddRuntimeForNestedWeave = function(t) {
+                i.AddGeneralRuntimeContent(t.rootContainer),
+                null !== i.previousWeavePoint && (i.looseEnds.splice(i.looseEnds.indexOf(i.previousWeavePoint), 1),
+                i.addContentToPreviousWeavePoint = !1)
+            }
+            ,
+            i.AddGeneralRuntimeContent = function(t) {
+                if (null !== t)
+                    if (i.addContentToPreviousWeavePoint) {
+                        if (!i.previousWeavePoint || !i.previousWeavePoint.runtimeContainer)
+                            throw new Error;
+                        i.previousWeavePoint.runtimeContainer.AddContent(t)
+                    } else {
+                        if (!i.currentContainer)
+                            throw new Error;
+                        i.currentContainer.AddContent(t)
+                    }
+            }
+            ,
+            i.PassLooseEndsToAncestors = function() {
+                if (0 !== i.looseEnds.length) {
+                    for (var t = null, e = null, n = !1, a = i.parent; null !== a; a = a.parent) {
+                        var o = _(a, r);
+                        o && (n || null !== t || (t = o),
+                        n && null === e && (e = o)),
+                        (a instanceof qt || a instanceof kt) && (n = !0)
+                    }
+                    if (null !== t || null !== e)
+                        for (var s = i.looseEnds.length - 1; s >= 0; s -= 1) {
+                            var l = i.looseEnds[s]
+                              , u = !1;
+                            if (n) {
+                                if (l instanceof mt && null !== t)
+                                    t.ReceiveLooseEnd(l),
+                                    u = !0;
+                                else if (!(l instanceof mt)) {
+                                    var c = t || e;
+                                    null !== c && (c.ReceiveLooseEnd(l),
+                                    u = !0)
+                                }
+                            } else
+                                (null == t ? void 0 : t.hasOwnProperty("ReceiveLooseEnd")) && t.ReceiveLooseEnd(l),
+                                u = !0;
+                            u && i.looseEnds.splice(s, 1)
+                        }
+                }
+            }
+            ,
+            i.ReceiveLooseEnd = function(t) {
+                i.looseEnds.push(t)
+            }
+            ,
+            i.WeavePointNamed = function(t) {
+                if (!i.namedWeavePoints)
+                    return null;
+                var e = i.namedWeavePoints.get(t);
+                return e || null
+            }
+            ,
+            i.IsGlobalDeclaration = function(t) {
+                var e = _(t, Jt);
+                return !!(e && e.isGlobalDeclaration && e.isDeclaration) || !!_(t, _t)
+            }
+            ,
+            i.ContentThatFollowsWeavePoint = function(t) {
+                var e = []
+                  , n = t;
+                if (null !== n.content) {
+                    var a, o = S(n.content);
+                    try {
+                        for (o.s(); !(a = o.n()).done; ) {
+                            var s = a.value;
+                            i.IsGlobalDeclaration(s) || e.push(s)
+                        }
+                    } catch (t) {
+                        o.e(t)
+                    } finally {
+                        o.f()
+                    }
+                }
+                var l = _(n.parent, r);
+                if (null === l)
+                    throw new Error("Expected weave point parent to be weave?");
+                for (var u = l.content.indexOf(n) + 1; u < l.content.length; u += 1) {
+                    var c = l.content[u];
+                    if (!i.IsGlobalDeclaration(c)) {
+                        if (c instanceof mt || c instanceof Tt)
+                            break;
+                        if (c instanceof r)
+                            break;
+                        e.push(c)
+                    }
+                }
+                return e
+            }
+            ,
+            i.ValidateTermination = function(t) {
+                if (!(i.lastParsedSignificantObject instanceof W))
+                    if (null !== i.looseEnds && i.looseEnds.length > 0) {
+                        var e, n = S(i.looseEnds);
+                        try {
+                            for (n.s(); !(e = n.n()).done; ) {
+                                var r = e.value
+                                  , a = i.ContentThatFollowsWeavePoint(r);
+                                i.ValidateFlowOfObjectsTerminates(a, r, t)
+                            }
+                        } catch (t) {
+                            n.e(t)
+                        } finally {
+                            n.f()
+                        }
+                    } else {
+                        var o, s = S(i.content);
+                        try {
+                            for (s.s(); !(o = s.n()).done; ) {
+                                var l = o.value;
+                                if (l instanceof mt || l instanceof jt)
+                                    return
+                            }
+                        } catch (t) {
+                            s.e(t)
+                        } finally {
+                            s.f()
+                        }
+                        i.ValidateFlowOfObjectsTerminates(i.content, h(i), t)
+                    }
+            }
+            ,
+            i.BadNestedTerminationHandler = function(t) {
+                for (var e = null, n = t.parent; null !== n; n = n.parent)
+                    if (n instanceof qt || n instanceof kt) {
+                        e = _(n, kt);
+                        break
+                    }
+                var r = "Choices nested in conditionals or sequences need to explicitly divert afterwards.";
+                null !== e && (1 === e.FindAll(mt)().length && (r = "Choices with conditions should be written: '* {condition} choice'. Otherwise, ".concat(r.toLowerCase())));
+                i.Error(r, t)
+            }
+            ,
+            i.ValidateFlowOfObjectsTerminates = function(t, e, n) {
+                var r, i = !1, a = e, o = S(t);
+                try {
+                    for (o.s(); !(r = o.n()).done; ) {
+                        var s = r.value;
+                        if (null !== s.Find(jt)((function(t) {
+                            return !(t.isThread || t.isTunnel || t.isFunctionCall || t.parent instanceof Vt)
+                        }
+                        )) && (i = !0),
+                        null != s.Find(Ut)()) {
+                            i = !0;
+                            break
+                        }
+                        a = s
+                    }
+                } catch (t) {
+                    o.e(t)
+                } finally {
+                    o.f()
+                }
+                if (!i) {
+                    if (a instanceof W)
+                        return;
+                    n(a)
+                }
+            }
+            ,
+            i.WeavePointHasLooseEnd = function(t) {
+                if (null === t.content)
+                    return !0;
+                for (var e = t.content.length - 1; e >= 0; --e) {
+                    var n = _(t.content[e], jt);
+                    if (n)
+                        if (!(n.isThread || n.isTunnel || n.isFunctionCall))
+                            return !1
+                }
+                return !0
+            }
+            ,
+            i.CheckForWeavePointNamingCollisions = function() {
+                if (i.namedWeavePoints) {
+                    var t, e = [], n = S(i.ancestry);
+                    try {
+                        for (n.s(); !(t = n.n()).done; ) {
+                            var r = _(t.value, Ot);
+                            if (!r)
+                                break;
+                            e.push(r)
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                    var a, o = S(i.namedWeavePoints);
+                    try {
+                        for (o.s(); !(a = o.n()).done; ) {
+                            var s, l = m(a.value, 2), u = l[0], c = l[1], h = S(e);
+                            try {
+                                for (h.s(); !(s = h.n()).done; ) {
+                                    var f = s.value.ContentWithNameAtLevel(u);
+                                    if (f && f !== c) {
+                                        var d = "".concat(c.GetType(), " '").concat(u, "' has the same label name as a ").concat(f.GetType(), " (on ").concat(f.debugMetadata, ")");
+                                        i.Error(d, c)
+                                    }
+                                }
+                            } catch (t) {
+                                h.e(t)
+                            } finally {
+                                h.f()
+                            }
+                        }
+                    } catch (t) {
+                        o.e(t)
+                    } finally {
+                        o.f()
+                    }
+                }
+            }
+            ,
+            i.baseIndentIndex = -1 == a ? i.DetermineBaseIndentationFromContent(t) : a,
+            i.AddContent(t),
+            i.ConstructWeaveHierarchyFromIndentation(),
+            i
+        }
+        return i(r, [{
+            key: "rootContainer",
+            get: function() {
+                return this._rootContainer || (this._rootContainer = this.GenerateRuntimeObject()),
+                this._rootContainer
+            }
+        }, {
+            key: "namedWeavePoints",
+            get: function() {
+                return this._namedWeavePoints
+            }
+        }, {
+            key: "lastParsedSignificantObject",
+            get: function() {
+                if (0 === this.content.length)
+                    return null;
+                for (var t = null, e = this.content.length - 1; e >= 0; --e) {
+                    var n = _(t = this.content[e], Et);
+                    if ((!n || "\n" !== n.text) && !this.IsGlobalDeclaration(t))
+                        break
+                }
+                var i = _(t, r);
+                return i && (t = i.lastParsedSignificantObject),
+                t
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Weave"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                null !== this.looseEnds && this.looseEnds.length > 0) {
+                    for (var e = !1, n = this.parent; null !== n; n = n.parent)
+                        if (n instanceof qt || n instanceof kt) {
+                            e = !0;
+                            break
+                        }
+                    e && this.ValidateTermination(this.BadNestedTerminationHandler)
+                }
+                var i, a = S(this.gatherPointsToResolve);
+                try {
+                    for (a.s(); !(i = a.n()).done; ) {
+                        var s = i.value;
+                        s.divert.targetPath = s.targetRuntimeObj.path
+                    }
+                } catch (t) {
+                    a.e(t)
+                } finally {
+                    a.f()
+                }
+                this.CheckForWeavePointNamingCollisions()
+            }
+        }]),
+        r
+    }(F), $t = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this))._contentContainer = null,
+            i._conditionalDivert = null,
+            i._ownExpression = null,
+            i._innerWeave = null,
+            i.isTrueBranch = !1,
+            i.matchingEquality = !1,
+            i.isElse = !1,
+            i.isInline = !1,
+            i.returnDivert = null,
+            i.GenerateRuntimeObject = function() {
+                if (i._innerWeave) {
+                    var t, e = S(i._innerWeave.content);
+                    try {
+                        for (e.s(); !(t = e.n()).done; ) {
+                            var n = _(t.value, Et);
+                            n && n.text.startsWith("else:") && i.Warning("Saw the text 'else:' which is being treated as content. Did you mean '- else:'?", n)
+                        }
+                    } catch (t) {
+                        e.e(t)
+                    } finally {
+                        e.f()
+                    }
+                }
+                var r = new tt
+                  , a = i.matchingEquality && !i.isElse;
+                if (a && r.AddContent(et.Duplicate()),
+                i._conditionalDivert = new vt,
+                i._conditionalDivert.isConditional = !i.isElse,
+                !i.isTrueBranch && !i.isElse) {
+                    var o = null !== i.ownExpression;
+                    o && r.AddContent(et.EvalStart()),
+                    i.ownExpression && i.ownExpression.GenerateIntoContainer(r),
+                    i.matchingEquality && r.AddContent(it.CallWithName("==")),
+                    o && r.AddContent(et.EvalEnd())
+                }
+                return r.AddContent(i._conditionalDivert),
+                i._contentContainer = i.GenerateRuntimeForContent(),
+                i._contentContainer.name = "b",
+                i.isInline || i._contentContainer.InsertContent(new $("\n"), 0),
+                (a || i.isElse && i.matchingEquality) && i._contentContainer.InsertContent(et.PopEvaluatedValue(), 0),
+                r.AddToNamedContentOnly(i._contentContainer),
+                i.returnDivert = new vt,
+                i._contentContainer.AddContent(i.returnDivert),
+                r
+            }
+            ,
+            i.GenerateRuntimeForContent = function() {
+                return null === i._innerWeave ? new tt : i._innerWeave.rootContainer
+            }
+            ,
+            t && (i._innerWeave = new zt(t),
+            i.AddContent(i._innerWeave)),
+            i
+        }
+        return i(r, [{
+            key: "ownExpression",
+            get: function() {
+                return this._ownExpression
+            },
+            set: function(t) {
+                this._ownExpression = t,
+                this._ownExpression && this.AddContent(this._ownExpression)
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "ConditionalSingleBranch"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                if (!this._conditionalDivert || !this._contentContainer)
+                    throw new Error;
+                this._conditionalDivert.targetPath = this._contentContainer.path,
+                p(o(r.prototype), "ResolveReferences", this).call(this, t)
+            }
+        }]),
+        r
+    }(F);
+    !function(t) {
+        t[t.ParsingString = 1] = "ParsingString",
+        t[t.TagActive = 2] = "TagActive"
+    }(Gt || (Gt = {}));
+    var Xt, Yt = function() {
+        function t() {
+            n(this, t),
+            this.startLineNumber = 0,
+            this.endLineNumber = 0,
+            this.startCharacterNumber = 0,
+            this.endCharacterNumber = 0,
+            this.fileName = null,
+            this.sourceName = null
+        }
+        return i(t, [{
+            key: "Merge",
+            value: function(e) {
+                var n = new t;
+                return n.fileName = this.fileName,
+                n.sourceName = this.sourceName,
+                this.startLineNumber < e.startLineNumber ? (n.startLineNumber = this.startLineNumber,
+                n.startCharacterNumber = this.startCharacterNumber) : this.startLineNumber > e.startLineNumber ? (n.startLineNumber = e.startLineNumber,
+                n.startCharacterNumber = e.startCharacterNumber) : (n.startLineNumber = this.startLineNumber,
+                n.startCharacterNumber = Math.min(this.startCharacterNumber, e.startCharacterNumber)),
+                this.endLineNumber > e.endLineNumber ? (n.endLineNumber = this.endLineNumber,
+                n.endCharacterNumber = this.endCharacterNumber) : this.endLineNumber < e.endLineNumber ? (n.endLineNumber = e.endLineNumber,
+                n.endCharacterNumber = e.endCharacterNumber) : (n.endLineNumber = this.endLineNumber,
+                n.endCharacterNumber = Math.max(this.endCharacterNumber, e.endCharacterNumber)),
+                n
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                return null !== this.fileName ? "line ".concat(this.startLineNumber, " of ").concat(this.fileName, '"') : "line " + this.startLineNumber
+            }
+        }]),
+        t
+    }(), Zt = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            return n(this, r),
+            (a = e.call(this)).identifier = t,
+            a.argumentNames = i,
+            a.GenerateRuntimeObject = function() {
+                return a.story.AddExternal(h(a)),
+                null
+            }
+            ,
+            a
+        }
+        return i(r, [{
+            key: "name",
+            get: function() {
+                var t;
+                return (null === (t = this.identifier) || void 0 === t ? void 0 : t.name) || null
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "EXTERNAL"
+            }
+        }, {
+            key: "toString",
+            value: function() {
+                var t;
+                return "EXTERNAL ".concat(null === (t = this.identifier) || void 0 === t ? void 0 : t.name)
+            }
+        }]),
+        r
+    }(F), Qt = i((function t(e, r, i) {
+        n(this, t),
+        this.name = e,
+        this.args = r,
+        this.isFunction = i
+    }
+    )), te = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            return n(this, r),
+            e.call(this, t)
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Glue"
+            }
+        }]),
+        r
+    }(function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this))._objToWrap = t,
+            i.GenerateRuntimeObject = function() {
+                return i._objToWrap
+            }
+            ,
+            i
+        }
+        return i(r)
+    }(F)), ee = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            return n(this, r),
+            e.apply(this, arguments)
+        }
+        return i(r, [{
+            key: "toString",
+            value: function() {
+                return "Glue"
+            }
+        }]),
+        r
+    }(V), ne = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i, a) {
+            var o;
+            return n(this, r),
+            (o = e.call(this)).varIdentifier = t,
+            o._runtimeAssignment = null,
+            o.expression = null,
+            o.GenerateIntoContainer = function(t) {
+                var e, n;
+                t.AddContent(new Ft((null === (e = o.varIdentifier) || void 0 === e ? void 0 : e.name) || null)),
+                o.expression ? o.expression.GenerateIntoContainer(t) : t.AddContent(new J(1)),
+                t.AddContent(it.CallWithName(o.isInc ? "+" : "-")),
+                o._runtimeAssignment = new pt((null === (n = o.varIdentifier) || void 0 === n ? void 0 : n.name) || null,!1),
+                t.AddContent(o._runtimeAssignment)
+            }
+            ,
+            o.toString = function() {
+                var t, e;
+                return o.expression ? "".concat(null === (t = o.varIdentifier) || void 0 === t ? void 0 : t.name).concat(o.isInc ? " += " : " -= ").concat(o.expression) : "".concat(null === (e = o.varIdentifier) || void 0 === e ? void 0 : e.name) + (o.isInc ? "++" : "--")
+            }
+            ,
+            i instanceof nt ? (o.expression = i,
+            o.AddContent(o.expression),
+            o.isInc = Boolean(a)) : o.isInc = i,
+            o
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "IncDecExpression"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                var e;
+                p(o(r.prototype), "ResolveReferences", this).call(this, t);
+                var n = t.ResolveVariableWithName((null === (e = this.varIdentifier) || void 0 === e ? void 0 : e.name) || "", this);
+                if (n.found || this.Error("variable for ".concat(this.incrementDecrementWord, " could not be found: '").concat(this.varIdentifier, "' after searching: {this.descriptionOfScope}")),
+                !this._runtimeAssignment)
+                    throw new Error;
+                this._runtimeAssignment.isGlobal = n.isGlobal,
+                this.parent instanceof zt || this.parent instanceof Ot || this.parent instanceof It || this.Error("Can't use ".concat(this.incrementDecrementWord, " as sub-expression"))
+            }
+        }, {
+            key: "incrementDecrementWord",
+            get: function() {
+                return this.isInc ? "increment" : "decrement"
+            }
+        }]),
+        r
+    }(nt), re = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).includedStory = t,
+            i.GenerateRuntimeObject = function() {
+                return null
+            }
+            ,
+            i
+        }
+        return i(r)
+    }(F), ie = i((function t(e, r, i) {
+        var a = this;
+        n(this, t),
+        this.type = e,
+        this.precedence = r,
+        this.requireWhitespace = i,
+        this.toString = function() {
+            return a.type
+        }
+    }
+    )), ae = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i, a, o) {
+            return n(this, r),
+            e.call(this, t, i, a, o)
+        }
+        return i(r, [{
+            key: "flowLevel",
+            get: function() {
+                return bt.Knot
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return this.isFunction ? "Function" : "Knot"
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t);
+                var e = this.story;
+                for (var n in this.subFlowsByName) {
+                    var i = e.ContentWithNameAtLevel(n, bt.Knot, !1);
+                    if (i) {
+                        var a = this.subFlowsByName.get(n)
+                          , s = "Stitch '".concat(a ? a.name : "NO STITCH FOUND", "' has the same name as a knot (on ").concat(i.debugMetadata, ")");
+                        this.Error(s, a)
+                    }
+                }
+            }
+        }]),
+        r
+    }(Ot), oe = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).itemIdentifierList = t,
+            i.GenerateIntoContainer = function(t) {
+                var e, n, r = new M;
+                if (null != i.itemIdentifierList) {
+                    var a, o = S(i.itemIdentifierList);
+                    try {
+                        for (o.s(); !(a = o.n()).done; ) {
+                            var s = a.value
+                              , l = (null === (e = null == s ? void 0 : s.name) || void 0 === e ? void 0 : e.split(".")) || []
+                              , u = null
+                              , c = "";
+                            l.length > 1 ? (u = l[0],
+                            c = l[1]) : c = l[0];
+                            var f = i.story.ResolveListItem(u, c, h(i));
+                            if (null === f)
+                                null === u ? i.Error("Could not find list definition that contains item '".concat(s, "'")) : i.Error("Could not find list item ".concat(s));
+                            else {
+                                if (null == f.parent)
+                                    return void i.Error("Could not find list definition for item ".concat(s));
+                                u || (u = (null === (n = f.parent.identifier) || void 0 === n ? void 0 : n.name) || null);
+                                var d = new B(u,f.name || null);
+                                r.has(d.serialized()) ? i.Warning("Duplicate of item '".concat(s, "' in list.")) : r.Add(d, f.seriesValue)
+                            }
+                        }
+                    } catch (t) {
+                        o.e(t)
+                    } finally {
+                        o.f()
+                    }
+                }
+                t.AddContent(new Z(r))
+            }
+            ,
+            i
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "List"
+            }
+        }]),
+        r
+    }(nt), se = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a, s, l = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null;
+            return n(this, r),
+            (s = e.call(this)).indentifier = t,
+            s.inInitialList = i,
+            s.explicitValue = l,
+            s.seriesValue = 0,
+            s.parent = null,
+            s.GenerateRuntimeObject = function() {
+                throw new Error("Not implemented.")
+            }
+            ,
+            s.toString = function() {
+                return s.fullName
+            }
+            ,
+            s.parent = p((a = h(s),
+            o(r.prototype)), "parent", a),
+            s
+        }
+        return i(r, [{
+            key: "fullName",
+            get: function() {
+                var t, e = this.parent;
+                if (null === e)
+                    throw new Error("Can't get full name without a parent list.");
+                return "".concat(null === (t = e.identifier) || void 0 === t ? void 0 : t.name, ".").concat(this.name)
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "ListElement"
+            }
+        }, {
+            key: "name",
+            get: function() {
+                var t;
+                return (null === (t = this.indentifier) || void 0 === t ? void 0 : t.name) || null
+            }
+        }, {
+            key: "ResolveReferences",
+            value: function(t) {
+                p(o(r.prototype), "ResolveReferences", this).call(this, t),
+                t.CheckForNamingCollisions(this, this.indentifier, ft.ListItem)
+            }
+        }]),
+        r
+    }(F);
+    !function(t) {
+        t[t.InnerBlock = 0] = "InnerBlock",
+        t[t.Stitch = 1] = "Stitch",
+        t[t.Knot = 2] = "Knot",
+        t[t.Top = 3] = "Top"
+    }(Xt || (Xt = {}));
+    var le = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i, a, s) {
+            var l, u;
+            return n(this, r),
+            (u = e.call(this, t, i, a, s)).toString = function() {
+                return "".concat(null !== u.parent ? u.parent + " > " : "").concat(p((l = h(u),
+                o(r.prototype)), "toString", l).call(l))
+            }
+            ,
+            u
+        }
+        return i(r, [{
+            key: "flowLevel",
+            get: function() {
+                return bt.Stitch
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Stitch"
+            }
+        }]),
+        r
+    }(Ot)
+      , ue = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).text = t.toString() || "",
+            i
+        }
+        return i(r, [{
+            key: "toString",
+            value: function() {
+                return "# " + this.text
+            }
+        }]),
+        r
+    }(V)
+      , ce = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r() {
+            var t;
+            return n(this, r),
+            (t = e.apply(this, arguments)).text = "",
+            t.index = 0,
+            t.threadAtGeneration = null,
+            t.sourcePath = "",
+            t.targetPath = null,
+            t.isInvisibleDefault = !1,
+            t.tags = null,
+            t.originalThreadIndex = 0,
+            t
+        }
+        return i(r, [{
+            key: "pathStringOnChoice",
+            get: function() {
+                return null === this.targetPath ? L("Choice.targetPath") : this.targetPath.toString()
+            },
+            set: function(t) {
+                this.targetPath = new R(t)
+            }
+        }]),
+        r
+    }(V)
+      , he = function() {
+        function t(e) {
+            n(this, t),
+            this._lists = new Map,
+            this._allUnambiguousListValueCache = new Map;
+            var r, i = S(e);
+            try {
+                for (i.s(); !(r = i.n()).done; ) {
+                    var a = r.value;
+                    this._lists.set(a.name, a);
+                    var o, s = S(a.items);
+                    try {
+                        for (s.s(); !(o = s.n()).done; ) {
+                            var l = m(o.value, 2)
+                              , u = l[0]
+                              , c = l[1]
+                              , h = B.fromSerializedKey(u)
+                              , f = new Z(h,c);
+                            if (!h.itemName)
+                                throw new Error("item.itemName is null or undefined.");
+                            this._allUnambiguousListValueCache.set(h.itemName, f),
+                            this._allUnambiguousListValueCache.set(h.fullName, f)
+                        }
+                    } catch (t) {
+                        s.e(t)
+                    } finally {
+                        s.f()
+                    }
+                }
+            } catch (t) {
+                i.e(t)
+            } finally {
+                i.f()
+            }
+        }
+        return i(t, [{
+            key: "lists",
+            get: function() {
+                var t, e = [], n = S(this._lists);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        var r = m(t.value, 2)[1];
+                        e.push(r)
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return e
+            }
+        }, {
+            key: "TryListGetDefinition",
+            value: function(t, e) {
+                if (null === t)
+                    return {
+                        result: e,
+                        exists: !1
+                    };
+                var n = this._lists.get(t);
+                return n ? {
+                    result: n,
+                    exists: !0
+                } : {
+                    result: e,
+                    exists: !1
+                }
+            }
+        }, {
+            key: "FindSingleItemListWithName",
+            value: function(t) {
+                if (null === t)
+                    return L("name");
+                var e = this._allUnambiguousListValueCache.get(t);
+                return void 0 !== e ? e : null
+            }
+        }]),
+        t
+    }()
+      , fe = function() {
+        function t() {
+            n(this, t)
+        }
+        return i(t, null, [{
+            key: "JArrayToRuntimeObjList",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] && arguments[1]
+                  , n = t.length;
+                e && n--;
+                for (var r = [], i = 0; i < n; i++) {
+                    var a = t[i]
+                      , o = this.JTokenToRuntimeObject(a);
+                    if (null === o)
+                        return L("runtimeObj");
+                    r.push(o)
+                }
+                return r
+            }
+        }, {
+            key: "WriteDictionaryRuntimeObjs",
+            value: function(t, e) {
+                t.WriteObjectStart();
+                var n, r = S(e);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = m(n.value, 2)
+                          , a = i[0]
+                          , o = i[1];
+                        t.WritePropertyStart(a),
+                        this.WriteRuntimeObject(t, o),
+                        t.WritePropertyEnd()
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                t.WriteObjectEnd()
+            }
+        }, {
+            key: "WriteListRuntimeObjs",
+            value: function(t, e) {
+                t.WriteArrayStart();
+                var n, r = S(e);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = n.value;
+                        this.WriteRuntimeObject(t, i)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                t.WriteArrayEnd()
+            }
+        }, {
+            key: "WriteIntDictionary",
+            value: function(t, e) {
+                t.WriteObjectStart();
+                var n, r = S(e);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = m(n.value, 2)
+                          , a = i[0]
+                          , o = i[1];
+                        t.WriteIntProperty(a, o)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                t.WriteObjectEnd()
+            }
+        }, {
+            key: "WriteRuntimeObject",
+            value: function(e, n) {
+                var r = _(n, tt);
+                if (r)
+                    this.WriteRuntimeContainer(e, r);
+                else {
+                    var i = _(n, vt);
+                    if (i) {
+                        var a, o = "->";
+                        return i.isExternal ? o = "x()" : i.pushesToStack && (i.stackPushType == ct.Function ? o = "f()" : i.stackPushType == ct.Tunnel && (o = "->t->")),
+                        a = i.hasVariableTarget ? i.variableDivertName : i.targetPathString,
+                        e.WriteObjectStart(),
+                        e.WriteProperty(o, a),
+                        i.hasVariableTarget && e.WriteProperty("var", !0),
+                        i.isConditional && e.WriteProperty("c", !0),
+                        i.externalArgs > 0 && e.WriteIntProperty("exArgs", i.externalArgs),
+                        void e.WriteObjectEnd()
+                    }
+                    var s = _(n, ht);
+                    if (s)
+                        return e.WriteObjectStart(),
+                        e.WriteProperty("*", s.pathStringOnChoice),
+                        e.WriteIntProperty("flg", s.flags),
+                        void e.WriteObjectEnd();
+                    var l = _(n, H);
+                    if (l)
+                        e.WriteBool(l.value);
+                    else {
+                        var u = _(n, J);
+                        if (u)
+                            e.WriteInt(u.value);
+                        else {
+                            var c = _(n, z);
+                            if (c)
+                                e.WriteFloat(c.value);
+                            else {
+                                var h = _(n, $);
+                                if (h)
+                                    h.isNewline ? e.Write("\n", !1) : (e.WriteStringStart(),
+                                    e.WriteStringInner("^"),
+                                    e.WriteStringInner(h.value),
+                                    e.WriteStringEnd());
+                                else {
+                                    var f = _(n, Z);
+                                    if (f)
+                                        this.WriteInkList(e, f);
+                                    else {
+                                        var d = _(n, X);
+                                        if (d)
+                                            return e.WriteObjectStart(),
+                                            null === d.value ? L("divTargetVal.value") : (e.WriteProperty("^->", d.value.componentsString),
+                                            void e.WriteObjectEnd());
+                                        var v = _(n, Y);
+                                        if (v)
+                                            return e.WriteObjectStart(),
+                                            e.WriteProperty("^var", v.value),
+                                            e.WriteIntProperty("ci", v.contextIndex),
+                                            void e.WriteObjectEnd();
+                                        if (_(n, ee))
+                                            e.Write("<>");
+                                        else {
+                                            var p = _(n, et);
+                                            if (p)
+                                                e.Write(t._controlCommandNames[p.commandType]);
+                                            else {
+                                                var m = _(n, it);
+                                                if (m) {
+                                                    var g = m.name;
+                                                    return "^" == g && (g = "L^"),
+                                                    void e.Write(g)
+                                                }
+                                                var y = _(n, Ft);
+                                                if (y) {
+                                                    e.WriteObjectStart();
+                                                    var C = y.pathStringForCount;
+                                                    return null != C ? e.WriteProperty("CNT?", C) : e.WriteProperty("VAR?", y.name),
+                                                    void e.WriteObjectEnd()
+                                                }
+                                                var S = _(n, pt);
+                                                if (S) {
+                                                    e.WriteObjectStart();
+                                                    var b = S.isGlobal ? "VAR=" : "temp=";
+                                                    return e.WriteProperty(b, S.variableName),
+                                                    S.isNewDeclaration || e.WriteProperty("re", !0),
+                                                    void e.WriteObjectEnd()
+                                                }
+                                                if (_(n, rt))
+                                                    e.Write("void");
+                                                else {
+                                                    var w = _(n, ue);
+                                                    if (w)
+                                                        return e.WriteObjectStart(),
+                                                        e.WriteProperty("#", w.text),
+                                                        void e.WriteObjectEnd();
+                                                    var k = _(n, ce);
+                                                    if (!k)
+                                                        throw new Error("Failed to convert runtime object to Json token: " + n);
+                                                    this.WriteChoice(e, k)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, {
+            key: "JObjectToDictionaryRuntimeObjs",
+            value: function(t) {
+                var e = new Map;
+                for (var n in t)
+                    if (t.hasOwnProperty(n)) {
+                        var r = this.JTokenToRuntimeObject(t[n]);
+                        if (null === r)
+                            return L("inkObject");
+                        e.set(n, r)
+                    }
+                return e
+            }
+        }, {
+            key: "JObjectToIntDictionary",
+            value: function(t) {
+                var e = new Map;
+                for (var n in t)
+                    t.hasOwnProperty(n) && e.set(n, parseInt(t[n]));
+                return e
+            }
+        }, {
+            key: "JTokenToRuntimeObject",
+            value: function(n) {
+                if ("number" == typeof n && !isNaN(n) || "boolean" == typeof n)
+                    return K.Create(n);
+                if ("string" == typeof n) {
+                    var r = n.toString()
+                      , i = r[0];
+                    if ("^" == i)
+                        return new $(r.substring(1));
+                    if ("\n" == i && 1 == r.length)
+                        return new $("\n");
+                    if ("<>" == r)
+                        return new ee;
+                    for (var a = 0; a < t._controlCommandNames.length; ++a) {
+                        if (r == t._controlCommandNames[a])
+                            return new et(a)
+                    }
+                    if ("L^" == r && (r = "^"),
+                    it.CallExistsWithName(r))
+                        return it.CallWithName(r);
+                    if ("->->" == r)
+                        return et.PopTunnel();
+                    if ("~ret" == r)
+                        return et.PopFunction();
+                    if ("void" == r)
+                        return new rt
+                }
+                if ("object" === e(n) && !Array.isArray(n)) {
+                    var o, s = n;
+                    if (s["^->"])
+                        return o = s["^->"],
+                        new X(new R(o.toString()));
+                    if (s["^var"]) {
+                        o = s["^var"];
+                        var l = new Y(o.toString());
+                        return "ci"in s && (o = s.ci,
+                        l.contextIndex = parseInt(o)),
+                        l
+                    }
+                    var u = !1
+                      , c = !1
+                      , h = ct.Function
+                      , f = !1;
+                    if ((o = s["->"]) ? u = !0 : (o = s["f()"]) ? (u = !0,
+                    c = !0,
+                    h = ct.Function) : (o = s["->t->"]) ? (u = !0,
+                    c = !0,
+                    h = ct.Tunnel) : (o = s["x()"]) && (u = !0,
+                    f = !0,
+                    c = !1,
+                    h = ct.Function),
+                    u) {
+                        var d = new vt;
+                        d.pushesToStack = c,
+                        d.stackPushType = h,
+                        d.isExternal = f;
+                        var v = o.toString();
+                        return (o = s.var) ? d.variableDivertName = v : d.targetPathString = v,
+                        d.isConditional = !!s.c,
+                        f && (o = s.exArgs) && (d.externalArgs = parseInt(o)),
+                        d
+                    }
+                    if (o = s["*"]) {
+                        var p = new ht;
+                        return p.pathStringOnChoice = o.toString(),
+                        (o = s.flg) && (p.flags = parseInt(o)),
+                        p
+                    }
+                    if (o = s["VAR?"])
+                        return new Ft(o.toString());
+                    if (o = s["CNT?"]) {
+                        var m = new Ft;
+                        return m.pathStringForCount = o.toString(),
+                        m
+                    }
+                    var g = !1
+                      , y = !1;
+                    if ((o = s["VAR="]) ? (g = !0,
+                    y = !0) : (o = s["temp="]) && (g = !0,
+                    y = !1),
+                    g) {
+                        var C = o.toString()
+                          , S = !s.re
+                          , b = new pt(C,S);
+                        return b.isGlobal = y,
+                        b
+                    }
+                    if (void 0 !== s["#"])
+                        return o = s["#"],
+                        new ue(o.toString());
+                    if (o = s.list) {
+                        var w = o
+                          , k = new M;
+                        if (o = s.origins) {
+                            var E = o;
+                            k.SetInitialOriginNames(E)
+                        }
+                        for (var _ in w)
+                            if (w.hasOwnProperty(_)) {
+                                var T = w[_]
+                                  , A = new B(_)
+                                  , P = parseInt(T);
+                                k.Add(A, P)
+                            }
+                        return new Z(k)
+                    }
+                    if (null != s.originalChoicePath)
+                        return this.JObjectToChoice(s)
+                }
+                if (Array.isArray(n))
+                    return this.JArrayToContainer(n);
+                if (null == n)
+                    return null;
+                throw new Error("Failed to convert token to runtime object: " + this.toJson(n, ["parent"]))
+            }
+        }, {
+            key: "toJson",
+            value: function(t, e, n) {
+                return JSON.stringify(t, (function(t, n) {
+                    return (null == e ? void 0 : e.some((function(e) {
+                        return e === t
+                    }
+                    ))) ? void 0 : n
+                }
+                ), n)
+            }
+        }, {
+            key: "WriteRuntimeContainer",
+            value: function(t, e) {
+                var n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                if (t.WriteArrayStart(),
+                null === e)
+                    return L("container");
+                var r, i = S(e.content);
+                try {
+                    for (i.s(); !(r = i.n()).done; ) {
+                        var a = r.value;
+                        this.WriteRuntimeObject(t, a)
+                    }
+                } catch (t) {
+                    i.e(t)
+                } finally {
+                    i.f()
+                }
+                var o = e.namedOnlyContent
+                  , s = e.countFlags
+                  , l = null != e.name && !n
+                  , u = null != o || s > 0 || l;
+                if (u && t.WriteObjectStart(),
+                null != o) {
+                    var c, h = S(o);
+                    try {
+                        for (h.s(); !(c = h.n()).done; ) {
+                            var f = m(c.value, 2)
+                              , d = f[0]
+                              , v = f[1]
+                              , p = d
+                              , g = _(v, tt);
+                            t.WritePropertyStart(p),
+                            this.WriteRuntimeContainer(t, g, !0),
+                            t.WritePropertyEnd()
+                        }
+                    } catch (t) {
+                        h.e(t)
+                    } finally {
+                        h.f()
+                    }
+                }
+                s > 0 && t.WriteIntProperty("#f", s),
+                l && t.WriteProperty("#n", e.name),
+                u ? t.WriteObjectEnd() : t.WriteNull(),
+                t.WriteArrayEnd()
+            }
+        }, {
+            key: "JArrayToContainer",
+            value: function(t) {
+                var e = new tt;
+                e.content = this.JArrayToRuntimeObjList(t, !0);
+                var n = t[t.length - 1];
+                if (null != n) {
+                    var r = new Map;
+                    for (var i in n)
+                        if ("#f" == i)
+                            e.countFlags = parseInt(n[i]);
+                        else if ("#n" == i)
+                            e.name = n[i].toString();
+                        else {
+                            var a = this.JTokenToRuntimeObject(n[i])
+                              , o = _(a, tt);
+                            o && (o.name = i),
+                            r.set(i, a)
+                        }
+                    e.namedOnlyContent = r
+                }
+                return e
+            }
+        }, {
+            key: "JObjectToChoice",
+            value: function(t) {
+                var e = new ce;
+                return e.text = t.text.toString(),
+                e.index = parseInt(t.index),
+                e.sourcePath = t.originalChoicePath.toString(),
+                e.originalThreadIndex = parseInt(t.originalThreadIndex),
+                e.pathStringOnChoice = t.targetPath.toString(),
+                e
+            }
+        }, {
+            key: "WriteChoice",
+            value: function(t, e) {
+                t.WriteObjectStart(),
+                t.WriteProperty("text", e.text),
+                t.WriteIntProperty("index", e.index),
+                t.WriteProperty("originalChoicePath", e.sourcePath),
+                t.WriteIntProperty("originalThreadIndex", e.originalThreadIndex),
+                t.WriteProperty("targetPath", e.pathStringOnChoice),
+                t.WriteObjectEnd()
+            }
+        }, {
+            key: "WriteInkList",
+            value: function(t, e) {
+                var n = e.value;
+                if (null === n)
+                    return L("rawList");
+                t.WriteObjectStart(),
+                t.WritePropertyStart("list"),
+                t.WriteObjectStart();
+                var r, i = S(n);
+                try {
+                    for (i.s(); !(r = i.n()).done; ) {
+                        var a = m(r.value, 2)
+                          , o = a[0]
+                          , s = a[1]
+                          , l = B.fromSerializedKey(o)
+                          , u = s;
+                        if (null === l.itemName)
+                            return L("item.itemName");
+                        t.WritePropertyNameStart(),
+                        t.WritePropertyNameInner(l.originName ? l.originName : "?"),
+                        t.WritePropertyNameInner("."),
+                        t.WritePropertyNameInner(l.itemName),
+                        t.WritePropertyNameEnd(),
+                        t.Write(u),
+                        t.WritePropertyEnd()
+                    }
+                } catch (t) {
+                    i.e(t)
+                } finally {
+                    i.f()
+                }
+                if (t.WriteObjectEnd(),
+                t.WritePropertyEnd(),
+                0 == n.Count && null != n.originNames && n.originNames.length > 0) {
+                    t.WritePropertyStart("origins"),
+                    t.WriteArrayStart();
+                    var c, h = S(n.originNames);
+                    try {
+                        for (h.s(); !(c = h.n()).done; ) {
+                            var f = c.value;
+                            t.Write(f)
+                        }
+                    } catch (t) {
+                        h.e(t)
+                    } finally {
+                        h.f()
+                    }
+                    t.WriteArrayEnd(),
+                    t.WritePropertyEnd()
+                }
+                t.WriteObjectEnd()
+            }
+        }, {
+            key: "ListDefinitionsToJToken",
+            value: function(t) {
+                var e, n = {}, r = S(t.lists);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i, a = e.value, o = {}, s = S(a.items);
+                        try {
+                            for (s.s(); !(i = s.n()).done; ) {
+                                var l = m(i.value, 2)
+                                  , u = l[0]
+                                  , c = l[1]
+                                  , h = B.fromSerializedKey(u);
+                                if (null === h.itemName)
+                                    return L("item.itemName");
+                                o[h.itemName] = c
+                            }
+                        } catch (t) {
+                            s.e(t)
+                        } finally {
+                            s.f()
+                        }
+                        n[a.name] = o
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return n
+            }
+        }, {
+            key: "JTokenToListDefinitions",
+            value: function(t) {
+                var e = t
+                  , n = [];
+                for (var r in e)
+                    if (e.hasOwnProperty(r)) {
+                        var i = r.toString()
+                          , a = e[r]
+                          , o = new Map;
+                        for (var s in a)
+                            if (e.hasOwnProperty(r)) {
+                                var l = a[s];
+                                o.set(s, parseInt(l))
+                            }
+                        var u = new Kt(i,o);
+                        n.push(u)
+                    }
+                return new he(n)
+            }
+        }]),
+        t
+    }();
+    fe._controlCommandNames = function() {
+        var t = [];
+        t[et.CommandType.EvalStart] = "ev",
+        t[et.CommandType.EvalOutput] = "out",
+        t[et.CommandType.EvalEnd] = "/ev",
+        t[et.CommandType.Duplicate] = "du",
+        t[et.CommandType.PopEvaluatedValue] = "pop",
+        t[et.CommandType.PopFunction] = "~ret",
+        t[et.CommandType.PopTunnel] = "->->",
+        t[et.CommandType.BeginString] = "str",
+        t[et.CommandType.EndString] = "/str",
+        t[et.CommandType.NoOp] = "nop",
+        t[et.CommandType.ChoiceCount] = "choiceCnt",
+        t[et.CommandType.Turns] = "turn",
+        t[et.CommandType.TurnsSince] = "turns",
+        t[et.CommandType.ReadCount] = "readc",
+        t[et.CommandType.Random] = "rnd",
+        t[et.CommandType.SeedRandom] = "srnd",
+        t[et.CommandType.VisitIndex] = "visit",
+        t[et.CommandType.SequenceShuffleIndex] = "seq",
+        t[et.CommandType.StartThread] = "thread",
+        t[et.CommandType.Done] = "done",
+        t[et.CommandType.End] = "end",
+        t[et.CommandType.ListFromInt] = "listInt",
+        t[et.CommandType.ListRange] = "range",
+        t[et.CommandType.ListRandom] = "lrnd",
+        t[et.CommandType.BeginTag] = "#",
+        t[et.CommandType.EndTag] = "/#";
+        for (var e = 0; e < et.CommandType.TOTAL_VALUES; ++e)
+            if (null == t[e])
+                throw new Error("Control command not accounted for in serialisation");
+        return t
+    }();
+    var de = function() {
+        function e() {
+            if (n(this, e),
+            this._threadCounter = 0,
+            this._startOfRoot = dt.Null,
+            arguments[0]instanceof t.Story) {
+                var r = arguments[0];
+                this._startOfRoot = dt.StartOf(r.rootContentContainer),
+                this.Reset()
+            } else {
+                var i = arguments[0];
+                this._threads = [];
+                var a, o = S(i._threads);
+                try {
+                    for (o.s(); !(a = o.n()).done; ) {
+                        var s = a.value;
+                        this._threads.push(s.Copy())
+                    }
+                } catch (t) {
+                    o.e(t)
+                } finally {
+                    o.f()
+                }
+                this._threadCounter = i._threadCounter,
+                this._startOfRoot = i._startOfRoot.copy()
+            }
+        }
+        return i(e, [{
+            key: "elements",
+            get: function() {
+                return this.callStack
+            }
+        }, {
+            key: "depth",
+            get: function() {
+                return this.elements.length
+            }
+        }, {
+            key: "currentElement",
+            get: function() {
+                var t = this._threads[this._threads.length - 1].callstack;
+                return t[t.length - 1]
+            }
+        }, {
+            key: "currentElementIndex",
+            get: function() {
+                return this.callStack.length - 1
+            }
+        }, {
+            key: "currentThread",
+            get: function() {
+                return this._threads[this._threads.length - 1]
+            },
+            set: function(t) {
+                I.Assert(1 == this._threads.length, "Shouldn't be directly setting the current thread when we have a stack of them"),
+                this._threads.length = 0,
+                this._threads.push(t)
+            }
+        }, {
+            key: "canPop",
+            get: function() {
+                return this.callStack.length > 1
+            }
+        }, {
+            key: "Reset",
+            value: function() {
+                this._threads = [],
+                this._threads.push(new e.Thread),
+                this._threads[0].callstack.push(new e.Element(ct.Tunnel,this._startOfRoot))
+            }
+        }, {
+            key: "SetJsonToken",
+            value: function(t, n) {
+                this._threads.length = 0;
+                var r, i = S(t.threads);
+                try {
+                    for (i.s(); !(r = i.n()).done; ) {
+                        var a = r.value
+                          , o = new e.Thread(a,n);
+                        this._threads.push(o)
+                    }
+                } catch (t) {
+                    i.e(t)
+                } finally {
+                    i.f()
+                }
+                this._threadCounter = parseInt(t.threadCounter),
+                this._startOfRoot = dt.StartOf(n.rootContentContainer)
+            }
+        }, {
+            key: "WriteJson",
+            value: function(t) {
+                var e = this;
+                t.WriteObject((function(t) {
+                    t.WritePropertyStart("threads"),
+                    t.WriteArrayStart();
+                    var n, r = S(e._threads);
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            n.value.WriteJson(t)
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                    t.WriteArrayEnd(),
+                    t.WritePropertyEnd(),
+                    t.WritePropertyStart("threadCounter"),
+                    t.WriteInt(e._threadCounter),
+                    t.WritePropertyEnd()
+                }
+                ))
+            }
+        }, {
+            key: "PushThread",
+            value: function() {
+                var t = this.currentThread.Copy();
+                this._threadCounter++,
+                t.threadIndex = this._threadCounter,
+                this._threads.push(t)
+            }
+        }, {
+            key: "ForkThread",
+            value: function() {
+                var t = this.currentThread.Copy();
+                return this._threadCounter++,
+                t.threadIndex = this._threadCounter,
+                t
+            }
+        }, {
+            key: "PopThread",
+            value: function() {
+                if (!this.canPopThread)
+                    throw new Error("Can't pop thread");
+                this._threads.splice(this._threads.indexOf(this.currentThread), 1)
+            }
+        }, {
+            key: "canPopThread",
+            get: function() {
+                return this._threads.length > 1 && !this.elementIsEvaluateFromGame
+            }
+        }, {
+            key: "elementIsEvaluateFromGame",
+            get: function() {
+                return this.currentElement.type == ct.FunctionEvaluationFromGame
+            }
+        }, {
+            key: "Push",
+            value: function(t) {
+                var n = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0
+                  , r = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : 0
+                  , i = new e.Element(t,this.currentElement.currentPointer,!1);
+                i.evaluationStackHeightWhenPushed = n,
+                i.functionStartInOutputStream = r,
+                this.callStack.push(i)
+            }
+        }, {
+            key: "CanPop",
+            value: function() {
+                var t = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+                return !!this.canPop && (null == t || this.currentElement.type == t)
+            }
+        }, {
+            key: "Pop",
+            value: function() {
+                var t = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+                if (!this.CanPop(t))
+                    throw new Error("Mismatched push/pop in Callstack");
+                this.callStack.pop()
+            }
+        }, {
+            key: "GetTemporaryVariableWithName",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1;
+                -1 == e && (e = this.currentElementIndex + 1);
+                var n = this.callStack[e - 1]
+                  , r = q(n.temporaryVariables, t, null);
+                return r.exists ? r.result : null
+            }
+        }, {
+            key: "SetTemporaryVariable",
+            value: function(t, e, n) {
+                var r = arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : -1;
+                -1 == r && (r = this.currentElementIndex + 1);
+                var i = this.callStack[r - 1];
+                if (!n && !i.temporaryVariables.get(t))
+                    throw new Error("Could not find temporary variable to set: " + t);
+                var a = q(i.temporaryVariables, t, null);
+                a.exists && Z.RetainListOriginsForAssignment(a.result, e),
+                i.temporaryVariables.set(t, e)
+            }
+        }, {
+            key: "ContextForVariableNamed",
+            value: function(t) {
+                return this.currentElement.temporaryVariables.get(t) ? this.currentElementIndex + 1 : 0
+            }
+        }, {
+            key: "ThreadWithIndex",
+            value: function(t) {
+                var e = this._threads.filter((function(e) {
+                    if (e.threadIndex == t)
+                        return e
+                }
+                ));
+                return e.length > 0 ? e[0] : null
+            }
+        }, {
+            key: "callStack",
+            get: function() {
+                return this.currentThread.callstack
+            }
+        }, {
+            key: "callStackTrace",
+            get: function() {
+                for (var t = new j, e = 0; e < this._threads.length; e++) {
+                    var n = this._threads[e]
+                      , r = e == this._threads.length - 1;
+                    t.AppendFormat("=== THREAD {0}/{1} {2}===\n", e + 1, this._threads.length, r ? "(current) " : "");
+                    for (var i = 0; i < n.callstack.length; i++) {
+                        n.callstack[i].type == ct.Function ? t.Append("  [FUNCTION] ") : t.Append("  [TUNNEL] ");
+                        var a = n.callstack[i].currentPointer;
+                        if (!a.isNull) {
+                            if (t.Append("<SOMEWHERE IN "),
+                            null === a.container)
+                                return L("pointer.container");
+                            t.Append(a.container.path.toString()),
+                            t.AppendLine(">")
+                        }
+                    }
+                }
+                return t.toString()
+            }
+        }]),
+        e
+    }();
+    !function(t) {
+        var e = function() {
+            function t(e, r) {
+                var i = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                n(this, t),
+                this.evaluationStackHeightWhenPushed = 0,
+                this.functionStartInOutputStream = 0,
+                this.currentPointer = r.copy(),
+                this.inExpressionEvaluation = i,
+                this.temporaryVariables = new Map,
+                this.type = e
+            }
+            return i(t, [{
+                key: "Copy",
+                value: function() {
+                    var e = new t(this.type,this.currentPointer,this.inExpressionEvaluation);
+                    return e.temporaryVariables = new Map(this.temporaryVariables),
+                    e.evaluationStackHeightWhenPushed = this.evaluationStackHeightWhenPushed,
+                    e.functionStartInOutputStream = this.functionStartInOutputStream,
+                    e
+                }
+            }]),
+            t
+        }();
+        t.Element = e;
+        var r = function() {
+            function t() {
+                if (n(this, t),
+                this.threadIndex = 0,
+                this.previousPointer = dt.Null,
+                this.callstack = [],
+                arguments[0] && arguments[1]) {
+                    var r = arguments[0]
+                      , i = arguments[1];
+                    this.threadIndex = parseInt(r.threadIndex);
+                    var a, o = r.callstack, s = S(o);
+                    try {
+                        for (s.s(); !(a = s.n()).done; ) {
+                            var l = a.value
+                              , u = l
+                              , c = parseInt(u.type)
+                              , h = dt.Null
+                              , f = void 0
+                              , d = u.cPath;
+                            if (void 0 !== d) {
+                                f = d.toString();
+                                var v = i.ContentAtPath(new R(f));
+                                if (h.container = v.container,
+                                h.index = parseInt(u.idx),
+                                null == v.obj)
+                                    throw new Error("When loading state, internal story location couldn't be found: " + f + ". Has the story changed since this save data was created?");
+                                if (v.approximate) {
+                                    if (null === h.container)
+                                        return L("pointer.container");
+                                    i.Warning("When loading state, exact internal story location couldn't be found: '" + f + "', so it was approximated to '" + h.container.path.toString() + "' to recover. Has the story changed since this save data was created?")
+                                }
+                            }
+                            var p = !!u.exp
+                              , m = new e(c,h,p)
+                              , g = u.temp;
+                            void 0 !== g ? m.temporaryVariables = fe.JObjectToDictionaryRuntimeObjs(g) : m.temporaryVariables.clear(),
+                            this.callstack.push(m)
+                        }
+                    } catch (t) {
+                        s.e(t)
+                    } finally {
+                        s.f()
+                    }
+                    var y = r.previousContentObject;
+                    if (void 0 !== y) {
+                        var C = new R(y.toString());
+                        this.previousPointer = i.PointerAtPath(C)
+                    }
+                }
+            }
+            return i(t, [{
+                key: "Copy",
+                value: function() {
+                    var e = new t;
+                    e.threadIndex = this.threadIndex;
+                    var n, r = S(this.callstack);
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            var i = n.value;
+                            e.callstack.push(i.Copy())
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                    return e.previousPointer = this.previousPointer.copy(),
+                    e
+                }
+            }, {
+                key: "WriteJson",
+                value: function(t) {
+                    t.WriteObjectStart(),
+                    t.WritePropertyStart("callstack"),
+                    t.WriteArrayStart();
+                    var e, n = S(this.callstack);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r = e.value;
+                            if (t.WriteObjectStart(),
+                            !r.currentPointer.isNull) {
+                                if (null === r.currentPointer.container)
+                                    return L("el.currentPointer.container");
+                                t.WriteProperty("cPath", r.currentPointer.container.path.componentsString),
+                                t.WriteIntProperty("idx", r.currentPointer.index)
+                            }
+                            t.WriteProperty("exp", r.inExpressionEvaluation),
+                            t.WriteIntProperty("type", r.type),
+                            r.temporaryVariables.size > 0 && (t.WritePropertyStart("temp"),
+                            fe.WriteDictionaryRuntimeObjs(t, r.temporaryVariables),
+                            t.WritePropertyEnd()),
+                            t.WriteObjectEnd()
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                    if (t.WriteArrayEnd(),
+                    t.WritePropertyEnd(),
+                    t.WriteIntProperty("threadIndex", this.threadIndex),
+                    !this.previousPointer.isNull) {
+                        var i = this.previousPointer.Resolve();
+                        if (null === i)
+                            return L("this.previousPointer.Resolve()");
+                        t.WriteProperty("previousContentObject", i.path.toString())
+                    }
+                    t.WriteObjectEnd()
+                }
+            }]),
+            t
+        }();
+        t.Thread = r
+    }(de || (de = {}));
+    var ve = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t, i) {
+            var a;
+            n(this, r),
+            (a = e.call(this)).variableChangedEventCallbacks = [],
+            a.patch = null,
+            a._batchObservingVariableChanges = !1,
+            a._defaultGlobalVariables = new Map,
+            a._changedVariablesForBatchObs = new Set,
+            a._globalVariables = new Map,
+            a._callStack = t,
+            a._listDefsOrigin = i;
+            try {
+                return f(a, new Proxy(h(a),{
+                    get: function(t, e) {
+                        return e in t ? t[e] : t.$(e)
+                    },
+                    set: function(t, e, n) {
+                        return e in t ? t[e] = n : t.$(e, n),
+                        !0
+                    }
+                }))
+            } catch (t) {}
+            return a
+        }
+        return i(r, [{
+            key: "variableChangedEvent",
+            value: function(t, e) {
+                var n, r = S(this.variableChangedEventCallbacks);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        (0,
+                        n.value)(t, e)
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+            }
+        }, {
+            key: "batchObservingVariableChanges",
+            get: function() {
+                return this._batchObservingVariableChanges
+            },
+            set: function(t) {
+                if (this._batchObservingVariableChanges = t,
+                t)
+                    this._changedVariablesForBatchObs = new Set;
+                else if (null != this._changedVariablesForBatchObs) {
+                    var e, n = S(this._changedVariablesForBatchObs);
+                    try {
+                        for (n.s(); !(e = n.n()).done; ) {
+                            var r = e.value
+                              , i = this._globalVariables.get(r);
+                            i ? this.variableChangedEvent(r, i) : L("currentValue")
+                        }
+                    } catch (t) {
+                        n.e(t)
+                    } finally {
+                        n.f()
+                    }
+                    this._changedVariablesForBatchObs = null
+                }
+            }
+        }, {
+            key: "callStack",
+            get: function() {
+                return this._callStack
+            },
+            set: function(t) {
+                this._callStack = t
+            }
+        }, {
+            key: "$",
+            value: function(t, e) {
+                if (void 0 === e) {
+                    var n = null;
+                    return null !== this.patch && (n = this.patch.TryGetGlobal(t, null)).exists ? n.result.valueObject : (void 0 === (n = this._globalVariables.get(t)) && (n = this._defaultGlobalVariables.get(t)),
+                    void 0 !== n ? n.valueObject : null)
+                }
+                if (void 0 === this._defaultGlobalVariables.get(t))
+                    throw new G("Cannot assign to a variable (" + t + ") that hasn't been declared in the story");
+                var r = K.Create(e);
+                if (null == r)
+                    throw null == e ? new Error("Cannot pass null to VariableState") : new Error("Invalid value passed to VariableState: " + e.toString());
+                this.SetGlobal(t, r)
+            }
+        }, {
+            key: "ApplyPatch",
+            value: function() {
+                if (null === this.patch)
+                    return L("this.patch");
+                var t, e = S(this.patch.globals);
+                try {
+                    for (e.s(); !(t = e.n()).done; ) {
+                        var n = m(t.value, 2)
+                          , r = n[0]
+                          , i = n[1];
+                        this._globalVariables.set(r, i)
+                    }
+                } catch (t) {
+                    e.e(t)
+                } finally {
+                    e.f()
+                }
+                if (null !== this._changedVariablesForBatchObs) {
+                    var a, o = S(this.patch.changedVariables);
+                    try {
+                        for (o.s(); !(a = o.n()).done; ) {
+                            var s = a.value;
+                            this._changedVariablesForBatchObs.add(s)
+                        }
+                    } catch (t) {
+                        o.e(t)
+                    } finally {
+                        o.f()
+                    }
+                }
+                this.patch = null
+            }
+        }, {
+            key: "SetJsonToken",
+            value: function(t) {
+                this._globalVariables.clear();
+                var e, n = S(this._defaultGlobalVariables);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = m(e.value, 2)
+                          , i = r[0]
+                          , a = r[1]
+                          , o = t[i];
+                        if (void 0 !== o) {
+                            var s = fe.JTokenToRuntimeObject(o);
+                            if (null === s)
+                                return L("tokenInkObject");
+                            this._globalVariables.set(i, s)
+                        } else
+                            this._globalVariables.set(i, a)
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+            }
+        }, {
+            key: "WriteJson",
+            value: function(t) {
+                t.WriteObjectStart();
+                var e, n = S(this._globalVariables);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var i = m(e.value, 2)
+                          , a = i[0]
+                          , o = i[1]
+                          , s = a
+                          , l = o;
+                        if (r.dontSaveDefaultValues && this._defaultGlobalVariables.has(s)) {
+                            var u = this._defaultGlobalVariables.get(s);
+                            if (this.RuntimeObjectsEqual(l, u))
+                                continue
+                        }
+                        t.WritePropertyStart(s),
+                        fe.WriteRuntimeObject(t, l),
+                        t.WritePropertyEnd()
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                t.WriteObjectEnd()
+            }
+        }, {
+            key: "RuntimeObjectsEqual",
+            value: function(t, e) {
+                if (null === t)
+                    return L("obj1");
+                if (null === e)
+                    return L("obj2");
+                if (t.constructor !== e.constructor)
+                    return !1;
+                var n = _(t, H);
+                if (null !== n)
+                    return n.value === T(e, H).value;
+                var r = _(t, J);
+                if (null !== r)
+                    return r.value === T(e, J).value;
+                var i = _(t, z);
+                if (null !== i)
+                    return i.value === T(e, z).value;
+                var a = _(t, K)
+                  , o = _(e, K);
+                if (null !== a && null !== o)
+                    return N(a.valueObject) && N(o.valueObject) ? a.valueObject.Equals(o.valueObject) : a.valueObject === o.valueObject;
+                throw new Error("FastRoughDefinitelyEquals: Unsupported runtime object type: " + t.constructor.name)
+            }
+        }, {
+            key: "GetVariableWithName",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : -1
+                  , n = this.GetRawVariableWithName(t, e)
+                  , r = _(n, Y);
+                return null !== r && (n = this.ValueAtVariablePointer(r)),
+                n
+            }
+        }, {
+            key: "TryGetDefaultVariableValue",
+            value: function(t) {
+                var e = q(this._defaultGlobalVariables, t, null);
+                return e.exists ? e.result : null
+            }
+        }, {
+            key: "GlobalVariableExistsWithName",
+            value: function(t) {
+                return this._globalVariables.has(t) || null !== this._defaultGlobalVariables && this._defaultGlobalVariables.has(t)
+            }
+        }, {
+            key: "GetRawVariableWithName",
+            value: function(t, e) {
+                if (0 == e || -1 == e) {
+                    var n = null;
+                    if (null !== this.patch && (n = this.patch.TryGetGlobal(t, null)).exists)
+                        return n.result;
+                    if ((n = q(this._globalVariables, t, null)).exists)
+                        return n.result;
+                    if (null !== this._defaultGlobalVariables && (n = q(this._defaultGlobalVariables, t, null)).exists)
+                        return n.result;
+                    if (null === this._listDefsOrigin)
+                        return L("VariablesState._listDefsOrigin");
+                    var r = this._listDefsOrigin.FindSingleItemListWithName(t);
+                    if (r)
+                        return r
+                }
+                return this._callStack.GetTemporaryVariableWithName(t, e)
+            }
+        }, {
+            key: "ValueAtVariablePointer",
+            value: function(t) {
+                return this.GetVariableWithName(t.variableName, t.contextIndex)
+            }
+        }, {
+            key: "Assign",
+            value: function(t, e) {
+                var n = t.variableName;
+                if (null === n)
+                    return L("name");
+                var r = -1
+                  , i = !1;
+                if (i = t.isNewDeclaration ? t.isGlobal : this.GlobalVariableExistsWithName(n),
+                t.isNewDeclaration) {
+                    var a = _(e, Y);
+                    if (null !== a)
+                        e = this.ResolveVariablePointer(a)
+                } else {
+                    var o = null;
+                    do {
+                        null != (o = _(this.GetRawVariableWithName(n, r), Y)) && (n = o.variableName,
+                        i = 0 == (r = o.contextIndex))
+                    } while (null != o)
+                }
+                i ? this.SetGlobal(n, e) : this._callStack.SetTemporaryVariable(n, e, t.isNewDeclaration, r)
+            }
+        }, {
+            key: "SnapshotDefaultGlobals",
+            value: function() {
+                this._defaultGlobalVariables = new Map(this._globalVariables)
+            }
+        }, {
+            key: "RetainListOriginsForAssignment",
+            value: function(t, e) {
+                var n = T(t, Z)
+                  , r = T(e, Z);
+                n.value && r.value && 0 == r.value.Count && r.value.SetInitialOriginNames(n.value.originNames)
+            }
+        }, {
+            key: "SetGlobal",
+            value: function(t, e) {
+                var n = null;
+                if (null === this.patch && (n = q(this._globalVariables, t, null)),
+                null !== this.patch && ((n = this.patch.TryGetGlobal(t, null)).exists || (n = q(this._globalVariables, t, null))),
+                Z.RetainListOriginsForAssignment(n.result, e),
+                null === t)
+                    return L("variableName");
+                if (null !== this.patch ? this.patch.SetGlobal(t, e) : this._globalVariables.set(t, e),
+                null !== this.variableChangedEvent && null !== n && e !== n.result)
+                    if (this.batchObservingVariableChanges) {
+                        if (null === this._changedVariablesForBatchObs)
+                            return L("this._changedVariablesForBatchObs");
+                        null !== this.patch ? this.patch.AddChangedVariable(t) : null !== this._changedVariablesForBatchObs && this._changedVariablesForBatchObs.add(t)
+                    } else
+                        this.variableChangedEvent(t, e)
+            }
+        }, {
+            key: "ResolveVariablePointer",
+            value: function(t) {
+                var e = t.contextIndex;
+                -1 == e && (e = this.GetContextIndexOfVariableNamed(t.variableName));
+                var n = _(this.GetRawVariableWithName(t.variableName, e), Y);
+                return null != n ? n : new Y(t.variableName,e)
+            }
+        }, {
+            key: "GetContextIndexOfVariableNamed",
+            value: function(t) {
+                return this.GlobalVariableExistsWithName(t) ? 0 : this._callStack.currentElementIndex
+            }
+        }, {
+            key: "ObserveVariableChange",
+            value: function(t) {
+                this.variableChangedEventCallbacks.push(t)
+            }
+        }]),
+        r
+    }(function() {
+        return i((function t() {
+            n(this, t)
+        }
+        ))
+    }());
+    ve.dontSaveDefaultValues = !0;
+    var pe = function() {
+        function t(e) {
+            n(this, t),
+            this.seed = e % 2147483647,
+            this.seed <= 0 && (this.seed += 2147483646)
+        }
+        return i(t, [{
+            key: "next",
+            value: function() {
+                return this.seed = 48271 * this.seed % 2147483647
+            }
+        }, {
+            key: "nextFloat",
+            value: function() {
+                return (this.next() - 1) / 2147483646
+            }
+        }]),
+        t
+    }()
+      , me = function() {
+        function t() {
+            if (n(this, t),
+            this._changedVariables = new Set,
+            this._visitCounts = new Map,
+            this._turnIndices = new Map,
+            1 === arguments.length && null !== arguments[0]) {
+                var e = arguments[0];
+                this._globals = new Map(e._globals),
+                this._changedVariables = new Set(e._changedVariables),
+                this._visitCounts = new Map(e._visitCounts),
+                this._turnIndices = new Map(e._turnIndices)
+            } else
+                this._globals = new Map,
+                this._changedVariables = new Set,
+                this._visitCounts = new Map,
+                this._turnIndices = new Map
+        }
+        return i(t, [{
+            key: "globals",
+            get: function() {
+                return this._globals
+            }
+        }, {
+            key: "changedVariables",
+            get: function() {
+                return this._changedVariables
+            }
+        }, {
+            key: "visitCounts",
+            get: function() {
+                return this._visitCounts
+            }
+        }, {
+            key: "turnIndices",
+            get: function() {
+                return this._turnIndices
+            }
+        }, {
+            key: "TryGetGlobal",
+            value: function(t, e) {
+                return null !== t && this._globals.has(t) ? {
+                    result: this._globals.get(t),
+                    exists: !0
+                } : {
+                    result: e,
+                    exists: !1
+                }
+            }
+        }, {
+            key: "SetGlobal",
+            value: function(t, e) {
+                this._globals.set(t, e)
+            }
+        }, {
+            key: "AddChangedVariable",
+            value: function(t) {
+                return this._changedVariables.add(t)
+            }
+        }, {
+            key: "TryGetVisitCount",
+            value: function(t, e) {
+                return this._visitCounts.has(t) ? {
+                    result: this._visitCounts.get(t),
+                    exists: !0
+                } : {
+                    result: e,
+                    exists: !1
+                }
+            }
+        }, {
+            key: "SetVisitCount",
+            value: function(t, e) {
+                this._visitCounts.set(t, e)
+            }
+        }, {
+            key: "SetTurnIndex",
+            value: function(t, e) {
+                this._turnIndices.set(t, e)
+            }
+        }, {
+            key: "TryGetTurnIndex",
+            value: function(t, e) {
+                return this._turnIndices.has(t) ? {
+                    result: this._turnIndices.get(t),
+                    exists: !0
+                } : {
+                    result: e,
+                    exists: !1
+                }
+            }
+        }]),
+        t
+    }()
+      , ge = function() {
+        function t() {
+            n(this, t)
+        }
+        return i(t, null, [{
+            key: "TextToDictionary",
+            value: function(e) {
+                return new t.Reader(e).ToDictionary()
+            }
+        }, {
+            key: "TextToArray",
+            value: function(e) {
+                return new t.Reader(e).ToArray()
+            }
+        }]),
+        t
+    }();
+    !function(t) {
+        var e = function() {
+            function t(e) {
+                n(this, t),
+                this._rootObject = JSON.parse(e)
+            }
+            return i(t, [{
+                key: "ToDictionary",
+                value: function() {
+                    return this._rootObject
+                }
+            }, {
+                key: "ToArray",
+                value: function() {
+                    return this._rootObject
+                }
+            }]),
+            t
+        }();
+        t.Reader = e;
+        var r = function() {
+            function e() {
+                n(this, e),
+                this._currentPropertyName = null,
+                this._currentString = null,
+                this._stateStack = [],
+                this._collectionStack = [],
+                this._propertyNameStack = [],
+                this._jsonObject = null
+            }
+            return i(e, [{
+                key: "WriteObject",
+                value: function(t) {
+                    this.WriteObjectStart(),
+                    t(this),
+                    this.WriteObjectEnd()
+                }
+            }, {
+                key: "WriteObjectStart",
+                value: function() {
+                    this.StartNewObject(!0);
+                    var e = {};
+                    if (this.state === t.Writer.State.Property) {
+                        this.Assert(null !== this.currentCollection),
+                        this.Assert(null !== this.currentPropertyName);
+                        var n = this._propertyNameStack.pop();
+                        this.currentCollection[n] = e,
+                        this._collectionStack.push(e)
+                    } else
+                        this.state === t.Writer.State.Array ? (this.Assert(null !== this.currentCollection),
+                        this.currentCollection.push(e),
+                        this._collectionStack.push(e)) : (this.Assert(this.state === t.Writer.State.None),
+                        this._jsonObject = e,
+                        this._collectionStack.push(e));
+                    this._stateStack.push(new t.Writer.StateElement(t.Writer.State.Object))
+                }
+            }, {
+                key: "WriteObjectEnd",
+                value: function() {
+                    this.Assert(this.state === t.Writer.State.Object),
+                    this._collectionStack.pop(),
+                    this._stateStack.pop()
+                }
+            }, {
+                key: "WriteProperty",
+                value: function(t, e) {
+                    if (this.WritePropertyStart(t),
+                    arguments[1]instanceof Function) {
+                        var n = arguments[1];
+                        n(this)
+                    } else {
+                        var r = arguments[1];
+                        this.Write(r)
+                    }
+                    this.WritePropertyEnd()
+                }
+            }, {
+                key: "WriteIntProperty",
+                value: function(t, e) {
+                    this.WritePropertyStart(t),
+                    this.WriteInt(e),
+                    this.WritePropertyEnd()
+                }
+            }, {
+                key: "WriteFloatProperty",
+                value: function(t, e) {
+                    this.WritePropertyStart(t),
+                    this.WriteFloat(e),
+                    this.WritePropertyEnd()
+                }
+            }, {
+                key: "WritePropertyStart",
+                value: function(e) {
+                    this.Assert(this.state === t.Writer.State.Object),
+                    this._propertyNameStack.push(e),
+                    this.IncrementChildCount(),
+                    this._stateStack.push(new t.Writer.StateElement(t.Writer.State.Property))
+                }
+            }, {
+                key: "WritePropertyEnd",
+                value: function() {
+                    this.Assert(this.state === t.Writer.State.Property),
+                    this.Assert(1 === this.childCount),
+                    this._stateStack.pop()
+                }
+            }, {
+                key: "WritePropertyNameStart",
+                value: function() {
+                    this.Assert(this.state === t.Writer.State.Object),
+                    this.IncrementChildCount(),
+                    this._currentPropertyName = "",
+                    this._stateStack.push(new t.Writer.StateElement(t.Writer.State.Property)),
+                    this._stateStack.push(new t.Writer.StateElement(t.Writer.State.PropertyName))
+                }
+            }, {
+                key: "WritePropertyNameEnd",
+                value: function() {
+                    this.Assert(this.state === t.Writer.State.PropertyName),
+                    this.Assert(null !== this._currentPropertyName),
+                    this._propertyNameStack.push(this._currentPropertyName),
+                    this._currentPropertyName = null,
+                    this._stateStack.pop()
+                }
+            }, {
+                key: "WritePropertyNameInner",
+                value: function(e) {
+                    this.Assert(this.state === t.Writer.State.PropertyName),
+                    this.Assert(null !== this._currentPropertyName),
+                    this._currentPropertyName += e
+                }
+            }, {
+                key: "WriteArrayStart",
+                value: function() {
+                    this.StartNewObject(!0);
+                    var e = [];
+                    if (this.state === t.Writer.State.Property) {
+                        this.Assert(null !== this.currentCollection),
+                        this.Assert(null !== this.currentPropertyName);
+                        var n = this._propertyNameStack.pop();
+                        this.currentCollection[n] = e,
+                        this._collectionStack.push(e)
+                    } else
+                        this.state === t.Writer.State.Array ? (this.Assert(null !== this.currentCollection),
+                        this.currentCollection.push(e),
+                        this._collectionStack.push(e)) : (this.Assert(this.state === t.Writer.State.None),
+                        this._jsonObject = e,
+                        this._collectionStack.push(e));
+                    this._stateStack.push(new t.Writer.StateElement(t.Writer.State.Array))
+                }
+            }, {
+                key: "WriteArrayEnd",
+                value: function() {
+                    this.Assert(this.state === t.Writer.State.Array),
+                    this._collectionStack.pop(),
+                    this._stateStack.pop()
+                }
+            }, {
+                key: "Write",
+                value: function(t) {
+                    null !== t ? (this.StartNewObject(!1),
+                    this._addToCurrentObject(t)) : console.error("Warning: trying to write a null value")
+                }
+            }, {
+                key: "WriteBool",
+                value: function(t) {
+                    null !== t && (this.StartNewObject(!1),
+                    this._addToCurrentObject(t))
+                }
+            }, {
+                key: "WriteInt",
+                value: function(t) {
+                    null !== t && (this.StartNewObject(!1),
+                    this._addToCurrentObject(Math.floor(t)))
+                }
+            }, {
+                key: "WriteFloat",
+                value: function(t) {
+                    null !== t && (this.StartNewObject(!1),
+                    t == Number.POSITIVE_INFINITY ? this._addToCurrentObject(34e37) : t == Number.NEGATIVE_INFINITY ? this._addToCurrentObject(-34e37) : isNaN(t) ? this._addToCurrentObject(0) : this._addToCurrentObject(t))
+                }
+            }, {
+                key: "WriteNull",
+                value: function() {
+                    this.StartNewObject(!1),
+                    this._addToCurrentObject(null)
+                }
+            }, {
+                key: "WriteStringStart",
+                value: function() {
+                    this.StartNewObject(!1),
+                    this._currentString = "",
+                    this._stateStack.push(new t.Writer.StateElement(t.Writer.State.String))
+                }
+            }, {
+                key: "WriteStringEnd",
+                value: function() {
+                    this.Assert(this.state == t.Writer.State.String),
+                    this._stateStack.pop(),
+                    this._addToCurrentObject(this._currentString),
+                    this._currentString = null
+                }
+            }, {
+                key: "WriteStringInner",
+                value: function(e) {
+                    this.Assert(this.state === t.Writer.State.String),
+                    null !== e ? this._currentString += e : console.error("Warning: trying to write a null string")
+                }
+            }, {
+                key: "toString",
+                value: function() {
+                    return null === this._jsonObject ? "" : JSON.stringify(this._jsonObject)
+                }
+            }, {
+                key: "StartNewObject",
+                value: function(e) {
+                    e ? this.Assert(this.state === t.Writer.State.None || this.state === t.Writer.State.Property || this.state === t.Writer.State.Array) : this.Assert(this.state === t.Writer.State.Property || this.state === t.Writer.State.Array),
+                    this.state === t.Writer.State.Property && this.Assert(0 === this.childCount),
+                    this.state !== t.Writer.State.Array && this.state !== t.Writer.State.Property || this.IncrementChildCount()
+                }
+            }, {
+                key: "state",
+                get: function() {
+                    return this._stateStack.length > 0 ? this._stateStack[this._stateStack.length - 1].type : t.Writer.State.None
+                }
+            }, {
+                key: "childCount",
+                get: function() {
+                    return this._stateStack.length > 0 ? this._stateStack[this._stateStack.length - 1].childCount : 0
+                }
+            }, {
+                key: "currentCollection",
+                get: function() {
+                    return this._collectionStack.length > 0 ? this._collectionStack[this._collectionStack.length - 1] : null
+                }
+            }, {
+                key: "currentPropertyName",
+                get: function() {
+                    return this._propertyNameStack.length > 0 ? this._propertyNameStack[this._propertyNameStack.length - 1] : null
+                }
+            }, {
+                key: "IncrementChildCount",
+                value: function() {
+                    this.Assert(this._stateStack.length > 0);
+                    var t = this._stateStack.pop();
+                    t.childCount++,
+                    this._stateStack.push(t)
+                }
+            }, {
+                key: "Assert",
+                value: function(t) {
+                    if (!t)
+                        throw Error("Assert failed while writing JSON")
+                }
+            }, {
+                key: "_addToCurrentObject",
+                value: function(e) {
+                    this.Assert(null !== this.currentCollection),
+                    this.state === t.Writer.State.Array ? (this.Assert(Array.isArray(this.currentCollection)),
+                    this.currentCollection.push(e)) : this.state === t.Writer.State.Property && (this.Assert(!Array.isArray(this.currentCollection)),
+                    this.Assert(null !== this.currentPropertyName),
+                    this.currentCollection[this.currentPropertyName] = e,
+                    this._propertyNameStack.pop())
+                }
+            }]),
+            e
+        }();
+        t.Writer = r,
+        function(e) {
+            var r;
+            (r = e.State || (e.State = {}))[r.None = 0] = "None",
+            r[r.Object = 1] = "Object",
+            r[r.Array = 2] = "Array",
+            r[r.Property = 3] = "Property",
+            r[r.PropertyName = 4] = "PropertyName",
+            r[r.String = 5] = "String";
+            var a = i((function e(r) {
+                n(this, e),
+                this.type = t.Writer.State.None,
+                this.childCount = 0,
+                this.type = r
+            }
+            ));
+            e.StateElement = a
+        }(r = t.Writer || (t.Writer = {}))
+    }(ge || (ge = {}));
+    var ye, Ce = function() {
+        function t() {
+            n(this, t);
+            var e = arguments[0]
+              , r = arguments[1];
+            if (this.name = e,
+            this.callStack = new de(r),
+            arguments[2]) {
+                var i = arguments[2];
+                this.callStack.SetJsonToken(i.callstack, r),
+                this.outputStream = fe.JArrayToRuntimeObjList(i.outputStream),
+                this.currentChoices = fe.JArrayToRuntimeObjList(i.currentChoices);
+                var a = i.choiceThreads;
+                void 0 !== a && this.LoadFlowChoiceThreads(a, r)
+            } else
+                this.outputStream = [],
+                this.currentChoices = []
+        }
+        return i(t, [{
+            key: "WriteJson",
+            value: function(t) {
+                var e = this;
+                t.WriteObjectStart(),
+                t.WriteProperty("callstack", (function(t) {
+                    return e.callStack.WriteJson(t)
+                }
+                )),
+                t.WriteProperty("outputStream", (function(t) {
+                    return fe.WriteListRuntimeObjs(t, e.outputStream)
+                }
+                ));
+                var n, r = !1, i = S(this.currentChoices);
+                try {
+                    for (i.s(); !(n = i.n()).done; ) {
+                        var a = n.value;
+                        if (null === a.threadAtGeneration)
+                            return L("c.threadAtGeneration");
+                        a.originalThreadIndex = a.threadAtGeneration.threadIndex,
+                        null === this.callStack.ThreadWithIndex(a.originalThreadIndex) && (r || (r = !0,
+                        t.WritePropertyStart("choiceThreads"),
+                        t.WriteObjectStart()),
+                        t.WritePropertyStart(a.originalThreadIndex),
+                        a.threadAtGeneration.WriteJson(t),
+                        t.WritePropertyEnd())
+                    }
+                } catch (t) {
+                    i.e(t)
+                } finally {
+                    i.f()
+                }
+                r && (t.WriteObjectEnd(),
+                t.WritePropertyEnd()),
+                t.WriteProperty("currentChoices", (function(t) {
+                    t.WriteArrayStart();
+                    var n, r = S(e.currentChoices);
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            var i = n.value;
+                            fe.WriteChoice(t, i)
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                    t.WriteArrayEnd()
+                }
+                )),
+                t.WriteObjectEnd()
+            }
+        }, {
+            key: "LoadFlowChoiceThreads",
+            value: function(t, e) {
+                var n, r = S(this.currentChoices);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        var i = n.value
+                          , a = this.callStack.ThreadWithIndex(i.originalThreadIndex);
+                        if (null !== a)
+                            i.threadAtGeneration = a.Copy();
+                        else {
+                            var o = t["".concat(i.originalThreadIndex)];
+                            i.threadAtGeneration = new de.Thread(o,e)
+                        }
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+            }
+        }]),
+        t
+    }(), Se = function() {
+        function e(t) {
+            n(this, e),
+            this.kInkSaveStateVersion = 10,
+            this.kMinCompatibleLoadVersion = 8,
+            this.onDidLoadState = null,
+            this._currentErrors = null,
+            this._currentWarnings = null,
+            this.divertedPointer = dt.Null,
+            this._currentTurnIndex = 0,
+            this.storySeed = 0,
+            this.previousRandom = 0,
+            this.didSafeExit = !1,
+            this._currentText = null,
+            this._currentTags = null,
+            this._outputStreamTextDirty = !0,
+            this._outputStreamTagsDirty = !0,
+            this._patch = null,
+            this._aliveFlowNames = null,
+            this._namedFlows = null,
+            this.kDefaultFlowName = "DEFAULT_FLOW",
+            this._aliveFlowNamesDirty = !0,
+            this.story = t,
+            this._currentFlow = new Ce(this.kDefaultFlowName,t),
+            this.OutputStreamDirty(),
+            this._aliveFlowNamesDirty = !0,
+            this._evaluationStack = [],
+            this._variablesState = new ve(this.callStack,t.listDefinitions),
+            this._visitCounts = new Map,
+            this._turnIndices = new Map,
+            this.currentTurnIndex = -1;
+            var r = (new Date).getTime();
+            this.storySeed = new pe(r).next() % 100,
+            this.previousRandom = 0,
+            this.GoToStart()
+        }
+        return i(e, [{
+            key: "ToJson",
+            value: function() {
+                var t = new ge.Writer;
+                return this.WriteJson(t),
+                t.toString()
+            }
+        }, {
+            key: "toJson",
+            value: function() {
+                var t = arguments.length > 0 && void 0 !== arguments[0] && arguments[0];
+                return this.ToJson(t)
+            }
+        }, {
+            key: "LoadJson",
+            value: function(t) {
+                var e = ge.TextToDictionary(t);
+                this.LoadJsonObj(e),
+                null !== this.onDidLoadState && this.onDidLoadState()
+            }
+        }, {
+            key: "VisitCountAtPathString",
+            value: function(t) {
+                var e;
+                if (null !== this._patch) {
+                    var n = this.story.ContentAtPath(new R(t)).container;
+                    if (null === n)
+                        throw new Error("Content at path not found: " + t);
+                    if ((e = this._patch.TryGetVisitCount(n, 0)).exists)
+                        return e.result
+                }
+                return (e = q(this._visitCounts, t, null)).exists ? e.result : 0
+            }
+        }, {
+            key: "VisitCountForContainer",
+            value: function(t) {
+                if (null === t)
+                    return L("container");
+                if (!t.visitsShouldBeCounted)
+                    return this.story.Error("Read count for target (" + t.name + " - on " + t.debugMetadata + ") unknown. The story may need to be compiled with countAllVisits flag (-c)."),
+                    0;
+                if (null !== this._patch) {
+                    var e = this._patch.TryGetVisitCount(t, 0);
+                    if (e.exists)
+                        return e.result
+                }
+                var n = t.path.toString()
+                  , r = q(this._visitCounts, n, null);
+                return r.exists ? r.result : 0
+            }
+        }, {
+            key: "IncrementVisitCountForContainer",
+            value: function(t) {
+                if (null !== this._patch) {
+                    var e = this.VisitCountForContainer(t);
+                    return e++,
+                    void this._patch.SetVisitCount(t, e)
+                }
+                var n = t.path.toString()
+                  , r = q(this._visitCounts, n, null);
+                r.exists ? this._visitCounts.set(n, r.result + 1) : this._visitCounts.set(n, 1)
+            }
+        }, {
+            key: "RecordTurnIndexVisitToContainer",
+            value: function(t) {
+                if (null === this._patch) {
+                    var e = t.path.toString();
+                    this._turnIndices.set(e, this.currentTurnIndex)
+                } else
+                    this._patch.SetTurnIndex(t, this.currentTurnIndex)
+            }
+        }, {
+            key: "TurnsSinceForContainer",
+            value: function(t) {
+                if (t.turnIndexShouldBeCounted || this.story.Error("TURNS_SINCE() for target (" + t.name + " - on " + t.debugMetadata + ") unknown. The story may need to be compiled with countAllVisits flag (-c)."),
+                null !== this._patch) {
+                    var e = this._patch.TryGetTurnIndex(t, 0);
+                    if (e.exists)
+                        return this.currentTurnIndex - e.result
+                }
+                var n = t.path.toString()
+                  , r = q(this._turnIndices, n, 0);
+                return r.exists ? this.currentTurnIndex - r.result : -1
+            }
+        }, {
+            key: "callstackDepth",
+            get: function() {
+                return this.callStack.depth
+            }
+        }, {
+            key: "outputStream",
+            get: function() {
+                return this._currentFlow.outputStream
+            }
+        }, {
+            key: "currentChoices",
+            get: function() {
+                return this.canContinue ? [] : this._currentFlow.currentChoices
+            }
+        }, {
+            key: "generatedChoices",
+            get: function() {
+                return this._currentFlow.currentChoices
+            }
+        }, {
+            key: "currentErrors",
+            get: function() {
+                return this._currentErrors
+            }
+        }, {
+            key: "currentWarnings",
+            get: function() {
+                return this._currentWarnings
+            }
+        }, {
+            key: "variablesState",
+            get: function() {
+                return this._variablesState
+            },
+            set: function(t) {
+                this._variablesState = t
+            }
+        }, {
+            key: "callStack",
+            get: function() {
+                return this._currentFlow.callStack
+            }
+        }, {
+            key: "evaluationStack",
+            get: function() {
+                return this._evaluationStack
+            }
+        }, {
+            key: "currentTurnIndex",
+            get: function() {
+                return this._currentTurnIndex
+            },
+            set: function(t) {
+                this._currentTurnIndex = t
+            }
+        }, {
+            key: "currentPathString",
+            get: function() {
+                var t = this.currentPointer;
+                return t.isNull ? null : null === t.path ? L("pointer.path") : t.path.toString()
+            }
+        }, {
+            key: "currentPointer",
+            get: function() {
+                return this.callStack.currentElement.currentPointer.copy()
+            },
+            set: function(t) {
+                this.callStack.currentElement.currentPointer = t.copy()
+            }
+        }, {
+            key: "previousPointer",
+            get: function() {
+                return this.callStack.currentThread.previousPointer.copy()
+            },
+            set: function(t) {
+                this.callStack.currentThread.previousPointer = t.copy()
+            }
+        }, {
+            key: "canContinue",
+            get: function() {
+                return !this.currentPointer.isNull && !this.hasError
+            }
+        }, {
+            key: "hasError",
+            get: function() {
+                return null != this.currentErrors && this.currentErrors.length > 0
+            }
+        }, {
+            key: "hasWarning",
+            get: function() {
+                return null != this.currentWarnings && this.currentWarnings.length > 0
+            }
+        }, {
+            key: "currentText",
+            get: function() {
+                if (this._outputStreamTextDirty) {
+                    var t, e = new j, n = !1, r = S(this.outputStream);
+                    try {
+                        for (r.s(); !(t = r.n()).done; ) {
+                            var i = t.value
+                              , a = _(i, $);
+                            if (n || null === a) {
+                                var o = _(i, et);
+                                null !== o && (o.commandType == et.CommandType.BeginTag ? n = !0 : o.commandType == et.CommandType.EndTag && (n = !1))
+                            } else
+                                e.Append(a.value)
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                    this._currentText = this.CleanOutputWhitespace(e.toString()),
+                    this._outputStreamTextDirty = !1
+                }
+                return this._currentText
+            }
+        }, {
+            key: "CleanOutputWhitespace",
+            value: function(t) {
+                for (var e = new j, n = -1, r = 0, i = 0; i < t.length; i++) {
+                    var a = t.charAt(i)
+                      , o = " " == a || "\t" == a;
+                    o && -1 == n && (n = i),
+                    o || ("\n" != a && n > 0 && n != r && e.Append(" "),
+                    n = -1),
+                    "\n" == a && (r = i + 1),
+                    o || e.Append(a)
+                }
+                return e.toString()
+            }
+        }, {
+            key: "currentTags",
+            get: function() {
+                if (this._outputStreamTagsDirty) {
+                    this._currentTags = [];
+                    var t, e = !1, n = new j, r = S(this.outputStream);
+                    try {
+                        for (r.s(); !(t = r.n()).done; ) {
+                            var i = t.value
+                              , a = _(i, et);
+                            if (null != a) {
+                                if (a.commandType == et.CommandType.BeginTag) {
+                                    if (e && n.Length > 0) {
+                                        var o = this.CleanOutputWhitespace(n.toString());
+                                        this._currentTags.push(o),
+                                        n.Clear()
+                                    }
+                                    e = !0
+                                } else if (a.commandType == et.CommandType.EndTag) {
+                                    if (n.Length > 0) {
+                                        var s = this.CleanOutputWhitespace(n.toString());
+                                        this._currentTags.push(s),
+                                        n.Clear()
+                                    }
+                                    e = !1
+                                }
+                            } else if (e) {
+                                var l = _(i, $);
+                                null !== l && n.Append(l.value)
+                            } else {
+                                var u = _(i, ue);
+                                null != u && null != u.text && u.text.length > 0 && this._currentTags.push(u.text)
+                            }
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                    if (n.Length > 0) {
+                        var c = this.CleanOutputWhitespace(n.toString());
+                        this._currentTags.push(c),
+                        n.Clear()
+                    }
+                    this._outputStreamTagsDirty = !1
+                }
+                return this._currentTags
+            }
+        }, {
+            key: "currentFlowName",
+            get: function() {
+                return this._currentFlow.name
+            }
+        }, {
+            key: "currentFlowIsDefaultFlow",
+            get: function() {
+                return this._currentFlow.name == this.kDefaultFlowName
+            }
+        }, {
+            key: "aliveFlowNames",
+            get: function() {
+                if (this._aliveFlowNamesDirty) {
+                    if (this._aliveFlowNames = [],
+                    null != this._namedFlows) {
+                        var t, e = S(this._namedFlows.keys());
+                        try {
+                            for (e.s(); !(t = e.n()).done; ) {
+                                var n = t.value;
+                                n != this.kDefaultFlowName && this._aliveFlowNames.push(n)
+                            }
+                        } catch (t) {
+                            e.e(t)
+                        } finally {
+                            e.f()
+                        }
+                    }
+                    this._aliveFlowNamesDirty = !1
+                }
+                return this._aliveFlowNames
+            }
+        }, {
+            key: "inExpressionEvaluation",
+            get: function() {
+                return this.callStack.currentElement.inExpressionEvaluation
+            },
+            set: function(t) {
+                this.callStack.currentElement.inExpressionEvaluation = t
+            }
+        }, {
+            key: "GoToStart",
+            value: function() {
+                this.callStack.currentElement.currentPointer = dt.StartOf(this.story.mainContentContainer)
+            }
+        }, {
+            key: "SwitchFlow_Internal",
+            value: function(t) {
+                if (null === t)
+                    throw new Error("Must pass a non-null string to Story.SwitchFlow");
+                if (null === this._namedFlows && (this._namedFlows = new Map,
+                this._namedFlows.set(this.kDefaultFlowName, this._currentFlow)),
+                t !== this._currentFlow.name) {
+                    var e, n = q(this._namedFlows, t, null);
+                    n.exists ? e = n.result : (e = new Ce(t,this.story),
+                    this._namedFlows.set(t, e),
+                    this._aliveFlowNamesDirty = !0),
+                    this._currentFlow = e,
+                    this.variablesState.callStack = this._currentFlow.callStack,
+                    this.OutputStreamDirty()
+                }
+            }
+        }, {
+            key: "SwitchToDefaultFlow_Internal",
+            value: function() {
+                null !== this._namedFlows && this.SwitchFlow_Internal(this.kDefaultFlowName)
+            }
+        }, {
+            key: "RemoveFlow_Internal",
+            value: function(t) {
+                if (null === t)
+                    throw new Error("Must pass a non-null string to Story.DestroyFlow");
+                if (t === this.kDefaultFlowName)
+                    throw new Error("Cannot destroy default flow");
+                if (this._currentFlow.name === t && this.SwitchToDefaultFlow_Internal(),
+                null === this._namedFlows)
+                    return L("this._namedFlows");
+                this._namedFlows.delete(t),
+                this._aliveFlowNamesDirty = !0
+            }
+        }, {
+            key: "CopyAndStartPatching",
+            value: function() {
+                var t, n, r, i, a, o = new e(this.story);
+                if (o._patch = new me(this._patch),
+                o._currentFlow.name = this._currentFlow.name,
+                o._currentFlow.callStack = new de(this._currentFlow.callStack),
+                (t = o._currentFlow.currentChoices).push.apply(t, g(this._currentFlow.currentChoices)),
+                (n = o._currentFlow.outputStream).push.apply(n, g(this._currentFlow.outputStream)),
+                o.OutputStreamDirty(),
+                null !== this._namedFlows) {
+                    o._namedFlows = new Map;
+                    var s, l = S(this._namedFlows);
+                    try {
+                        for (l.s(); !(s = l.n()).done; ) {
+                            var u = m(s.value, 2)
+                              , c = u[0]
+                              , h = u[1];
+                            o._namedFlows.set(c, h),
+                            o._aliveFlowNamesDirty = !0
+                        }
+                    } catch (t) {
+                        l.e(t)
+                    } finally {
+                        l.f()
+                    }
+                    o._namedFlows.set(this._currentFlow.name, o._currentFlow)
+                }
+                this.hasError && (o._currentErrors = [],
+                (i = o._currentErrors).push.apply(i, g(this.currentErrors || [])));
+                this.hasWarning && (o._currentWarnings = [],
+                (a = o._currentWarnings).push.apply(a, g(this.currentWarnings || [])));
+                return o.variablesState = this.variablesState,
+                o.variablesState.callStack = o.callStack,
+                o.variablesState.patch = o._patch,
+                (r = o.evaluationStack).push.apply(r, g(this.evaluationStack)),
+                this.divertedPointer.isNull || (o.divertedPointer = this.divertedPointer.copy()),
+                o.previousPointer = this.previousPointer.copy(),
+                o._visitCounts = this._visitCounts,
+                o._turnIndices = this._turnIndices,
+                o.currentTurnIndex = this.currentTurnIndex,
+                o.storySeed = this.storySeed,
+                o.previousRandom = this.previousRandom,
+                o.didSafeExit = this.didSafeExit,
+                o
+            }
+        }, {
+            key: "RestoreAfterPatch",
+            value: function() {
+                this.variablesState.callStack = this.callStack,
+                this.variablesState.patch = this._patch
+            }
+        }, {
+            key: "ApplyAnyPatch",
+            value: function() {
+                if (null !== this._patch) {
+                    this.variablesState.ApplyPatch();
+                    var t, e = S(this._patch.visitCounts);
+                    try {
+                        for (e.s(); !(t = e.n()).done; ) {
+                            var n = m(t.value, 2)
+                              , r = n[0]
+                              , i = n[1];
+                            this.ApplyCountChanges(r, i, !0)
+                        }
+                    } catch (t) {
+                        e.e(t)
+                    } finally {
+                        e.f()
+                    }
+                    var a, o = S(this._patch.turnIndices);
+                    try {
+                        for (o.s(); !(a = o.n()).done; ) {
+                            var s = m(a.value, 2)
+                              , l = s[0]
+                              , u = s[1];
+                            this.ApplyCountChanges(l, u, !1)
+                        }
+                    } catch (t) {
+                        o.e(t)
+                    } finally {
+                        o.f()
+                    }
+                    this._patch = null
+                }
+            }
+        }, {
+            key: "ApplyCountChanges",
+            value: function(t, e, n) {
+                (n ? this._visitCounts : this._turnIndices).set(t.path.toString(), e)
+            }
+        }, {
+            key: "WriteJson",
+            value: function(e) {
+                var n = this;
+                if (e.WriteObjectStart(),
+                e.WritePropertyStart("flows"),
+                e.WriteObjectStart(),
+                null !== this._namedFlows) {
+                    var r, i = S(this._namedFlows);
+                    try {
+                        var a = function() {
+                            var t = m(r.value, 2)
+                              , n = t[0]
+                              , i = t[1];
+                            e.WriteProperty(n, (function(t) {
+                                return i.WriteJson(t)
+                            }
+                            ))
+                        };
+                        for (i.s(); !(r = i.n()).done; )
+                            a()
+                    } catch (t) {
+                        i.e(t)
+                    } finally {
+                        i.f()
+                    }
+                } else
+                    e.WriteProperty(this._currentFlow.name, (function(t) {
+                        return n._currentFlow.WriteJson(t)
+                    }
+                    ));
+                if (e.WriteObjectEnd(),
+                e.WritePropertyEnd(),
+                e.WriteProperty("currentFlowName", this._currentFlow.name),
+                e.WriteProperty("variablesState", (function(t) {
+                    return n.variablesState.WriteJson(t)
+                }
+                )),
+                e.WriteProperty("evalStack", (function(t) {
+                    return fe.WriteListRuntimeObjs(t, n.evaluationStack)
+                }
+                )),
+                !this.divertedPointer.isNull) {
+                    if (null === this.divertedPointer.path)
+                        return L("divertedPointer");
+                    e.WriteProperty("currentDivertTarget", this.divertedPointer.path.componentsString)
+                }
+                e.WriteProperty("visitCounts", (function(t) {
+                    return fe.WriteIntDictionary(t, n._visitCounts)
+                }
+                )),
+                e.WriteProperty("turnIndices", (function(t) {
+                    return fe.WriteIntDictionary(t, n._turnIndices)
+                }
+                )),
+                e.WriteIntProperty("turnIdx", this.currentTurnIndex),
+                e.WriteIntProperty("storySeed", this.storySeed),
+                e.WriteIntProperty("previousRandom", this.previousRandom),
+                e.WriteIntProperty("inkSaveVersion", this.kInkSaveStateVersion),
+                e.WriteIntProperty("inkFormatVersion", t.Story.inkVersionCurrent),
+                e.WriteObjectEnd()
+            }
+        }, {
+            key: "LoadJsonObj",
+            value: function(t) {
+                var e = t
+                  , n = e.inkSaveVersion;
+                if (null == n)
+                    throw new Error("ink save format incorrect, can't load.");
+                if (parseInt(n) < this.kMinCompatibleLoadVersion)
+                    throw new Error("Ink save format isn't compatible with the current version (saw '" + n + "', but minimum is " + this.kMinCompatibleLoadVersion + "), so can't load.");
+                var r = e.flows;
+                if (null != r) {
+                    var i = r;
+                    1 === Object.keys(i).length ? this._namedFlows = null : null === this._namedFlows ? this._namedFlows = new Map : this._namedFlows.clear();
+                    for (var a = 0, o = Object.entries(i); a < o.length; a++) {
+                        var s = m(o[a], 2)
+                          , l = s[0]
+                          , u = s[1]
+                          , c = new Ce(l,this.story,u);
+                        if (1 === Object.keys(i).length)
+                            this._currentFlow = new Ce(l,this.story,u);
+                        else {
+                            if (null === this._namedFlows)
+                                return L("this._namedFlows");
+                            this._namedFlows.set(l, c)
+                        }
+                    }
+                    if (null != this._namedFlows && this._namedFlows.size > 1) {
+                        var h = e.currentFlowName;
+                        this._currentFlow = this._namedFlows.get(h)
+                    }
+                } else {
+                    this._namedFlows = null,
+                    this._currentFlow.name = this.kDefaultFlowName,
+                    this._currentFlow.callStack.SetJsonToken(e.callstackThreads, this.story),
+                    this._currentFlow.outputStream = fe.JArrayToRuntimeObjList(e.outputStream),
+                    this._currentFlow.currentChoices = fe.JArrayToRuntimeObjList(e.currentChoices);
+                    var f = e.choiceThreads;
+                    this._currentFlow.LoadFlowChoiceThreads(f, this.story)
+                }
+                this.OutputStreamDirty(),
+                this._aliveFlowNamesDirty = !0,
+                this.variablesState.SetJsonToken(e.variablesState),
+                this.variablesState.callStack = this._currentFlow.callStack,
+                this._evaluationStack = fe.JArrayToRuntimeObjList(e.evalStack);
+                var d = e.currentDivertTarget;
+                if (null != d) {
+                    var v = new R(d.toString());
+                    this.divertedPointer = this.story.PointerAtPath(v)
+                }
+                this._visitCounts = fe.JObjectToIntDictionary(e.visitCounts),
+                this._turnIndices = fe.JObjectToIntDictionary(e.turnIndices),
+                this.currentTurnIndex = parseInt(e.turnIdx),
+                this.storySeed = parseInt(e.storySeed),
+                this.previousRandom = parseInt(e.previousRandom)
+            }
+        }, {
+            key: "ResetErrors",
+            value: function() {
+                this._currentErrors = null,
+                this._currentWarnings = null
+            }
+        }, {
+            key: "ResetOutput",
+            value: function() {
+                var t, e = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+                this.outputStream.length = 0,
+                null !== e && (t = this.outputStream).push.apply(t, g(e)),
+                this.OutputStreamDirty()
+            }
+        }, {
+            key: "PushToOutputStream",
+            value: function(t) {
+                var e = _(t, $);
+                if (null !== e) {
+                    var n = this.TrySplittingHeadTailWhitespace(e);
+                    if (null !== n) {
+                        var r, i = S(n);
+                        try {
+                            for (i.s(); !(r = i.n()).done; ) {
+                                var a = r.value;
+                                this.PushToOutputStreamIndividual(a)
+                            }
+                        } catch (t) {
+                            i.e(t)
+                        } finally {
+                            i.f()
+                        }
+                        return void this.OutputStreamDirty()
+                    }
+                }
+                this.PushToOutputStreamIndividual(t),
+                this.OutputStreamDirty()
+            }
+        }, {
+            key: "PopFromOutputStream",
+            value: function(t) {
+                this.outputStream.splice(this.outputStream.length - t, t),
+                this.OutputStreamDirty()
+            }
+        }, {
+            key: "TrySplittingHeadTailWhitespace",
+            value: function(t) {
+                var e = t.value;
+                if (null === e)
+                    return L("single.value");
+                for (var n = -1, r = -1, i = 0; i < e.length; i++) {
+                    var a = e[i];
+                    if ("\n" != a) {
+                        if (" " == a || "\t" == a)
+                            continue;
+                        break
+                    }
+                    -1 == n && (n = i),
+                    r = i
+                }
+                for (var o = -1, s = -1, l = e.length - 1; l >= 0; l--) {
+                    var u = e[l];
+                    if ("\n" != u) {
+                        if (" " == u || "\t" == u)
+                            continue;
+                        break
+                    }
+                    -1 == o && (o = l),
+                    s = l
+                }
+                if (-1 == n && -1 == o)
+                    return null;
+                var c = []
+                  , h = 0
+                  , f = e.length;
+                if (-1 != n) {
+                    if (n > 0) {
+                        var d = new $(e.substring(0, n));
+                        c.push(d)
+                    }
+                    c.push(new $("\n")),
+                    h = r + 1
+                }
+                if (-1 != o && (f = s),
+                f > h) {
+                    var v = e.substring(h, f - h);
+                    c.push(new $(v))
+                }
+                if (-1 != o && s > r && (c.push(new $("\n")),
+                o < e.length - 1)) {
+                    var p = e.length - o - 1
+                      , m = new $(e.substring(o + 1, p));
+                    c.push(m)
+                }
+                return c
+            }
+        }, {
+            key: "PushToOutputStreamIndividual",
+            value: function(t) {
+                var e = _(t, ee)
+                  , n = _(t, $)
+                  , r = !0;
+                if (e)
+                    this.TrimNewlinesFromOutputStream(),
+                    r = !0;
+                else if (n) {
+                    var i = -1
+                      , a = this.callStack.currentElement;
+                    a.type == ct.Function && (i = a.functionStartInOutputStream);
+                    for (var o = -1, s = this.outputStream.length - 1; s >= 0; s--) {
+                        var l = this.outputStream[s]
+                          , u = l instanceof et ? l : null;
+                        if (null != (l instanceof ee ? l : null)) {
+                            o = s;
+                            break
+                        }
+                        if (null != u && u.commandType == et.CommandType.BeginString) {
+                            s >= i && (i = -1);
+                            break
+                        }
+                    }
+                    if (-1 != (-1 != o && -1 != i ? Math.min(i, o) : -1 != o ? o : i)) {
+                        if (n.isNewline)
+                            r = !1;
+                        else if (n.isNonWhitespace && (o > -1 && this.RemoveExistingGlue(),
+                        i > -1))
+                            for (var c = this.callStack.elements, h = c.length - 1; h >= 0; h--) {
+                                var f = c[h];
+                                if (f.type != ct.Function)
+                                    break;
+                                f.functionStartInOutputStream = -1
+                            }
+                    } else
+                        n.isNewline && (!this.outputStreamEndsInNewline && this.outputStreamContainsContent || (r = !1))
+                }
+                if (r) {
+                    if (null === t)
+                        return L("obj");
+                    this.outputStream.push(t),
+                    this.OutputStreamDirty()
+                }
+            }
+        }, {
+            key: "TrimNewlinesFromOutputStream",
+            value: function() {
+                for (var t = -1, e = this.outputStream.length - 1; e >= 0; ) {
+                    var n = this.outputStream[e]
+                      , r = _(n, et)
+                      , i = _(n, $);
+                    if (null != r || null != i && i.isNonWhitespace)
+                        break;
+                    null != i && i.isNewline && (t = e),
+                    e--
+                }
+                if (t >= 0)
+                    for (e = t; e < this.outputStream.length; ) {
+                        _(this.outputStream[e], $) ? this.outputStream.splice(e, 1) : e++
+                    }
+                this.OutputStreamDirty()
+            }
+        }, {
+            key: "RemoveExistingGlue",
+            value: function() {
+                for (var t = this.outputStream.length - 1; t >= 0; t--) {
+                    var e = this.outputStream[t];
+                    if (e instanceof ee)
+                        this.outputStream.splice(t, 1);
+                    else if (e instanceof et)
+                        break
+                }
+                this.OutputStreamDirty()
+            }
+        }, {
+            key: "outputStreamEndsInNewline",
+            get: function() {
+                if (this.outputStream.length > 0)
+                    for (var t = this.outputStream.length - 1; t >= 0; t--) {
+                        if (this.outputStream[t]instanceof et)
+                            break;
+                        var e = this.outputStream[t];
+                        if (e instanceof $) {
+                            if (e.isNewline)
+                                return !0;
+                            if (e.isNonWhitespace)
+                                break
+                        }
+                    }
+                return !1
+            }
+        }, {
+            key: "outputStreamContainsContent",
+            get: function() {
+                var t, e = S(this.outputStream);
+                try {
+                    for (e.s(); !(t = e.n()).done; ) {
+                        if (t.value instanceof $)
+                            return !0
+                    }
+                } catch (t) {
+                    e.e(t)
+                } finally {
+                    e.f()
+                }
+                return !1
+            }
+        }, {
+            key: "inStringEvaluation",
+            get: function() {
+                for (var t = this.outputStream.length - 1; t >= 0; t--) {
+                    var e = _(this.outputStream[t], et);
+                    if (e instanceof et && e.commandType == et.CommandType.BeginString)
+                        return !0
+                }
+                return !1
+            }
+        }, {
+            key: "PushEvaluationStack",
+            value: function(t) {
+                var e = _(t, Z);
+                if (e) {
+                    var n = e.value;
+                    if (null === n)
+                        return L("rawList");
+                    if (null != n.originNames) {
+                        n.origins || (n.origins = []),
+                        n.origins.length = 0;
+                        var r, i = S(n.originNames);
+                        try {
+                            for (i.s(); !(r = i.n()).done; ) {
+                                var a = r.value;
+                                if (null === this.story.listDefinitions)
+                                    return L("StoryState.story.listDefinitions");
+                                var o = this.story.listDefinitions.TryListGetDefinition(a, null);
+                                if (null === o.result)
+                                    return L("StoryState def.result");
+                                n.origins.indexOf(o.result) < 0 && n.origins.push(o.result)
+                            }
+                        } catch (t) {
+                            i.e(t)
+                        } finally {
+                            i.f()
+                        }
+                    }
+                }
+                if (null === t)
+                    return L("obj");
+                this.evaluationStack.push(t)
+            }
+        }, {
+            key: "PopEvaluationStack",
+            value: function(t) {
+                if (void 0 === t)
+                    return P(this.evaluationStack.pop());
+                if (t > this.evaluationStack.length)
+                    throw new Error("trying to pop too many objects");
+                return P(this.evaluationStack.splice(this.evaluationStack.length - t, t))
+            }
+        }, {
+            key: "PeekEvaluationStack",
+            value: function() {
+                return this.evaluationStack[this.evaluationStack.length - 1]
+            }
+        }, {
+            key: "ForceEnd",
+            value: function() {
+                this.callStack.Reset(),
+                this._currentFlow.currentChoices.length = 0,
+                this.currentPointer = dt.Null,
+                this.previousPointer = dt.Null,
+                this.didSafeExit = !0
+            }
+        }, {
+            key: "TrimWhitespaceFromFunctionEnd",
+            value: function() {
+                I.Assert(this.callStack.currentElement.type == ct.Function);
+                var t = this.callStack.currentElement.functionStartInOutputStream;
+                -1 == t && (t = 0);
+                for (var e = this.outputStream.length - 1; e >= t; e--) {
+                    var n = this.outputStream[e]
+                      , r = _(n, $)
+                      , i = _(n, et);
+                    if (null != r) {
+                        if (i)
+                            break;
+                        if (!r.isNewline && !r.isInlineWhitespace)
+                            break;
+                        this.outputStream.splice(e, 1),
+                        this.OutputStreamDirty()
+                    }
+                }
+            }
+        }, {
+            key: "PopCallStack",
+            value: function() {
+                var t = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+                this.callStack.currentElement.type == ct.Function && this.TrimWhitespaceFromFunctionEnd(),
+                this.callStack.Pop(t)
+            }
+        }, {
+            key: "SetChosenPath",
+            value: function(t, e) {
+                this._currentFlow.currentChoices.length = 0;
+                var n = this.story.PointerAtPath(t);
+                n.isNull || -1 != n.index || (n.index = 0),
+                this.currentPointer = n,
+                e && this.currentTurnIndex++
+            }
+        }, {
+            key: "StartFunctionEvaluationFromGame",
+            value: function(t, e) {
+                this.callStack.Push(ct.FunctionEvaluationFromGame, this.evaluationStack.length),
+                this.callStack.currentElement.currentPointer = dt.StartOf(t),
+                this.PassArgumentsToEvaluationStack(e)
+            }
+        }, {
+            key: "PassArgumentsToEvaluationStack",
+            value: function(t) {
+                if (null !== t)
+                    for (var e = 0; e < t.length; e++) {
+                        if (!("number" == typeof t[e] || "string" == typeof t[e] || "boolean" == typeof t[e] || t[e]instanceof M))
+                            throw new Error((P(arguments[e]),
+                            "null"));
+                        this.PushEvaluationStack(K.Create(t[e]))
+                    }
+            }
+        }, {
+            key: "TryExitFunctionEvaluationFromGame",
+            value: function() {
+                return this.callStack.currentElement.type == ct.FunctionEvaluationFromGame && (this.currentPointer = dt.Null,
+                this.didSafeExit = !0,
+                !0)
+            }
+        }, {
+            key: "CompleteFunctionEvaluationFromGame",
+            value: function() {
+                if (this.callStack.currentElement.type != ct.FunctionEvaluationFromGame)
+                    throw new Error("Expected external function evaluation to be complete. Stack trace: " + this.callStack.callStackTrace);
+                for (var t = this.callStack.currentElement.evaluationStackHeightWhenPushed, e = null; this.evaluationStack.length > t; ) {
+                    var n = this.PopEvaluationStack();
+                    null === e && (e = n)
+                }
+                if (this.PopCallStack(ct.FunctionEvaluationFromGame),
+                e) {
+                    if (e instanceof rt)
+                        return null;
+                    var r = T(e, K);
+                    return r.valueType == U.DivertTarget ? r.valueObject.toString() : r.valueObject
+                }
+                return null
+            }
+        }, {
+            key: "AddError",
+            value: function(t, e) {
+                e ? (null == this._currentWarnings && (this._currentWarnings = []),
+                this._currentWarnings.push(t)) : (null == this._currentErrors && (this._currentErrors = []),
+                this._currentErrors.push(t))
+            }
+        }, {
+            key: "OutputStreamDirty",
+            value: function() {
+                this._outputStreamTextDirty = !0,
+                this._outputStreamTagsDirty = !0
+            }
+        }]),
+        e
+    }(), be = function() {
+        function t() {
+            n(this, t),
+            this.startTime = void 0
+        }
+        return i(t, [{
+            key: "ElapsedMilliseconds",
+            get: function() {
+                return void 0 === this.startTime ? 0 : (new Date).getTime() - this.startTime
+            }
+        }, {
+            key: "Start",
+            value: function() {
+                this.startTime = (new Date).getTime()
+            }
+        }, {
+            key: "Stop",
+            value: function() {
+                this.startTime = void 0
+            }
+        }]),
+        t
+    }();
+    !function(t) {
+        t[t.Author = 0] = "Author",
+        t[t.Warning = 1] = "Warning",
+        t[t.Error = 2] = "Error"
+    }(ye || (ye = {})),
+    Number.isInteger || (Number.isInteger = function(t) {
+        return "number" == typeof t && isFinite(t) && t > -9007199254740992 && t < 9007199254740992 && Math.floor(t) === t
+    }
+    ),
+    t.Story = function(t) {
+        a(o, t);
+        var r = d(o);
+        function o() {
+            var t, e;
+            n(this, o),
+            (t = r.call(this)).inkVersionMinimumCompatible = 18,
+            t.onError = null,
+            t.onDidContinue = null,
+            t.onMakeChoice = null,
+            t.onEvaluateFunction = null,
+            t.onCompleteEvaluateFunction = null,
+            t.onChoosePathString = null,
+            t._prevContainers = [],
+            t.allowExternalFunctionFallbacks = !1,
+            t._listDefinitions = null,
+            t._variableObservers = null,
+            t._hasValidatedExternals = !1,
+            t._temporaryEvaluationContainer = null,
+            t._asyncContinueActive = !1,
+            t._stateSnapshotAtLastNewline = null,
+            t._sawLookaheadUnsafeFunctionAfterNewline = !1,
+            t._recursiveContinueCount = 0,
+            t._asyncSaving = !1,
+            t._profiler = null;
+            var i = null
+              , a = null;
+            if (arguments[0]instanceof tt)
+                e = arguments[0],
+                void 0 !== arguments[1] && (i = arguments[1]),
+                t._mainContentContainer = e;
+            else if ("string" == typeof arguments[0]) {
+                var s = arguments[0];
+                a = ge.TextToDictionary(s)
+            } else
+                a = arguments[0];
+            if (null != i && (t._listDefinitions = new he(i)),
+            t._externals = new Map,
+            null !== a) {
+                var l = a
+                  , u = l.inkVersion;
+                if (null == u)
+                    throw new Error("ink version number not found. Are you sure it's a valid .ink.json file?");
+                var c = parseInt(u);
+                if (c > o.inkVersionCurrent)
+                    throw new Error("Version of ink used to build story was newer than the current version of the engine");
+                if (c < t.inkVersionMinimumCompatible)
+                    throw new Error("Version of ink used to build story is too old to be loaded by this version of the engine");
+                c != o.inkVersionCurrent && console.warn("WARNING: Version of ink used to build story doesn't match current version of engine. Non-critical, but recommend synchronising.");
+                var h, f = l.root;
+                if (null == f)
+                    throw new Error("Root node for ink not found. Are you sure it's a valid .ink.json file?");
+                (h = l.listDefs) && (t._listDefinitions = fe.JTokenToListDefinitions(h)),
+                t._mainContentContainer = T(fe.JTokenToRuntimeObject(f), tt),
+                t.ResetState()
+            }
+            return t
+        }
+        return i(o, [{
+            key: "currentChoices",
+            get: function() {
+                var t = [];
+                if (null === this._state)
+                    return L("this._state");
+                var e, n = S(this._state.currentChoices);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = e.value;
+                        r.isInvisibleDefault || (r.index = t.length,
+                        t.push(r))
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return t
+            }
+        }, {
+            key: "currentText",
+            get: function() {
+                return this.IfAsyncWeCant("call currentText since it's a work in progress"),
+                this.state.currentText
+            }
+        }, {
+            key: "currentTags",
+            get: function() {
+                return this.IfAsyncWeCant("call currentTags since it's a work in progress"),
+                this.state.currentTags
+            }
+        }, {
+            key: "currentErrors",
+            get: function() {
+                return this.state.currentErrors
+            }
+        }, {
+            key: "currentWarnings",
+            get: function() {
+                return this.state.currentWarnings
+            }
+        }, {
+            key: "currentFlowName",
+            get: function() {
+                return this.state.currentFlowName
+            }
+        }, {
+            key: "currentFlowIsDefaultFlow",
+            get: function() {
+                return this.state.currentFlowIsDefaultFlow
+            }
+        }, {
+            key: "aliveFlowNames",
+            get: function() {
+                return this.state.aliveFlowNames
+            }
+        }, {
+            key: "hasError",
+            get: function() {
+                return this.state.hasError
+            }
+        }, {
+            key: "hasWarning",
+            get: function() {
+                return this.state.hasWarning
+            }
+        }, {
+            key: "variablesState",
+            get: function() {
+                return this.state.variablesState
+            }
+        }, {
+            key: "listDefinitions",
+            get: function() {
+                return this._listDefinitions
+            }
+        }, {
+            key: "state",
+            get: function() {
+                return this._state
+            }
+        }, {
+            key: "StartProfiling",
+            value: function() {}
+        }, {
+            key: "EndProfiling",
+            value: function() {}
+        }, {
+            key: "ToJson",
+            value: function(t) {
+                var e = this
+                  , n = !1;
+                if (t || (n = !0,
+                t = new ge.Writer),
+                t.WriteObjectStart(),
+                t.WriteIntProperty("inkVersion", o.inkVersionCurrent),
+                t.WriteProperty("root", (function(t) {
+                    return fe.WriteRuntimeContainer(t, e._mainContentContainer)
+                }
+                )),
+                null != this._listDefinitions) {
+                    t.WritePropertyStart("listDefs"),
+                    t.WriteObjectStart();
+                    var r, i = S(this._listDefinitions.lists);
+                    try {
+                        for (i.s(); !(r = i.n()).done; ) {
+                            var a = r.value;
+                            t.WritePropertyStart(a.name),
+                            t.WriteObjectStart();
+                            var s, l = S(a.items);
+                            try {
+                                for (l.s(); !(s = l.n()).done; ) {
+                                    var u = m(s.value, 2)
+                                      , c = u[0]
+                                      , h = u[1]
+                                      , f = B.fromSerializedKey(c)
+                                      , d = h;
+                                    t.WriteIntProperty(f.itemName, d)
+                                }
+                            } catch (t) {
+                                l.e(t)
+                            } finally {
+                                l.f()
+                            }
+                            t.WriteObjectEnd(),
+                            t.WritePropertyEnd()
+                        }
+                    } catch (t) {
+                        i.e(t)
+                    } finally {
+                        i.f()
+                    }
+                    t.WriteObjectEnd(),
+                    t.WritePropertyEnd()
+                }
+                if (t.WriteObjectEnd(),
+                n)
+                    return t.toString()
+            }
+        }, {
+            key: "ResetState",
+            value: function() {
+                this.IfAsyncWeCant("ResetState"),
+                this._state = new Se(this),
+                this._state.variablesState.ObserveVariableChange(this.VariableStateDidChangeEvent.bind(this)),
+                this.ResetGlobals()
+            }
+        }, {
+            key: "ResetErrors",
+            value: function() {
+                if (null === this._state)
+                    return L("this._state");
+                this._state.ResetErrors()
+            }
+        }, {
+            key: "ResetCallstack",
+            value: function() {
+                if (this.IfAsyncWeCant("ResetCallstack"),
+                null === this._state)
+                    return L("this._state");
+                this._state.ForceEnd()
+            }
+        }, {
+            key: "ResetGlobals",
+            value: function() {
+                if (this._mainContentContainer.namedContent.get("global decl")) {
+                    var t = this.state.currentPointer.copy();
+                    this.ChoosePath(new R("global decl"), !1),
+                    this.ContinueInternal(),
+                    this.state.currentPointer = t
+                }
+                this.state.variablesState.SnapshotDefaultGlobals()
+            }
+        }, {
+            key: "SwitchFlow",
+            value: function(t) {
+                if (this.IfAsyncWeCant("switch flow"),
+                this._asyncSaving)
+                    throw new Error("Story is already in background saving mode, can't switch flow to " + t);
+                this.state.SwitchFlow_Internal(t)
+            }
+        }, {
+            key: "RemoveFlow",
+            value: function(t) {
+                this.state.RemoveFlow_Internal(t)
+            }
+        }, {
+            key: "SwitchToDefaultFlow",
+            value: function() {
+                this.state.SwitchToDefaultFlow_Internal()
+            }
+        }, {
+            key: "Continue",
+            value: function() {
+                return this.ContinueAsync(0),
+                this.currentText
+            }
+        }, {
+            key: "canContinue",
+            get: function() {
+                return this.state.canContinue
+            }
+        }, {
+            key: "asyncContinueComplete",
+            get: function() {
+                return !this._asyncContinueActive
+            }
+        }, {
+            key: "ContinueAsync",
+            value: function(t) {
+                this._hasValidatedExternals || this.ValidateExternalBindings(),
+                this.ContinueInternal(t)
+            }
+        }, {
+            key: "ContinueInternal",
+            value: function() {
+                var t = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                null != this._profiler && this._profiler.PreContinue();
+                var e = t > 0;
+                if (this._recursiveContinueCount++,
+                !this._asyncContinueActive) {
+                    if (this._asyncContinueActive = e,
+                    !this.canContinue)
+                        throw new Error("Can't continue - should check canContinue before calling Continue");
+                    this._state.didSafeExit = !1,
+                    this._state.ResetOutput(),
+                    1 == this._recursiveContinueCount && (this._state.variablesState.batchObservingVariableChanges = !0)
+                }
+                var n = new be;
+                n.Start();
+                var r = !1;
+                this._sawLookaheadUnsafeFunctionAfterNewline = !1;
+                do {
+                    try {
+                        r = this.ContinueSingleStep()
+                    } catch (t) {
+                        if (!(t instanceof G))
+                            throw t;
+                        this.AddError(t.message, void 0, t.useEndLineNumber);
+                        break
+                    }
+                    if (r)
+                        break;
+                    if (this._asyncContinueActive && n.ElapsedMilliseconds > t)
+                        break
+                } while (this.canContinue);
+                if (n.Stop(),
+                !r && this.canContinue || (null !== this._stateSnapshotAtLastNewline && this.RestoreStateSnapshot(),
+                this.canContinue || (this.state.callStack.canPopThread && this.AddError("Thread available to pop, threads should always be flat by the end of evaluation?"),
+                0 != this.state.generatedChoices.length || this.state.didSafeExit || null != this._temporaryEvaluationContainer || (this.state.callStack.CanPop(ct.Tunnel) ? this.AddError("unexpectedly reached end of content. Do you need a '->->' to return from a tunnel?") : this.state.callStack.CanPop(ct.Function) ? this.AddError("unexpectedly reached end of content. Do you need a '~ return'?") : this.state.callStack.canPop ? this.AddError("unexpectedly reached end of content for unknown reason. Please debug compiler!") : this.AddError("ran out of content. Do you need a '-> DONE' or '-> END'?"))),
+                this.state.didSafeExit = !1,
+                this._sawLookaheadUnsafeFunctionAfterNewline = !1,
+                1 == this._recursiveContinueCount && (this._state.variablesState.batchObservingVariableChanges = !1),
+                this._asyncContinueActive = !1,
+                null !== this.onDidContinue && this.onDidContinue()),
+                this._recursiveContinueCount--,
+                null != this._profiler && this._profiler.PostContinue(),
+                this.state.hasError || this.state.hasWarning) {
+                    if (null === this.onError) {
+                        var i = new j;
+                        throw i.Append("Ink had "),
+                        this.state.hasError && (i.Append("".concat(this.state.currentErrors.length)),
+                        i.Append(1 == this.state.currentErrors.length ? " error" : "errors"),
+                        this.state.hasWarning && i.Append(" and ")),
+                        this.state.hasWarning && (i.Append("".concat(this.state.currentWarnings.length)),
+                        i.Append(1 == this.state.currentWarnings.length ? " warning" : "warnings"),
+                        this.state.hasWarning && i.Append(" and ")),
+                        i.Append(". It is strongly suggested that you assign an error handler to story.onError. The first issue was: "),
+                        i.Append(this.state.hasError ? this.state.currentErrors[0] : this.state.currentWarnings[0]),
+                        new G(i.toString())
+                    }
+                    if (this.state.hasError) {
+                        var a, o = S(this.state.currentErrors);
+                        try {
+                            for (o.s(); !(a = o.n()).done; ) {
+                                var s = a.value;
+                                this.onError(s, ye.Error)
+                            }
+                        } catch (s) {
+                            o.e(s)
+                        } finally {
+                            o.f()
+                        }
+                    }
+                    if (this.state.hasWarning) {
+                        var l, u = S(this.state.currentWarnings);
+                        try {
+                            for (u.s(); !(l = u.n()).done; ) {
+                                var c = l.value;
+                                this.onError(c, ye.Warning)
+                            }
+                        } catch (s) {
+                            u.e(s)
+                        } finally {
+                            u.f()
+                        }
+                    }
+                    this.ResetErrors()
+                }
+            }
+        }, {
+            key: "ContinueSingleStep",
+            value: function() {
+                if (null != this._profiler && this._profiler.PreStep(),
+                this.Step(),
+                null != this._profiler && this._profiler.PostStep(),
+                this.canContinue || this.state.callStack.elementIsEvaluateFromGame || this.TryFollowDefaultInvisibleChoice(),
+                null != this._profiler && this._profiler.PreSnapshot(),
+                !this.state.inStringEvaluation) {
+                    if (null !== this._stateSnapshotAtLastNewline) {
+                        if (null === this._stateSnapshotAtLastNewline.currentTags)
+                            return L("this._stateAtLastNewline.currentTags");
+                        if (null === this.state.currentTags)
+                            return L("this.state.currentTags");
+                        var t = this.CalculateNewlineOutputStateChange(this._stateSnapshotAtLastNewline.currentText, this.state.currentText, this._stateSnapshotAtLastNewline.currentTags.length, this.state.currentTags.length);
+                        if (t == o.OutputStateChange.ExtendedBeyondNewline || this._sawLookaheadUnsafeFunctionAfterNewline)
+                            return this.RestoreStateSnapshot(),
+                            !0;
+                        t == o.OutputStateChange.NewlineRemoved && this.DiscardSnapshot()
+                    }
+                    this.state.outputStreamEndsInNewline && (this.canContinue ? null == this._stateSnapshotAtLastNewline && this.StateSnapshot() : this.DiscardSnapshot())
+                }
+                return null != this._profiler && this._profiler.PostSnapshot(),
+                !1
+            }
+        }, {
+            key: "CalculateNewlineOutputStateChange",
+            value: function(t, e, n, r) {
+                if (null === t)
+                    return L("prevText");
+                if (null === e)
+                    return L("currText");
+                var i = e.length >= t.length && t.length > 0 && "\n" == e.charAt(t.length - 1);
+                if (n == r && t.length == e.length && i)
+                    return o.OutputStateChange.NoChange;
+                if (!i)
+                    return o.OutputStateChange.NewlineRemoved;
+                if (r > n)
+                    return o.OutputStateChange.ExtendedBeyondNewline;
+                for (var a = t.length; a < e.length; a++) {
+                    var s = e.charAt(a);
+                    if (" " != s && "\t" != s)
+                        return o.OutputStateChange.ExtendedBeyondNewline
+                }
+                return o.OutputStateChange.NoChange
+            }
+        }, {
+            key: "ContinueMaximally",
+            value: function() {
+                this.IfAsyncWeCant("ContinueMaximally");
+                for (var t = new j; this.canContinue; )
+                    t.Append(this.Continue());
+                return t.toString()
+            }
+        }, {
+            key: "ContentAtPath",
+            value: function(t) {
+                return this.mainContentContainer.ContentAtPath(t)
+            }
+        }, {
+            key: "KnotContainerWithName",
+            value: function(t) {
+                var e = this.mainContentContainer.namedContent.get(t);
+                return e instanceof tt ? e : null
+            }
+        }, {
+            key: "PointerAtPath",
+            value: function(t) {
+                if (0 == t.length)
+                    return dt.Null;
+                var e = new dt
+                  , n = t.length
+                  , r = null;
+                return null === t.lastComponent ? L("path.lastComponent") : (t.lastComponent.isIndex ? (n = t.length - 1,
+                r = this.mainContentContainer.ContentAtPath(t, void 0, n),
+                e.container = r.container,
+                e.index = t.lastComponent.index) : (r = this.mainContentContainer.ContentAtPath(t),
+                e.container = r.container,
+                e.index = -1),
+                null == r.obj || r.obj == this.mainContentContainer && n > 0 ? this.Error("Failed to find content at path '" + t + "', and no approximation of it was possible.") : r.approximate && this.Warning("Failed to find content at path '" + t + "', so it was approximated to: '" + r.obj.path + "'."),
+                e)
+            }
+        }, {
+            key: "StateSnapshot",
+            value: function() {
+                this._stateSnapshotAtLastNewline = this._state,
+                this._state = this._state.CopyAndStartPatching()
+            }
+        }, {
+            key: "RestoreStateSnapshot",
+            value: function() {
+                null === this._stateSnapshotAtLastNewline && L("_stateSnapshotAtLastNewline"),
+                this._stateSnapshotAtLastNewline.RestoreAfterPatch(),
+                this._state = this._stateSnapshotAtLastNewline,
+                this._stateSnapshotAtLastNewline = null,
+                this._asyncSaving || this._state.ApplyAnyPatch()
+            }
+        }, {
+            key: "DiscardSnapshot",
+            value: function() {
+                this._asyncSaving || this._state.ApplyAnyPatch(),
+                this._stateSnapshotAtLastNewline = null
+            }
+        }, {
+            key: "CopyStateForBackgroundThreadSave",
+            value: function() {
+                if (this.IfAsyncWeCant("start saving on a background thread"),
+                this._asyncSaving)
+                    throw new Error("Story is already in background saving mode, can't call CopyStateForBackgroundThreadSave again!");
+                var t = this._state;
+                return this._state = this._state.CopyAndStartPatching(),
+                this._asyncSaving = !0,
+                t
+            }
+        }, {
+            key: "BackgroundSaveComplete",
+            value: function() {
+                null === this._stateSnapshotAtLastNewline && this._state.ApplyAnyPatch(),
+                this._asyncSaving = !1
+            }
+        }, {
+            key: "Step",
+            value: function() {
+                var t = !0
+                  , e = this.state.currentPointer.copy();
+                if (!e.isNull) {
+                    for (var n = _(e.Resolve(), tt); n && (this.VisitContainer(n, !0),
+                    0 != n.content.length); )
+                        n = _((e = dt.StartOf(n)).Resolve(), tt);
+                    this.state.currentPointer = e.copy(),
+                    null != this._profiler && this._profiler.Step(this.state.callStack);
+                    var r = e.Resolve()
+                      , i = this.PerformLogicAndFlowControl(r);
+                    if (!this.state.currentPointer.isNull) {
+                        i && (t = !1);
+                        var a = _(r, ht);
+                        if (a) {
+                            var o = this.ProcessChoice(a);
+                            o && this.state.generatedChoices.push(o),
+                            r = null,
+                            t = !1
+                        }
+                        if (r instanceof tt && (t = !1),
+                        t) {
+                            var s = _(r, Y);
+                            if (s && -1 == s.contextIndex) {
+                                var l = this.state.callStack.ContextForVariableNamed(s.variableName);
+                                r = new Y(s.variableName,l)
+                            }
+                            this.state.inExpressionEvaluation ? this.state.PushEvaluationStack(r) : this.state.PushToOutputStream(r)
+                        }
+                        this.NextContent();
+                        var u = _(r, et);
+                        u && u.commandType == et.CommandType.StartThread && this.state.callStack.PushThread()
+                    }
+                }
+            }
+        }, {
+            key: "VisitContainer",
+            value: function(t, e) {
+                t.countingAtStartOnly && !e || (t.visitsShouldBeCounted && this.state.IncrementVisitCountForContainer(t),
+                t.turnIndexShouldBeCounted && this.state.RecordTurnIndexVisitToContainer(t))
+            }
+        }, {
+            key: "VisitChangedContainersDueToDivert",
+            value: function() {
+                var t = this.state.previousPointer.copy()
+                  , e = this.state.currentPointer.copy();
+                if (!e.isNull && -1 != e.index) {
+                    if (this._prevContainers.length = 0,
+                    !t.isNull)
+                        for (var n = _(t.Resolve(), tt) || _(t.container, tt); n; )
+                            this._prevContainers.push(n),
+                            n = _(n.parent, tt);
+                    var r = e.Resolve();
+                    if (null != r)
+                        for (var i = _(r.parent, tt), a = !0; i && (this._prevContainers.indexOf(i) < 0 || i.countingAtStartOnly); ) {
+                            var o = i.content.length > 0 && r == i.content[0] && a;
+                            o || (a = !1),
+                            this.VisitContainer(i, o),
+                            r = i,
+                            i = _(i.parent, tt)
+                        }
+                }
+            }
+        }, {
+            key: "PopChoiceStringAndTags",
+            value: function(t) {
+                for (var e = T(this.state.PopEvaluationStack(), $); this.state.evaluationStack.length > 0 && null != _(this.state.PeekEvaluationStack(), ue); ) {
+                    var n = _(this.state.PopEvaluationStack(), ue);
+                    n && t.push(n.text)
+                }
+                return e.value
+            }
+        }, {
+            key: "ProcessChoice",
+            value: function(t) {
+                var e = !0;
+                if (t.hasCondition) {
+                    var n = this.state.PopEvaluationStack();
+                    this.IsTruthy(n) || (e = !1)
+                }
+                var r = ""
+                  , i = ""
+                  , a = [];
+                (t.hasChoiceOnlyContent && (i = this.PopChoiceStringAndTags(a) || ""),
+                t.hasStartContent && (r = this.PopChoiceStringAndTags(a) || ""),
+                t.onceOnly) && (this.state.VisitCountForContainer(t.choiceTarget) > 0 && (e = !1));
+                if (!e)
+                    return null;
+                var o = new ce;
+                return o.targetPath = t.pathOnChoice,
+                o.sourcePath = t.path.toString(),
+                o.isInvisibleDefault = t.isInvisibleDefault,
+                o.threadAtGeneration = this.state.callStack.ForkThread(),
+                o.tags = a.reverse(),
+                o.text = (r + i).replace(/^[ \t]+|[ \t]+$/g, ""),
+                o
+            }
+        }, {
+            key: "IsTruthy",
+            value: function(t) {
+                if (t instanceof K) {
+                    var e = t;
+                    if (e instanceof X) {
+                        var n = e;
+                        return this.Error("Shouldn't use a divert target (to " + n.targetPath + ") as a conditional value. Did you intend a function call 'likeThis()' or a read count check 'likeThis'? (no arrows)"),
+                        !1
+                    }
+                    return e.isTruthy
+                }
+                return !1
+            }
+        }, {
+            key: "PerformLogicAndFlowControl",
+            value: function(t) {
+                if (null == t)
+                    return !1;
+                if (t instanceof vt) {
+                    var e = t;
+                    if (e.isConditional) {
+                        var n = this.state.PopEvaluationStack();
+                        if (!this.IsTruthy(n))
+                            return !0
+                    }
+                    if (e.hasVariableTarget) {
+                        var r = e.variableDivertName
+                          , i = this.state.variablesState.GetVariableWithName(r);
+                        if (null == i)
+                            this.Error("Tried to divert using a target from a variable that could not be found (" + r + ")");
+                        else if (!(i instanceof X)) {
+                            var a = _(i, J)
+                              , o = "Tried to divert to a target from a variable, but the variable (" + r + ") didn't contain a divert target, it ";
+                            a instanceof J && 0 == a.value ? o += "was empty/null (the value 0)." : o += "contained '" + i + "'.",
+                            this.Error(o)
+                        }
+                        var s = T(i, X);
+                        this.state.divertedPointer = this.PointerAtPath(s.targetPath)
+                    } else {
+                        if (e.isExternal)
+                            return this.CallExternalFunction(e.targetPathString, e.externalArgs),
+                            !0;
+                        this.state.divertedPointer = e.targetPointer.copy()
+                    }
+                    return e.pushesToStack && this.state.callStack.Push(e.stackPushType, void 0, this.state.outputStream.length),
+                    this.state.divertedPointer.isNull && !e.isExternal && (e && e.debugMetadata && null != e.debugMetadata.sourceName ? this.Error("Divert target doesn't exist: " + e.debugMetadata.sourceName) : this.Error("Divert resolution failed: " + e)),
+                    !0
+                }
+                if (t instanceof et) {
+                    var l = t;
+                    switch (l.commandType) {
+                    case et.CommandType.EvalStart:
+                        this.Assert(!1 === this.state.inExpressionEvaluation, "Already in expression evaluation?"),
+                        this.state.inExpressionEvaluation = !0;
+                        break;
+                    case et.CommandType.EvalEnd:
+                        this.Assert(!0 === this.state.inExpressionEvaluation, "Not in expression evaluation mode"),
+                        this.state.inExpressionEvaluation = !1;
+                        break;
+                    case et.CommandType.EvalOutput:
+                        if (this.state.evaluationStack.length > 0) {
+                            var u = this.state.PopEvaluationStack();
+                            if (!(u instanceof rt)) {
+                                var c = new $(u.toString());
+                                this.state.PushToOutputStream(c)
+                            }
+                        }
+                        break;
+                    case et.CommandType.NoOp:
+                        break;
+                    case et.CommandType.Duplicate:
+                        this.state.PushEvaluationStack(this.state.PeekEvaluationStack());
+                        break;
+                    case et.CommandType.PopEvaluatedValue:
+                        this.state.PopEvaluationStack();
+                        break;
+                    case et.CommandType.PopFunction:
+                    case et.CommandType.PopTunnel:
+                        var h = l.commandType == et.CommandType.PopFunction ? ct.Function : ct.Tunnel
+                          , f = null;
+                        if (h == ct.Tunnel) {
+                            var d = this.state.PopEvaluationStack();
+                            null === (f = _(d, X)) && this.Assert(d instanceof rt, "Expected void if ->-> doesn't override target")
+                        }
+                        if (this.state.TryExitFunctionEvaluationFromGame())
+                            break;
+                        if (this.state.callStack.currentElement.type == h && this.state.callStack.canPop)
+                            this.state.PopCallStack(),
+                            f && (this.state.divertedPointer = this.PointerAtPath(f.targetPath));
+                        else {
+                            var v = new Map;
+                            v.set(ct.Function, "function return statement (~ return)"),
+                            v.set(ct.Tunnel, "tunnel onwards statement (->->)");
+                            var p = v.get(this.state.callStack.currentElement.type);
+                            this.state.callStack.canPop || (p = "end of flow (-> END or choice)");
+                            var m = "Found " + v.get(h) + ", when expected " + p;
+                            this.Error(m)
+                        }
+                        break;
+                    case et.CommandType.BeginString:
+                        this.state.PushToOutputStream(l),
+                        this.Assert(!0 === this.state.inExpressionEvaluation, "Expected to be in an expression when evaluating a string"),
+                        this.state.inExpressionEvaluation = !1;
+                        break;
+                    case et.CommandType.BeginTag:
+                        this.state.PushToOutputStream(l);
+                        break;
+                    case et.CommandType.EndTag:
+                        if (this.state.inStringEvaluation) {
+                            for (var g = [], y = 0, C = this.state.outputStream.length - 1; C >= 0; --C) {
+                                var b = this.state.outputStream[C];
+                                y++;
+                                var w = _(b, et);
+                                if (null != w) {
+                                    if (w.commandType == et.CommandType.BeginTag)
+                                        break;
+                                    this.Error("Unexpected ControlCommand while extracting tag from choice");
+                                    break
+                                }
+                                b instanceof $ && g.push(b)
+                            }
+                            this.state.PopFromOutputStream(y);
+                            for (var k = new j, E = 0, A = g; E < A.length; E++) {
+                                var P = A[E];
+                                k.Append(P.toString())
+                            }
+                            var N = new ue(this.state.CleanOutputWhitespace(k.toString()));
+                            this.state.PushEvaluationStack(N)
+                        } else
+                            this.state.PushToOutputStream(l);
+                        break;
+                    case et.CommandType.EndString:
+                        for (var x = [], O = [], I = 0, F = this.state.outputStream.length - 1; F >= 0; --F) {
+                            var W = this.state.outputStream[F];
+                            I++;
+                            var R = _(W, et);
+                            if (R && R.commandType == et.CommandType.BeginString)
+                                break;
+                            W instanceof ue && O.push(W),
+                            W instanceof $ && x.push(W)
+                        }
+                        this.state.PopFromOutputStream(I);
+                        for (var D = 0, V = O; D < V.length; D++) {
+                            var q = V[D];
+                            this.state.PushToOutputStream(q)
+                        }
+                        x = x.reverse();
+                        var U, H = new j, z = S(x);
+                        try {
+                            for (z.s(); !(U = z.n()).done; ) {
+                                var Y = U.value;
+                                H.Append(Y.toString())
+                            }
+                        } catch (t) {
+                            z.e(t)
+                        } finally {
+                            z.f()
+                        }
+                        this.state.inExpressionEvaluation = !0,
+                        this.state.PushEvaluationStack(new $(H.toString()));
+                        break;
+                    case et.CommandType.ChoiceCount:
+                        var Q = this.state.generatedChoices.length;
+                        this.state.PushEvaluationStack(new J(Q));
+                        break;
+                    case et.CommandType.Turns:
+                        this.state.PushEvaluationStack(new J(this.state.currentTurnIndex + 1));
+                        break;
+                    case et.CommandType.TurnsSince:
+                    case et.CommandType.ReadCount:
+                        var nt = this.state.PopEvaluationStack();
+                        if (!(nt instanceof X)) {
+                            var at = "";
+                            nt instanceof J && (at = ". Did you accidentally pass a read count ('knot_name') instead of a target ('-> knot_name')?"),
+                            this.Error("TURNS_SINCE / READ_COUNT expected a divert target (knot, stitch, label name), but saw " + nt + at);
+                            break
+                        }
+                        var ot, st = T(nt, X), lt = _(this.ContentAtPath(st.targetPath).correctObj, tt);
+                        null != lt ? ot = l.commandType == et.CommandType.TurnsSince ? this.state.TurnsSinceForContainer(lt) : this.state.VisitCountForContainer(lt) : (ot = l.commandType == et.CommandType.TurnsSince ? -1 : 0,
+                        this.Warning("Failed to find container for " + l.toString() + " lookup at " + st.targetPath.toString())),
+                        this.state.PushEvaluationStack(new J(ot));
+                        break;
+                    case et.CommandType.Random:
+                        var ut = _(this.state.PopEvaluationStack(), J)
+                          , ht = _(this.state.PopEvaluationStack(), J);
+                        if (null == ht || ht instanceof J == !1)
+                            return this.Error("Invalid value for minimum parameter of RANDOM(min, max)");
+                        if (null == ut || ht instanceof J == !1)
+                            return this.Error("Invalid value for maximum parameter of RANDOM(min, max)");
+                        if (null === ut.value)
+                            return L("maxInt.value");
+                        if (null === ht.value)
+                            return L("minInt.value");
+                        var ft = ut.value - ht.value + 1;
+                        (!isFinite(ft) || ft > Number.MAX_SAFE_INTEGER) && (ft = Number.MAX_SAFE_INTEGER,
+                        this.Error("RANDOM was called with a range that exceeds the size that ink numbers can use.")),
+                        ft <= 0 && this.Error("RANDOM was called with minimum as " + ht.value + " and maximum as " + ut.value + ". The maximum must be larger");
+                        var mt = this.state.storySeed + this.state.previousRandom
+                          , gt = new pe(mt).next()
+                          , yt = gt % ft + ht.value;
+                        this.state.PushEvaluationStack(new J(yt)),
+                        this.state.previousRandom = gt;
+                        break;
+                    case et.CommandType.SeedRandom:
+                        var Ct = _(this.state.PopEvaluationStack(), J);
+                        if (null == Ct || Ct instanceof J == !1)
+                            return this.Error("Invalid value passed to SEED_RANDOM");
+                        if (null === Ct.value)
+                            return L("minInt.value");
+                        this.state.storySeed = Ct.value,
+                        this.state.previousRandom = 0,
+                        this.state.PushEvaluationStack(new rt);
+                        break;
+                    case et.CommandType.VisitIndex:
+                        var St = this.state.VisitCountForContainer(this.state.currentPointer.container) - 1;
+                        this.state.PushEvaluationStack(new J(St));
+                        break;
+                    case et.CommandType.SequenceShuffleIndex:
+                        var bt = this.NextSequenceShuffleIndex();
+                        this.state.PushEvaluationStack(new J(bt));
+                        break;
+                    case et.CommandType.StartThread:
+                        break;
+                    case et.CommandType.Done:
+                        this.state.callStack.canPopThread ? this.state.callStack.PopThread() : (this.state.didSafeExit = !0,
+                        this.state.currentPointer = dt.Null);
+                        break;
+                    case et.CommandType.End:
+                        this.state.ForceEnd();
+                        break;
+                    case et.CommandType.ListFromInt:
+                        var wt = _(this.state.PopEvaluationStack(), J)
+                          , kt = T(this.state.PopEvaluationStack(), $);
+                        if (null === wt)
+                            throw new G("Passed non-integer when creating a list element from a numerical value.");
+                        var Et = null;
+                        if (null === this.listDefinitions)
+                            return L("this.listDefinitions");
+                        var _t = this.listDefinitions.TryListGetDefinition(kt.value, null);
+                        if (!_t.exists)
+                            throw new G("Failed to find LIST called " + kt.value);
+                        if (null === wt.value)
+                            return L("minInt.value");
+                        var Tt = _t.result.TryGetItemWithValue(wt.value, B.Null);
+                        Tt.exists && (Et = new Z(Tt.result,wt.value)),
+                        null == Et && (Et = new Z),
+                        this.state.PushEvaluationStack(Et);
+                        break;
+                    case et.CommandType.ListRange:
+                        var At = _(this.state.PopEvaluationStack(), K)
+                          , Pt = _(this.state.PopEvaluationStack(), K)
+                          , Nt = _(this.state.PopEvaluationStack(), Z);
+                        if (null === Nt || null === Pt || null === At)
+                            throw new G("Expected list, minimum and maximum for LIST_RANGE");
+                        if (null === Nt.value)
+                            return L("targetList.value");
+                        var xt = Nt.value.ListWithSubRange(Pt.valueObject, At.valueObject);
+                        this.state.PushEvaluationStack(new Z(xt));
+                        break;
+                    case et.CommandType.ListRandom:
+                        var Ot = this.state.PopEvaluationStack();
+                        if (null === Ot)
+                            throw new G("Expected list for LIST_RANDOM");
+                        var It = Ot.value
+                          , Wt = null;
+                        if (null === It)
+                            throw L("list");
+                        if (0 == It.Count)
+                            Wt = new M;
+                        else {
+                            for (var Rt = this.state.storySeed + this.state.previousRandom, Dt = new pe(Rt).next(), Lt = Dt % It.Count, Vt = It.entries(), jt = 0; jt <= Lt - 1; jt++)
+                                Vt.next();
+                            var Bt = Vt.next().value
+                              , Mt = {
+                                Key: B.fromSerializedKey(Bt[0]),
+                                Value: Bt[1]
+                            };
+                            if (null === Mt.Key.originName)
+                                return L("randomItem.Key.originName");
+                            (Wt = new M(Mt.Key.originName,this)).Add(Mt.Key, Mt.Value),
+                            this.state.previousRandom = Dt
+                        }
+                        this.state.PushEvaluationStack(new Z(Wt));
+                        break;
+                    default:
+                        this.Error("unhandled ControlCommand: " + l)
+                    }
+                    return !0
+                }
+                if (t instanceof pt) {
+                    var Gt = t
+                      , qt = this.state.PopEvaluationStack();
+                    return this.state.variablesState.Assign(Gt, qt),
+                    !0
+                }
+                if (t instanceof Ft) {
+                    var Ut = t
+                      , Kt = null;
+                    if (null != Ut.pathForCount) {
+                        var Ht = Ut.containerForCount
+                          , Jt = this.state.VisitCountForContainer(Ht);
+                        Kt = new J(Jt)
+                    } else
+                        null == (Kt = this.state.variablesState.GetVariableWithName(Ut.name)) && (this.Warning("Variable not found: '" + Ut.name + "'. Using default value of 0 (false). This can happen with temporary variables if the declaration hasn't yet been hit. Globals are always given a default value on load if a value doesn't exist in the save state."),
+                        Kt = new J(0));
+                    return this.state.PushEvaluationStack(Kt),
+                    !0
+                }
+                if (t instanceof it) {
+                    var zt = t
+                      , $t = this.state.PopEvaluationStack(zt.numberOfParameters)
+                      , Xt = zt.Call($t);
+                    return this.state.PushEvaluationStack(Xt),
+                    !0
+                }
+                return !1
+            }
+        }, {
+            key: "ChoosePathString",
+            value: function(t) {
+                var e = !(arguments.length > 1 && void 0 !== arguments[1]) || arguments[1]
+                  , n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : [];
+                if (this.IfAsyncWeCant("call ChoosePathString right now"),
+                null !== this.onChoosePathString && this.onChoosePathString(t, n),
+                e)
+                    this.ResetCallstack();
+                else if (this.state.callStack.currentElement.type == ct.Function) {
+                    var r = ""
+                      , i = this.state.callStack.currentElement.currentPointer.container;
+                    throw null != i && (r = "(" + i.path.toString() + ") "),
+                    new Error("Story was running a function " + r + "when you called ChoosePathString(" + t + ") - this is almost certainly not not what you want! Full stack trace: \n" + this.state.callStack.callStackTrace)
+                }
+                this.state.PassArgumentsToEvaluationStack(n),
+                this.ChoosePath(new R(t))
+            }
+        }, {
+            key: "IfAsyncWeCant",
+            value: function(t) {
+                if (this._asyncContinueActive)
+                    throw new Error("Can't " + t + ". Story is in the middle of a ContinueAsync(). Make more ContinueAsync() calls or a single Continue() call beforehand.")
+            }
+        }, {
+            key: "ChoosePath",
+            value: function(t) {
+                var e = !(arguments.length > 1 && void 0 !== arguments[1]) || arguments[1];
+                this.state.SetChosenPath(t, e),
+                this.VisitChangedContainersDueToDivert()
+            }
+        }, {
+            key: "ChooseChoiceIndex",
+            value: function(t) {
+                t = t;
+                var e = this.currentChoices;
+                this.Assert(t >= 0 && t < e.length, "choice out of range");
+                var n = e[t];
+                return null !== this.onMakeChoice && this.onMakeChoice(n),
+                null === n.threadAtGeneration ? L("choiceToChoose.threadAtGeneration") : null === n.targetPath ? L("choiceToChoose.targetPath") : (this.state.callStack.currentThread = n.threadAtGeneration,
+                void this.ChoosePath(n.targetPath))
+            }
+        }, {
+            key: "HasFunction",
+            value: function(t) {
+                try {
+                    return null != this.KnotContainerWithName(t)
+                } catch (t) {
+                    return !1
+                }
+            }
+        }, {
+            key: "EvaluateFunction",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : []
+                  , n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                if (null !== this.onEvaluateFunction && this.onEvaluateFunction(t, e),
+                this.IfAsyncWeCant("evaluate a function"),
+                null == t)
+                    throw new Error("Function is null");
+                if ("" == t || "" == t.trim())
+                    throw new Error("Function is empty or white space.");
+                var r = this.KnotContainerWithName(t);
+                if (null == r)
+                    throw new Error("Function doesn't exist: '" + t + "'");
+                var i = [];
+                i.push.apply(i, g(this.state.outputStream)),
+                this._state.ResetOutput(),
+                this.state.StartFunctionEvaluationFromGame(r, e);
+                for (var a = new j; this.canContinue; )
+                    a.Append(this.Continue());
+                var o = a.toString();
+                this._state.ResetOutput(i);
+                var s = this.state.CompleteFunctionEvaluationFromGame();
+                return null != this.onCompleteEvaluateFunction && this.onCompleteEvaluateFunction(t, e, o, s),
+                n ? {
+                    returned: s,
+                    output: o
+                } : s
+            }
+        }, {
+            key: "EvaluateExpression",
+            value: function(t) {
+                var e = this.state.callStack.elements.length;
+                this.state.callStack.Push(ct.Tunnel),
+                this._temporaryEvaluationContainer = t,
+                this.state.GoToStart();
+                var n = this.state.evaluationStack.length;
+                return this.Continue(),
+                this._temporaryEvaluationContainer = null,
+                this.state.callStack.elements.length > e && this.state.PopCallStack(),
+                this.state.evaluationStack.length > n ? this.state.PopEvaluationStack() : null
+            }
+        }, {
+            key: "CallExternalFunction",
+            value: function(t, n) {
+                if (null === t)
+                    return L("funcName");
+                var r = this._externals.get(t)
+                  , i = null
+                  , a = void 0 !== r;
+                if (!a || r.lookAheadSafe || null === this._stateSnapshotAtLastNewline) {
+                    if (!a) {
+                        if (this.allowExternalFunctionFallbacks)
+                            return i = this.KnotContainerWithName(t),
+                            this.Assert(null !== i, "Trying to call EXTERNAL function '" + t + "' which has not been bound, and fallback ink function could not be found."),
+                            this.state.callStack.Push(ct.Function, void 0, this.state.outputStream.length),
+                            void (this.state.divertedPointer = dt.StartOf(i));
+                        this.Assert(!1, "Trying to call EXTERNAL function '" + t + "' which has not been bound (and ink fallbacks disabled).")
+                    }
+                    for (var o = [], s = 0; s < n; ++s) {
+                        var l = T(this.state.PopEvaluationStack(), K).valueObject;
+                        o.push(l)
+                    }
+                    o.reverse();
+                    var u = r.function(o)
+                      , c = null;
+                    null != u ? (c = K.Create(u),
+                    this.Assert(null !== c, "Could not create ink value from returned object of type " + e(u))) : c = new rt,
+                    this.state.PushEvaluationStack(c)
+                } else
+                    this._sawLookaheadUnsafeFunctionAfterNewline = !0
+            }
+        }, {
+            key: "BindExternalFunctionGeneral",
+            value: function(t, e) {
+                var n = !(arguments.length > 2 && void 0 !== arguments[2]) || arguments[2];
+                this.IfAsyncWeCant("bind an external function"),
+                this.Assert(!this._externals.has(t), "Function '" + t + "' has already been bound."),
+                this._externals.set(t, {
+                    function: e,
+                    lookAheadSafe: n
+                })
+            }
+        }, {
+            key: "TryCoerce",
+            value: function(t) {
+                return t
+            }
+        }, {
+            key: "BindExternalFunction",
+            value: function(t, e) {
+                var n = this
+                  , r = arguments.length > 2 && void 0 !== arguments[2] && arguments[2];
+                this.Assert(null != e, "Can't bind a null function"),
+                this.BindExternalFunctionGeneral(t, (function(t) {
+                    n.Assert(t.length >= e.length, "External function expected " + e.length + " arguments");
+                    for (var r = [], i = 0, a = t.length; i < a; i++)
+                        r[i] = n.TryCoerce(t[i]);
+                    return e.apply(null, r)
+                }
+                ), r)
+            }
+        }, {
+            key: "UnbindExternalFunction",
+            value: function(t) {
+                this.IfAsyncWeCant("unbind an external a function"),
+                this.Assert(this._externals.has(t), "Function '" + t + "' has not been bound."),
+                this._externals.delete(t)
+            }
+        }, {
+            key: "ValidateExternalBindings",
+            value: function() {
+                var t = null
+                  , e = null
+                  , n = arguments[1] || new Set;
+                if (arguments[0]instanceof tt && (t = arguments[0]),
+                arguments[0]instanceof V && (e = arguments[0]),
+                null === t && null === e)
+                    if (this.ValidateExternalBindings(this._mainContentContainer, n),
+                    this._hasValidatedExternals = !0,
+                    0 == n.size)
+                        this._hasValidatedExternals = !0;
+                    else {
+                        var r = "Error: Missing function binding for external";
+                        r += n.size > 1 ? "s" : "",
+                        r += ": '",
+                        r += Array.from(n).join("', '"),
+                        r += "' ",
+                        r += this.allowExternalFunctionFallbacks ? ", and no fallback ink function found." : " (ink fallbacks disabled)",
+                        this.Error(r)
+                    }
+                else if (null != t) {
+                    var i, a = S(t.content);
+                    try {
+                        for (a.s(); !(i = a.n()).done; ) {
+                            var o = i.value
+                              , s = o;
+                            null != s && s.hasValidName || this.ValidateExternalBindings(o, n)
+                        }
+                    } catch (t) {
+                        a.e(t)
+                    } finally {
+                        a.f()
+                    }
+                    var l, u = S(t.namedContent);
+                    try {
+                        for (u.s(); !(l = u.n()).done; ) {
+                            var c = m(l.value, 2)
+                              , h = c[1];
+                            this.ValidateExternalBindings(_(h, V), n)
+                        }
+                    } catch (t) {
+                        u.e(t)
+                    } finally {
+                        u.f()
+                    }
+                } else if (null != e) {
+                    var f = _(e, vt);
+                    if (f && f.isExternal) {
+                        var d = f.targetPathString;
+                        if (null === d)
+                            return L("name");
+                        if (!this._externals.has(d))
+                            if (this.allowExternalFunctionFallbacks) {
+                                var v = this.mainContentContainer.namedContent.has(d);
+                                v || n.add(d)
+                            } else
+                                n.add(d)
+                    }
+                }
+            }
+        }, {
+            key: "ObserveVariable",
+            value: function(t, e) {
+                if (this.IfAsyncWeCant("observe a new variable"),
+                null === this._variableObservers && (this._variableObservers = new Map),
+                !this.state.variablesState.GlobalVariableExistsWithName(t))
+                    throw new Error("Cannot observe variable '" + t + "' because it wasn't declared in the ink story.");
+                this._variableObservers.has(t) ? this._variableObservers.get(t).push(e) : this._variableObservers.set(t, [e])
+            }
+        }, {
+            key: "ObserveVariables",
+            value: function(t, e) {
+                for (var n = 0, r = t.length; n < r; n++)
+                    this.ObserveVariable(t[n], e[n])
+            }
+        }, {
+            key: "RemoveVariableObserver",
+            value: function(t, e) {
+                if (this.IfAsyncWeCant("remove a variable observer"),
+                null !== this._variableObservers)
+                    if (null != e) {
+                        if (this._variableObservers.has(e))
+                            if (null != t) {
+                                var n = this._variableObservers.get(e);
+                                null != n && (n.splice(n.indexOf(t), 1),
+                                0 === n.length && this._variableObservers.delete(e))
+                            } else
+                                this._variableObservers.delete(e)
+                    } else if (null != t) {
+                        var r, i = S(this._variableObservers.keys());
+                        try {
+                            for (i.s(); !(r = i.n()).done; ) {
+                                var a = r.value
+                                  , o = this._variableObservers.get(a);
+                                null != o && (o.splice(o.indexOf(t), 1),
+                                0 === o.length && this._variableObservers.delete(a))
+                            }
+                        } catch (t) {
+                            i.e(t)
+                        } finally {
+                            i.f()
+                        }
+                    }
+            }
+        }, {
+            key: "VariableStateDidChangeEvent",
+            value: function(t, e) {
+                if (null !== this._variableObservers) {
+                    var n = this._variableObservers.get(t);
+                    if (void 0 !== n) {
+                        if (!(e instanceof K))
+                            throw new Error("Tried to get the value of a variable that isn't a standard type");
+                        var r, i = T(e, K), a = S(n);
+                        try {
+                            for (a.s(); !(r = a.n()).done; ) {
+                                (0,
+                                r.value)(t, i.valueObject)
+                            }
+                        } catch (t) {
+                            a.e(t)
+                        } finally {
+                            a.f()
+                        }
+                    }
+                }
+            }
+        }, {
+            key: "globalTags",
+            get: function() {
+                return this.TagsAtStartOfFlowContainerWithPathString("")
+            }
+        }, {
+            key: "TagsForContentAtPath",
+            value: function(t) {
+                return this.TagsAtStartOfFlowContainerWithPathString(t)
+            }
+        }, {
+            key: "TagsAtStartOfFlowContainerWithPathString",
+            value: function(t) {
+                var e = new R(t)
+                  , n = this.ContentAtPath(e).container;
+                if (null === n)
+                    return L("flowContainer");
+                for (; ; ) {
+                    var r = n.content[0];
+                    if (!(r instanceof tt))
+                        break;
+                    n = r
+                }
+                var i, a = !1, o = null, s = S(n.content);
+                try {
+                    for (s.s(); !(i = s.n()).done; ) {
+                        var l = i.value
+                          , u = _(l, et);
+                        if (null != u)
+                            u.commandType == et.CommandType.BeginTag ? a = !0 : u.commandType == et.CommandType.EndTag && (a = !1);
+                        else {
+                            if (!a)
+                                break;
+                            var c = _(l, $);
+                            null !== c ? (null === o && (o = []),
+                            null !== c.value && o.push(c.value)) : this.Error("Tag contained non-text content. Only plain text is allowed when using globalTags or TagsAtContentPath. If you want to evaluate dynamic content, you need to use story.Continue().")
+                        }
+                    }
+                } catch (t) {
+                    s.e(t)
+                } finally {
+                    s.f()
+                }
+                return o
+            }
+        }, {
+            key: "BuildStringOfHierarchy",
+            value: function() {
+                var t = new j;
+                return this.mainContentContainer.BuildStringOfHierarchy(t, 0, this.state.currentPointer.Resolve()),
+                t.toString()
+            }
+        }, {
+            key: "BuildStringOfContainer",
+            value: function(t) {
+                var e = new j;
+                return t.BuildStringOfHierarchy(e, 0, this.state.currentPointer.Resolve()),
+                e.toString()
+            }
+        }, {
+            key: "NextContent",
+            value: function() {
+                if ((this.state.previousPointer = this.state.currentPointer.copy(),
+                this.state.divertedPointer.isNull || (this.state.currentPointer = this.state.divertedPointer.copy(),
+                this.state.divertedPointer = dt.Null,
+                this.VisitChangedContainersDueToDivert(),
+                this.state.currentPointer.isNull)) && !this.IncrementContentPointer()) {
+                    var t = !1;
+                    this.state.callStack.CanPop(ct.Function) ? (this.state.PopCallStack(ct.Function),
+                    this.state.inExpressionEvaluation && this.state.PushEvaluationStack(new rt),
+                    t = !0) : this.state.callStack.canPopThread ? (this.state.callStack.PopThread(),
+                    t = !0) : this.state.TryExitFunctionEvaluationFromGame(),
+                    t && !this.state.currentPointer.isNull && this.NextContent()
+                }
+            }
+        }, {
+            key: "IncrementContentPointer",
+            value: function() {
+                var t = !0
+                  , e = this.state.callStack.currentElement.currentPointer.copy();
+                if (e.index++,
+                null === e.container)
+                    return L("pointer.container");
+                for (; e.index >= e.container.content.length; ) {
+                    t = !1;
+                    var n = _(e.container.parent, tt);
+                    if (n instanceof tt == !1)
+                        break;
+                    var r = n.content.indexOf(e.container);
+                    if (-1 == r)
+                        break;
+                    if ((e = new dt(n,r)).index++,
+                    t = !0,
+                    null === e.container)
+                        return L("pointer.container")
+                }
+                return t || (e = dt.Null),
+                this.state.callStack.currentElement.currentPointer = e.copy(),
+                t
+            }
+        }, {
+            key: "TryFollowDefaultInvisibleChoice",
+            value: function() {
+                var t = this._state.currentChoices
+                  , e = t.filter((function(t) {
+                    return t.isInvisibleDefault
+                }
+                ));
+                if (0 == e.length || t.length > e.length)
+                    return !1;
+                var n = e[0];
+                return null === n.targetPath ? L("choice.targetPath") : null === n.threadAtGeneration ? L("choice.threadAtGeneration") : (this.state.callStack.currentThread = n.threadAtGeneration,
+                null !== this._stateSnapshotAtLastNewline && (this.state.callStack.currentThread = this.state.callStack.ForkThread()),
+                this.ChoosePath(n.targetPath, !1),
+                !0)
+            }
+        }, {
+            key: "NextSequenceShuffleIndex",
+            value: function() {
+                var t = _(this.state.PopEvaluationStack(), J);
+                if (!(t instanceof J))
+                    return this.Error("expected number of elements in sequence for shuffle index"),
+                    0;
+                var e = this.state.currentPointer.container;
+                if (null === e)
+                    return L("seqContainer");
+                if (null === t.value)
+                    return L("numElementsIntVal.value");
+                var n = t.value
+                  , r = T(this.state.PopEvaluationStack(), J).value;
+                if (null === r)
+                    return L("seqCount");
+                for (var i = r / n, a = r % n, o = e.path.toString(), s = 0, l = 0, u = o.length; l < u; l++)
+                    s += o.charCodeAt(l) || 0;
+                for (var c = s + i + this.state.storySeed, h = new pe(Math.floor(c)), f = [], d = 0; d < n; ++d)
+                    f.push(d);
+                for (var v = 0; v <= a; ++v) {
+                    var p = h.next() % f.length
+                      , m = f[p];
+                    if (f.splice(p, 1),
+                    v == a)
+                        return m
+                }
+                throw new Error("Should never reach here")
+            }
+        }, {
+            key: "Error",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] && arguments[1]
+                  , n = new G(t);
+                throw n.useEndLineNumber = e,
+                n
+            }
+        }, {
+            key: "Warning",
+            value: function(t) {
+                this.AddError(t, !0)
+            }
+        }, {
+            key: "AddError",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] && arguments[1]
+                  , n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2]
+                  , r = this.currentDebugMetadata
+                  , i = e ? "WARNING" : "ERROR";
+                if (null != r) {
+                    var a = n ? r.endLineNumber : r.startLineNumber;
+                    t = "RUNTIME " + i + ": '" + r.fileName + "' line " + a + ": " + t
+                } else
+                    t = this.state.currentPointer.isNull ? "RUNTIME " + i + ": " + t : "RUNTIME " + i + ": (" + this.state.currentPointer + "): " + t;
+                this.state.AddError(t, e),
+                e || this.state.ForceEnd()
+            }
+        }, {
+            key: "Assert",
+            value: function(t) {
+                var e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null;
+                if (0 == t)
+                    throw null == e && (e = "Story assert"),
+                    new Error(e + " " + this.currentDebugMetadata)
+            }
+        }, {
+            key: "currentDebugMetadata",
+            get: function() {
+                var t, e = this.state.currentPointer;
+                if (!e.isNull && null !== e.Resolve() && null !== (t = e.Resolve().debugMetadata))
+                    return t;
+                for (var n = this.state.callStack.elements.length - 1; n >= 0; --n)
+                    if (!(e = this.state.callStack.elements[n].currentPointer).isNull && null !== e.Resolve() && null !== (t = e.Resolve().debugMetadata))
+                        return t;
+                for (var r = this.state.outputStream.length - 1; r >= 0; --r) {
+                    if (null !== (t = this.state.outputStream[r].debugMetadata))
+                        return t
+                }
+                return null
+            }
+        }, {
+            key: "mainContentContainer",
+            get: function() {
+                return this._temporaryEvaluationContainer ? this._temporaryEvaluationContainer : this._mainContentContainer
+            }
+        }]),
+        o
+    }(V),
+    t.Story.inkVersionCurrent = 21,
+    function(t) {
+        var e;
+        (e = t.OutputStateChange || (t.OutputStateChange = {}))[e.NoChange = 0] = "NoChange",
+        e[e.ExtendedBeyondNewline = 1] = "ExtendedBeyondNewline",
+        e[e.NewlineRemoved = 2] = "NewlineRemoved"
+    }(t.Story || (t.Story = {}));
+    var we = function(e) {
+        a(s, e);
+        var r = d(s);
+        function s(e) {
+            var i, a = arguments.length > 1 && void 0 !== arguments[1] && arguments[1];
+            return n(this, s),
+            (i = r.call(this, null, e, null, !1, a))._errorHandler = null,
+            i._hadError = !1,
+            i._hadWarning = !1,
+            i._dontFlattenContainers = new Set,
+            i._listDefs = new Map,
+            i.constants = new Map,
+            i.externals = new Map,
+            i.countAllVisits = !1,
+            i.ExportRuntime = function() {
+                var e, n, r = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : null;
+                i._errorHandler = r,
+                i.constants = new Map;
+                var a, o = S(i.FindAll(_t)());
+                try {
+                    for (o.s(); !(a = o.n()).done; ) {
+                        var s = a.value
+                          , l = i.constants.get(s.constantName);
+                        if (l && !l.Equals(s.expression)) {
+                            var u = "CONST '".concat(s.constantName, "' has been redefined with a different value. Multiple definitions of the same CONST are valid so long as they contain the same value. Initial definition was on ").concat(l.debugMetadata, ".");
+                            i.Error(u, s, !1)
+                        }
+                        i.constants.set(s.constantName, s.expression)
+                    }
+                } catch (t) {
+                    o.e(t)
+                } finally {
+                    o.f()
+                }
+                i._listDefs = new Map;
+                var c, f = S(i.FindAll(Ht)());
+                try {
+                    for (f.s(); !(c = f.n()).done; ) {
+                        var d = c.value;
+                        (null === (e = d.identifier) || void 0 === e ? void 0 : e.name) && i._listDefs.set(null === (n = d.identifier) || void 0 === n ? void 0 : n.name, d)
+                    }
+                } catch (t) {
+                    f.e(t)
+                } finally {
+                    f.f()
+                }
+                i.externals = new Map,
+                i.ResolveWeavePointNaming();
+                var v = i.runtimeObject
+                  , p = new tt;
+                p.AddContent(et.EvalStart());
+                var g, y = [], C = S(i.variableDeclarations);
+                try {
+                    for (C.s(); !(g = C.n()).done; ) {
+                        var b = m(g.value, 2)
+                          , w = b[0]
+                          , k = b[1];
+                        if (k.isGlobalDeclaration) {
+                            if (k.listDefinition)
+                                i._listDefs.set(w, k.listDefinition),
+                                p.AddContent(k.listDefinition.runtimeObject),
+                                y.push(k.listDefinition.runtimeListDefinition);
+                            else {
+                                if (!k.expression)
+                                    throw new Error;
+                                k.expression.GenerateIntoContainer(p)
+                            }
+                            var E = new pt(w,!0);
+                            E.isGlobal = !0,
+                            p.AddContent(E)
+                        }
+                    }
+                } catch (t) {
+                    C.e(t)
+                } finally {
+                    C.f()
+                }
+                p.AddContent(et.EvalEnd()),
+                p.AddContent(et.End()),
+                i.variableDeclarations.size > 0 && (p.name = "global decl",
+                v.AddToNamedContentOnly(p)),
+                v.AddContent(et.Done());
+                var _ = new t.Story(v,y);
+                return i.runtimeObject = _,
+                i.hadError ? null : (i.FlattenContainersIn(v),
+                i.ResolveReferences(h(i)),
+                i.hadError ? null : (_.ResetState(),
+                _))
+            }
+            ,
+            i.ResolveList = function(t) {
+                var e = i._listDefs.get(t);
+                return e || null
+            }
+            ,
+            i.ResolveListItem = function(t, e) {
+                var n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null
+                  , r = null;
+                if (t)
+                    return (r = i._listDefs.get(t)) ? r.ItemNamed(e) : null;
+                var a, o = null, s = null, l = S(i._listDefs.entries());
+                try {
+                    for (l.s(); !(a = l.n()).done; ) {
+                        var u = m(a.value, 2)
+                          , c = u[1]
+                          , h = c.ItemNamed(e);
+                        h && (o ? i.Error("Ambiguous item name '".concat(e, "' found in multiple sets, including ").concat(s.identifier, " and ").concat(c.identifier), n, !1) : (o = h,
+                        s = c))
+                    }
+                } catch (t) {
+                    l.e(t)
+                } finally {
+                    l.f()
+                }
+                return o
+            }
+            ,
+            i.FlattenContainersIn = function(t) {
+                var e = new Set;
+                if (t.content) {
+                    var n, r = S(t.content);
+                    try {
+                        for (r.s(); !(n = r.n()).done; ) {
+                            var a = _(n.value, tt);
+                            a && e.add(a)
+                        }
+                    } catch (t) {
+                        r.e(t)
+                    } finally {
+                        r.f()
+                    }
+                }
+                if (t.namedContent) {
+                    var o, s = S(t.namedContent);
+                    try {
+                        for (s.s(); !(o = s.n()).done; ) {
+                            var l = _(m(o.value, 2)[1], tt);
+                            l && e.add(l)
+                        }
+                    } catch (t) {
+                        s.e(t)
+                    } finally {
+                        s.f()
+                    }
+                }
+                var u, c = S(e);
+                try {
+                    for (c.s(); !(u = c.n()).done; ) {
+                        var h = u.value;
+                        i.TryFlattenContainer(h),
+                        i.FlattenContainersIn(h)
+                    }
+                } catch (t) {
+                    c.e(t)
+                } finally {
+                    c.f()
+                }
+            }
+            ,
+            i.TryFlattenContainer = function(t) {
+                if (!(t.namedContent && t.namedContent.size > 0 || t.hasValidName || i._dontFlattenContainers.has(t))) {
+                    var e = _(t.parent, tt);
+                    if (e) {
+                        var n = e.content.indexOf(t);
+                        e.content.splice(n, 1);
+                        var r = t.ownDebugMetadata;
+                        if (t.content) {
+                            var a, o = S(t.content);
+                            try {
+                                for (o.s(); !(a = o.n()).done; ) {
+                                    var s = a.value;
+                                    s.parent = null,
+                                    null !== r && null === s.ownDebugMetadata && (s.debugMetadata = r),
+                                    e.InsertContent(s, n),
+                                    n += 1
+                                }
+                            } catch (t) {
+                                o.e(t)
+                            } finally {
+                                o.f()
+                            }
+                        }
+                    }
+                }
+            }
+            ,
+            i.Error = function(t, e, n) {
+                var r = n ? b.Warning : b.Error
+                  , a = "";
+                if (e instanceof W ? (a += "TODO: ",
+                r = b.Author) : a += n ? "WARNING: " : "ERROR: ",
+                e && null !== e.debugMetadata && e.debugMetadata.startLineNumber >= 1 && (null != e.debugMetadata.fileName && (a += "'".concat(e.debugMetadata.fileName, "' ")),
+                a += "line ".concat(e.debugMetadata.startLineNumber, ": ")),
+                t = a += t,
+                null === i._errorHandler)
+                    throw new Error(t);
+                i._errorHandler(t, r),
+                i._hadError = r === b.Error,
+                i._hadWarning = r === b.Warning
+            }
+            ,
+            i.ResetError = function() {
+                i._hadError = !1,
+                i._hadWarning = !1
+            }
+            ,
+            i.IsExternal = function(t) {
+                return i.externals.has(t)
+            }
+            ,
+            i.AddExternal = function(t) {
+                i.externals.has(t.name) ? i.Error("Duplicate EXTERNAL definition of '".concat(t.name, "'"), t, !1) : t.name && i.externals.set(t.name, t)
+            }
+            ,
+            i.DontFlattenContainer = function(t) {
+                i._dontFlattenContainers.add(t)
+            }
+            ,
+            i.NameConflictError = function(t, e, n, r) {
+                t.Error("".concat(r, " '").concat(e, "': name has already been used for a ").concat(n.typeName.toLowerCase(), " on ").concat(n.debugMetadata))
+            }
+            ,
+            i.CheckForNamingCollisions = function(t, e, n) {
+                var r, a = arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : "", o = a || t.typeName;
+                if (s.IsReservedKeyword(null == e ? void 0 : e.name))
+                    t.Error("'".concat(e, "' cannot be used for the name of a ").concat(o.toLowerCase(), " because it's a reserved keyword"));
+                else if (Rt.IsBuiltIn((null == e ? void 0 : e.name) || ""))
+                    t.Error("'".concat(e, "' cannot be used for the name of a ").concat(o.toLowerCase(), " because it's a built in function"));
+                else {
+                    var l = i.ContentWithNameAtLevel((null == e ? void 0 : e.name) || "", bt.Knot)
+                      , u = _(l, Ot);
+                    if (!u || u === t && n !== ft.Arg) {
+                        if (!(n < ft.List)) {
+                            var c, h = S(i._listDefs);
+                            try {
+                                for (h.s(); !(c = h.n()).done; ) {
+                                    var f = m(c.value, 2)
+                                      , d = f[0]
+                                      , v = f[1];
+                                    if ((null == e ? void 0 : e.name) === d && t !== v && v.variableAssignment !== t && i.NameConflictError(t, null == e ? void 0 : e.name, v, o),
+                                    !(t instanceof se)) {
+                                        var p, g = S(v.itemDefinitions);
+                                        try {
+                                            for (g.s(); !(p = g.n()).done; ) {
+                                                var y = p.value;
+                                                (null == e ? void 0 : e.name) === y.name && i.NameConflictError(t, (null == e ? void 0 : e.name) || "", y, o)
+                                            }
+                                        } catch (t) {
+                                            g.e(t)
+                                        } finally {
+                                            g.f()
+                                        }
+                                    }
+                                }
+                            } catch (t) {
+                                h.e(t)
+                            } finally {
+                                h.f()
+                            }
+                            if (!(n <= ft.Var)) {
+                                var C = (null == e ? void 0 : e.name) && i.variableDeclarations.get(null == e ? void 0 : e.name) || null;
+                                if (C && C !== t && C.isGlobalDeclaration && null == C.listDefinition && i.NameConflictError(t, (null == e ? void 0 : e.name) || "", C, o),
+                                !(n < ft.SubFlowAndWeave)) {
+                                    var b = new At(e)
+                                      , w = b.ResolveFromContext(t);
+                                    if (w && w !== t)
+                                        i.NameConflictError(t, (null == e ? void 0 : e.name) || "", w, o);
+                                    else if (!(n < ft.Arg) && n !== ft.Arg) {
+                                        var k = _(t, Ot);
+                                        if (k || (k = Nt(t)),
+                                        k && k.hasParameters && k.args) {
+                                            var E, T = S(k.args);
+                                            try {
+                                                for (T.s(); !(E = T.n()).done; ) {
+                                                    var A = E.value;
+                                                    if ((null === (r = A.identifier) || void 0 === r ? void 0 : r.name) === (null == e ? void 0 : e.name))
+                                                        return void t.Error("".concat(o, " '").concat(e, "': name has already been used for a argument to ").concat(k.identifier, " on ").concat(k.debugMetadata))
+                                                }
+                                            } catch (t) {
+                                                T.e(t)
+                                            } finally {
+                                                T.f()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else
+                        i.NameConflictError(t, (null == e ? void 0 : e.name) || "", u, o)
+                }
+            }
+            ,
+            i
+        }
+        return i(s, [{
+            key: "flowLevel",
+            get: function() {
+                return bt.Story
+            }
+        }, {
+            key: "hadError",
+            get: function() {
+                return this._hadError
+            }
+        }, {
+            key: "hadWarning",
+            get: function() {
+                return this._hadWarning
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "Story"
+            }
+        }, {
+            key: "PreProcessTopLevelObjects",
+            value: function(t) {
+                p(o(s.prototype), "PreProcessTopLevelObjects", this).call(this, t);
+                var e, n = [], r = S(t);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var i = e.value;
+                        if (i instanceof re) {
+                            var a = i
+                              , l = t.indexOf(i);
+                            if (t.splice(l, 1),
+                            a.includedStory) {
+                                var u = []
+                                  , c = a.includedStory;
+                                if (null != c.content) {
+                                    var h, f = S(c.content);
+                                    try {
+                                        for (f.s(); !(h = f.n()).done; ) {
+                                            var d = h.value;
+                                            d instanceof Ot ? n.push(d) : u.push(d)
+                                        }
+                                    } catch (t) {
+                                        f.e(t)
+                                    } finally {
+                                        f.f()
+                                    }
+                                    u.push(new Et("\n")),
+                                    t.splice.apply(t, [l, 0].concat(u))
+                                }
+                            }
+                        } else
+                            ;
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                t.splice.apply(t, [0, 0].concat(n))
+            }
+        }]),
+        s
+    }(Ot);
+    we.IsReservedKeyword = function(t) {
+        switch (t) {
+        case "true":
+        case "false":
+        case "not":
+        case "return":
+        case "else":
+        case "VAR":
+        case "CONST":
+        case "temp":
+        case "LIST":
+        case "function":
+            return !0
+        }
+        return !1
+    }
+    ;
+    var ke = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i;
+            return n(this, r),
+            (i = e.call(this)).GenerateIntoContainer = function(t) {
+                t.AddContent(et.BeginString());
+                var e, n = S(i.content);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = e.value;
+                        t.AddContent(r.runtimeObject)
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                t.AddContent(et.EndString())
+            }
+            ,
+            i.toString = function() {
+                var t, e = "", n = S(i.content);
+                try {
+                    for (n.s(); !(t = n.n()).done; ) {
+                        e += t.value
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+                return e
+            }
+            ,
+            i.AddContent(t),
+            i
+        }
+        return i(r, [{
+            key: "isSingleString",
+            get: function() {
+                return 1 === this.content.length && this.content[0]instanceof Et
+            }
+        }, {
+            key: "typeName",
+            get: function() {
+                return "String"
+            }
+        }, {
+            key: "Equals",
+            value: function(t) {
+                var e = _(t, r);
+                return null !== e && (!(!this.isSingleString || !e.isSingleString) && this.toString() === e.toString())
+            }
+        }]),
+        r
+    }(nt)
+      , Ee = function(t) {
+        a(r, t);
+        var e = d(r);
+        function r(t) {
+            var i, a = arguments.length > 1 && void 0 !== arguments[1] && arguments[1];
+            return n(this, r),
+            (i = e.call(this)).GenerateRuntimeObject = function() {
+                return i.isStart ? et.BeginTag() : et.EndTag()
+            }
+            ,
+            i.toString = function() {
+                return i.isStart ? "#StartTag" : "#EndTag"
+            }
+            ,
+            i.isStart = t,
+            i.inChoice = a,
+            i
+        }
+        return i(r, [{
+            key: "typeName",
+            get: function() {
+                return "Tag"
+            }
+        }]),
+        r
+    }(F)
+      , _e = i((function t(e) {
+        n(this, t),
+        this.rootPath = e,
+        this.ResolveInkFilename = function() {
+            throw Error("Can't resolve filename because no FileHandler was provided when instantiating the parser / compiler.")
+        }
+        ,
+        this.LoadInkFileContents = function() {
+            throw Error("Can't load ink content because no FileHandler was provided when instantiating the parser / compiler.")
+        }
+    }
+    ))
+      , Te = function(t) {
+        a(o, t);
+        var r = d(o);
+        function o(t) {
+            var i, a = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null, s = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : null, l = arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : null, u = arguments.length > 4 && void 0 !== arguments[4] ? arguments[4] : null;
+            if (n(this, o),
+            (i = r.call(this, t)).ParseStory = function() {
+                var t = i.StatementsAtLevel(Xt.Top);
+                return new we(t,i._rootParser !== h(i))
+            }
+            ,
+            i.SeparatedList = function(t, e) {
+                var n = i.Parse(t);
+                if (null === n)
+                    return null;
+                var r = [];
+                for (r.push(n); ; ) {
+                    var a = i.BeginRule();
+                    if (null === e()) {
+                        i.FailRule(a);
+                        break
+                    }
+                    var o = i.Parse(t);
+                    if (null === o) {
+                        i.FailRule(a);
+                        break
+                    }
+                    i.SucceedRule(a),
+                    r.push(o)
+                }
+                return r
+            }
+            ,
+            i.CreateDebugMetadata = function(t, e) {
+                var n = new Yt;
+                return n.startLineNumber = ((null == t ? void 0 : t.lineIndex) || 0) + 1,
+                n.endLineNumber = e.lineIndex + 1,
+                n.startCharacterNumber = ((null == t ? void 0 : t.characterInLineIndex) || 0) + 1,
+                n.endCharacterNumber = e.characterInLineIndex + 1,
+                n.fileName = i._filename,
+                n
+            }
+            ,
+            i.RuleDidSucceed = function(t, e, n) {
+                var r = _(t, F);
+                r && (r.debugMetadata = i.CreateDebugMetadata(e, n));
+                var a = Array.isArray(t) ? t : null;
+                if (null !== a) {
+                    var o, s = S(a);
+                    try {
+                        for (s.s(); !(o = s.n()).done; ) {
+                            var l = o.value;
+                            _(l, F) && (l.hasOwnDebugMetadata || (l.debugMetadata = i.CreateDebugMetadata(e, n)))
+                        }
+                    } catch (t) {
+                        s.e(t)
+                    } finally {
+                        s.f()
+                    }
+                }
+                var u = _(t, xt);
+                null != u && (u.debugMetadata = i.CreateDebugMetadata(e, n))
+            }
+            ,
+            i.OnStringParserError = function(t, e) {
+                var n = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : 0
+                  , r = arguments.length > 3 && void 0 !== arguments[3] && arguments[3]
+                  , a = r ? "WARNING:" : "ERROR:"
+                  , o = a;
+                if (null !== i._filename && (o += " '".concat(i._filename, "'")),
+                o += " line ".concat(n + 1, ": ").concat(t),
+                null === i._externalErrorHandler)
+                    throw new Error(o);
+                i._externalErrorHandler(o, r ? b.Warning : b.Error)
+            }
+            ,
+            i.AuthorWarning = function() {
+                i.Whitespace();
+                var t = i.Parse(i.IdentifierWithMetadata);
+                if (null === t || "TODO" !== t.name)
+                    return null;
+                i.Whitespace(),
+                i.ParseString(":"),
+                i.Whitespace();
+                var e = i.ParseUntilCharactersFromString("\n\r");
+                return e ? new W(e) : null
+            }
+            ,
+            i.ExtendIdentifierCharacterRanges = function(t) {
+                var e, n = S(o.ListAllCharacterRanges());
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var r = e.value;
+                        t.AddCharacters(r.ToCharacterSet())
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+            }
+            ,
+            i._parsingChoice = !1,
+            i.Choice = function() {
+                var t = !0
+                  , e = i.Interleave(i.OptionalExclude(i.Whitespace), i.String("*"));
+                if (!e) {
+                    if (null === (e = i.Interleave(i.OptionalExclude(i.Whitespace), i.String("+"))))
+                        return null;
+                    t = !1
+                }
+                var n = i.Parse(i.BracketedName);
+                i.Whitespace();
+                var r = i.Parse(i.ChoiceCondition);
+                if (i.Whitespace(),
+                i._parsingChoice)
+                    throw new Error("Already parsing a choice - shouldn't have nested choices");
+                i._parsingChoice = !0;
+                var a = null
+                  , o = i.Parse(i.MixedTextAndLogic);
+                o && (a = new It(o));
+                var s = null
+                  , l = null
+                  , u = null !== i.ParseString("[");
+                if (u) {
+                    i.EndTagIfNecessary(a);
+                    var c = i.Parse(i.MixedTextAndLogic);
+                    null !== c && (s = new It(c)),
+                    i.Expect(i.String("]"), "closing ']' for weave-style option"),
+                    i.EndTagIfNecessary(s);
+                    var h = i.Parse(i.MixedTextAndLogic);
+                    null !== h && (l = new It(h))
+                }
+                i.Whitespace(),
+                i.EndTagIfNecessary(null != l ? l : a);
+                var f = i.Parse(i.MultiDivert);
+                i._parsingChoice = !1,
+                i.Whitespace();
+                var d = !a && !l && !s;
+                if (d && null === f && i.Warning("Choice is completely empty. Interpretting as a default fallback choice. Add a divert arrow to remove this warning: * ->"),
+                a || !u || s || i.Warning("Blank choice - if you intended a default fallback choice, use the `* ->` syntax"),
+                l || (l = new It),
+                i.EndTagIfNecessary(l),
+                null !== f) {
+                    var v, p = S(f);
+                    try {
+                        for (p.s(); !(v = p.n()).done; ) {
+                            var m = v.value
+                              , g = _(m, jt);
+                            g && g.isEmpty || l.AddContent(m)
+                        }
+                    } catch (t) {
+                        p.e(t)
+                    } finally {
+                        p.f()
+                    }
+                }
+                l.AddContent(new Et("\n"));
+                var y = new mt(a,s,l);
+                return n && (y.identifier = n),
+                y.indentationDepth = e.length,
+                y.hasWeaveStyleInlineBrackets = u,
+                y.condition = r,
+                y.onceOnly = t,
+                y.isInvisibleDefault = d,
+                y
+            }
+            ,
+            i.ChoiceCondition = function() {
+                var t = i.Interleave(i.ChoiceSingleCondition, i.ChoiceConditionsSpace);
+                return null === t ? null : 1 === t.length ? t[0] : new Lt(t)
+            }
+            ,
+            i.ChoiceConditionsSpace = function() {
+                return i.Newline(),
+                i.Whitespace(),
+                Ct
+            }
+            ,
+            i.ChoiceSingleCondition = function() {
+                if (null === i.ParseString("{"))
+                    return null;
+                var t = i.Expect(i.Expression, "choice condition inside { }");
+                return i.DisallowIncrement(t),
+                i.Expect(i.String("}"), "closing '}' for choice condition"),
+                t
+            }
+            ,
+            i.Gather = function() {
+                var t = i.Parse(i.GatherDashes);
+                if (null === t)
+                    return null;
+                var e = Number(t)
+                  , n = i.Parse(i.BracketedName)
+                  , r = new Tt(n,e);
+                return i.Newline(),
+                r
+            }
+            ,
+            i.GatherDashes = function() {
+                i.Whitespace();
+                for (var t = 0; null !== i.ParseDashNotArrow(); )
+                    t += 1,
+                    i.Whitespace();
+                return 0 === t ? null : t
+            }
+            ,
+            i.ParseDashNotArrow = function() {
+                var t = i.BeginRule();
+                return null === i.ParseString("->") && "-" === i.ParseSingleCharacter() ? i.SucceedRule(t) : i.FailRule(t)
+            }
+            ,
+            i.BracketedName = function() {
+                if (null === i.ParseString("("))
+                    return null;
+                i.Whitespace();
+                var t = i.Parse(i.IdentifierWithMetadata);
+                return null === t ? null : (i.Whitespace(),
+                i.Expect(i.String(")"), "closing ')' for bracketed name"),
+                t)
+            }
+            ,
+            i.InnerConditionalContent = function(t) {
+                if (void 0 === t) {
+                    var e = i.Parse(i.ConditionExpression)
+                      , n = i.Parse((function() {
+                        return i.InnerConditionalContent(e)
+                    }
+                    ));
+                    return null === n ? null : n
+                }
+                var r, a = null !== t, o = null === i.Parse(i.Newline);
+                if (o && !a)
+                    return null;
+                if (o)
+                    r = i.InlineConditionalBranches();
+                else {
+                    if (null === (r = i.MultilineConditionalBranches())) {
+                        if (t) {
+                            var s = i.StatementsAtLevel(Xt.InnerBlock);
+                            if (null !== s) {
+                                r = [new $t(s)];
+                                var l = i.Parse(i.SingleMultilineCondition);
+                                l && (l.isElse || (i.ErrorWithParsedObject("Expected an '- else:' clause here rather than an extra condition", l),
+                                l.isElse = !0),
+                                r.push(l))
+                            }
+                        }
+                        if (null === r)
+                            return null
+                    } else if (1 === r.length && r[0].isElse && t) {
+                        var u = new $t(null);
+                        u.isTrueBranch = !0,
+                        r.unshift(u)
+                    }
+                    if (t)
+                        for (var c = !1, h = 0; h < r.length; ++h) {
+                            var f = r[h]
+                              , d = h === r.length - 1;
+                            f.ownExpression ? (f.matchingEquality = !0,
+                            c = !0) : c && d ? (f.matchingEquality = !0,
+                            f.isElse = !0) : !d && r.length > 2 ? i.ErrorWithParsedObject("Only final branch can be an 'else'. Did you miss a ':'?", f) : 0 === h ? f.isTrueBranch = !0 : f.isElse = !0
+                        }
+                    else {
+                        for (var v = 0; v < r.length; ++v) {
+                            var p = r[v]
+                              , m = v === r.length - 1;
+                            if (null === p.ownExpression)
+                                if (m)
+                                    p.isElse = !0;
+                                else if (p.isElse) {
+                                    var g = r[r.length - 1];
+                                    g.isElse ? i.ErrorWithParsedObject("Multiple 'else' cases. Can have a maximum of one, at the end.", g) : i.ErrorWithParsedObject("'else' case in conditional should always be the final one", p)
+                                } else
+                                    i.ErrorWithParsedObject("Branch doesn't have condition. Are you missing a ':'? ", p)
+                        }
+                        1 === r.length && null === r[0].ownExpression && i.ErrorWithParsedObject("Condition block with no conditions", r[0])
+                    }
+                }
+                if (null === r)
+                    return null;
+                var y, C = S(r);
+                try {
+                    for (C.s(); !(y = C.n()).done; ) {
+                        y.value.isInline = o
+                    }
+                } catch (t) {
+                    C.e(t)
+                } finally {
+                    C.f()
+                }
+                return new kt(t,r)
+            }
+            ,
+            i.InlineConditionalBranches = function() {
+                var t = i.Interleave(i.MixedTextAndLogic, i.Exclude(i.String("|")), null, !1);
+                if (null === t || 0 === t.length)
+                    return null;
+                var e = [];
+                if (t.length > 2)
+                    i.Error("Expected one or two alternatives separated by '|' in inline conditional");
+                else {
+                    var n = new $t(t[0]);
+                    if (n.isTrueBranch = !0,
+                    e.push(n),
+                    t.length > 1) {
+                        var r = new $t(t[1]);
+                        r.isElse = !0,
+                        e.push(r)
+                    }
+                }
+                return e
+            }
+            ,
+            i.MultilineConditionalBranches = function() {
+                i.MultilineWhitespace();
+                var t = i.OneOrMore(i.SingleMultilineCondition);
+                return null === t ? null : (i.MultilineWhitespace(),
+                t)
+            }
+            ,
+            i.SingleMultilineCondition = function() {
+                if (i.Whitespace(),
+                null !== i.ParseString("->") || null === i.ParseString("-"))
+                    return null;
+                i.Whitespace();
+                var t = null
+                  , e = null !== i.Parse(i.ElseExpression);
+                e || (t = i.Parse(i.ConditionExpression));
+                var n = i.StatementsAtLevel(Xt.InnerBlock);
+                null === t && null === n && (i.Error("expected content for the conditional branch following '-'"),
+                n = [new Et("")]),
+                i.MultilineWhitespace();
+                var r = new $t(n);
+                return r.ownExpression = t,
+                r.isElse = e,
+                r
+            }
+            ,
+            i.ConditionExpression = function() {
+                var t = i.Parse(i.Expression);
+                return null === t ? null : (i.DisallowIncrement(t),
+                i.Whitespace(),
+                null === i.ParseString(":") ? null : t)
+            }
+            ,
+            i.ElseExpression = function() {
+                return null === i.ParseString("else") ? null : (i.Whitespace(),
+                null === i.ParseString(":") ? null : Ct)
+            }
+            ,
+            i._nonTextPauseCharacters = null,
+            i._nonTextEndCharacters = null,
+            i._notTextEndCharactersChoice = null,
+            i._notTextEndCharactersString = null,
+            i.TrimEndWhitespace = function(t, e) {
+                if (t.length > 0) {
+                    var n = t.length - 1
+                      , r = t[n];
+                    if (r instanceof Et) {
+                        var a = r;
+                        a.text = a.text.replace(new RegExp(/[ \t]+$/g), ""),
+                        e ? a.text += " " : 0 === a.text.length && (t.splice(n, 1),
+                        i.TrimEndWhitespace(t, !1))
+                    }
+                }
+            }
+            ,
+            i.LineOfMixedTextAndLogic = function() {
+                i.Parse(i.Whitespace);
+                var t = i.Parse(i.MixedTextAndLogic);
+                if (!t || !t.length)
+                    return null;
+                var e = t[0];
+                return e && e.text && e.text.startsWith("return") && i.Warning("Do you need a '~' before 'return'? If not, perhaps use a glue: <> (since it's lowercase) or rewrite somehow?"),
+                0 === t.length ? null : (t[t.length - 1]instanceof jt || i.TrimEndWhitespace(t, !1),
+                i.EndTagIfNecessary(t),
+                t.length > 0 && t[0]instanceof Ee && t[0].isStart || t.push(new Et("\n")),
+                i.Expect(i.EndOfLine, "end of line", i.SkipToNextLine),
+                t)
+            }
+            ,
+            i.MixedTextAndLogic = function() {
+                null !== i.ParseObject(i.Spaced(i.String("~"))) && i.Error("You shouldn't use a '~' here - tildas are for logic that's on its own line. To do inline logic, use { curly braces } instead");
+                var t = i.Interleave(i.Optional(i.ContentText), i.Optional(i.InlineLogicOrGlueOrStartTag));
+                if (!i._parsingChoice) {
+                    var e, n = i.Parse(i.MultiDivert);
+                    if (null !== n)
+                        null === t && (t = []),
+                        i.EndTagIfNecessary(t),
+                        i.TrimEndWhitespace(t, !0),
+                        (e = t).push.apply(e, g(n))
+                }
+                return t || null
+            }
+            ,
+            i.ContentText = function() {
+                return i.ContentTextAllowingEscapeChar()
+            }
+            ,
+            i.ContentTextAllowingEscapeChar = function() {
+                for (var t = null; ; ) {
+                    var e = i.Parse(i.ContentTextNoEscape)
+                      , n = null !== i.ParseString("\\");
+                    if (!n && null === e)
+                        break;
+                    null === t && (t = ""),
+                    null !== e && (t += String(e)),
+                    n && (t += i.ParseSingleCharacter())
+                }
+                return null !== t ? new Et(t) : null
+            }
+            ,
+            i.ContentTextNoEscape = function() {
+                null === i._nonTextPauseCharacters && (i._nonTextPauseCharacters = new lt("-<")),
+                null === i._nonTextEndCharacters && (i._nonTextEndCharacters = new lt("{}|\n\r\\#"),
+                i._notTextEndCharactersChoice = new lt(i._nonTextEndCharacters),
+                i._notTextEndCharactersChoice.AddCharacters("[]"),
+                i._notTextEndCharactersString = new lt(i._nonTextEndCharacters),
+                i._notTextEndCharactersString.AddCharacters('"'));
+                var t = null;
+                t = i.parsingStringExpression ? i._notTextEndCharactersString : i._parsingChoice ? i._notTextEndCharactersChoice : i._nonTextEndCharacters;
+                var e = i.ParseUntil((function() {
+                    return i.OneOf([i.ParseDivertArrow, i.ParseThreadArrow, i.EndOfLine, i.Glue])
+                }
+                ), i._nonTextPauseCharacters, t);
+                return null !== e ? e : null
+            }
+            ,
+            i.MultiDivert = function() {
+                i.Whitespace();
+                var t = []
+                  , e = i.Parse(i.StartThread);
+                if (e)
+                    return t = [e];
+                var n = i.Interleave(i.ParseDivertArrowOrTunnelOnwards, i.DivertIdentifierWithArguments);
+                if (!n)
+                    return null;
+                t = [],
+                i.EndTagIfNecessary(t);
+                for (var r = 0; r < n.length; ++r) {
+                    if (r % 2 == 0) {
+                        if ("->->" === n[r]) {
+                            0 === r || r === n.length - 1 || r === n.length - 2 || i.Error("Tunnel onwards '->->' must only come at the begining or the start of a divert");
+                            var a = new Ut;
+                            if (r < n.length - 1) {
+                                var o = _(n[r + 1], jt);
+                                a.divertAfter = o
+                            }
+                            t.push(a);
+                            break
+                        }
+                    } else {
+                        var s = n[r];
+                        r < n.length - 1 && (s.isTunnel = !0),
+                        t.push(s)
+                    }
+                }
+                if (0 === t.length && 1 === n.length) {
+                    var l = new jt(null);
+                    l.isEmpty = !0,
+                    t.push(l),
+                    i._parsingChoice || i.Error("Empty diverts (->) are only valid on choices")
+                }
+                return t
+            }
+            ,
+            i.StartThread = function() {
+                if (i.Whitespace(),
+                null === i.ParseThreadArrow())
+                    return null;
+                i.Whitespace();
+                var t = i.Expect(i.DivertIdentifierWithArguments, "target for new thread", (function() {
+                    return new jt(null)
+                }
+                ));
+                return t.isThread = !0,
+                t
+            }
+            ,
+            i.DivertIdentifierWithArguments = function() {
+                i.Whitespace();
+                var t = i.Parse(i.DotSeparatedDivertPathComponents);
+                if (!t)
+                    return null;
+                i.Whitespace();
+                var e = i.Parse(i.ExpressionFunctionCallArguments);
+                i.Whitespace();
+                var n = new At(t);
+                return new jt(n,e)
+            }
+            ,
+            i.SingleDivert = function() {
+                var t = i.Parse(i.MultiDivert);
+                if (!t)
+                    return null;
+                if (1 !== t.length)
+                    return null;
+                if (t[0]instanceof Ut)
+                    return null;
+                var e = t[0];
+                return e.isTunnel ? null : e
+            }
+            ,
+            i.DotSeparatedDivertPathComponents = function() {
+                return i.Interleave(i.Spaced(i.IdentifierWithMetadata), i.Exclude(i.String(".")))
+            }
+            ,
+            i.ParseDivertArrowOrTunnelOnwards = function() {
+                for (var t = 0; null !== i.ParseString("->"); )
+                    t += 1;
+                return 0 === t ? null : 1 === t ? "->" : (2 === t || i.Error("Unexpected number of arrows in divert. Should only have '->' or '->->'"),
+                "->->")
+            }
+            ,
+            i.ParseDivertArrow = function() {
+                return i.ParseString("->")
+            }
+            ,
+            i.ParseThreadArrow = function() {
+                return i.ParseString("<-")
+            }
+            ,
+            i._binaryOperators = [],
+            i._maxBinaryOpLength = 0,
+            i.TempDeclarationOrAssignment = function() {
+                i.Whitespace();
+                var t = i.ParseTempKeyword();
+                i.Whitespace();
+                var e = null;
+                if (null === (e = t ? i.Expect(i.IdentifierWithMetadata, "variable name") : i.Parse(i.IdentifierWithMetadata)))
+                    return null;
+                i.Whitespace();
+                var n = null !== i.ParseString("+")
+                  , r = null !== i.ParseString("-");
+                if (n && r && i.Error("Unexpected sequence '+-'"),
+                null === i.ParseString("="))
+                    return t && i.Error("Expected '='"),
+                    null;
+                var a = i.Expect(i.Expression, "value expression to be assigned");
+                return n || r ? new ne(e,a,n) : new Jt({
+                    variableIdentifier: e,
+                    assignedExpression: a,
+                    isTemporaryNewDeclaration: t
+                })
+            }
+            ,
+            i.DisallowIncrement = function(t) {
+                t instanceof ne && i.Error("Can't use increment/decrement here. It can only be used on a ~ line")
+            }
+            ,
+            i.ParseTempKeyword = function() {
+                var t = i.BeginRule();
+                return "temp" === i.Parse(i.Identifier) ? (i.SucceedRule(t),
+                !0) : (i.FailRule(t),
+                !1)
+            }
+            ,
+            i.ReturnStatement = function() {
+                if (i.Whitespace(),
+                "return" !== i.Parse(i.Identifier))
+                    return null;
+                i.Whitespace();
+                var t = i.Parse(i.Expression);
+                return new Pt(t)
+            }
+            ,
+            i.Expression = function() {
+                var t = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                i.Whitespace();
+                var n = i.ExpressionUnary();
+                if (null === n)
+                    return null;
+                i.Whitespace();
+                for (var r = function() {
+                    var e = i.BeginRule()
+                      , r = i.ParseInfixOperator();
+                    if (null !== r && r.precedence > t) {
+                        var a = "right side of '".concat(r.type, "' expression")
+                          , o = i.Expect((function() {
+                            return i.ExpressionInfixRight(n, r)
+                        }
+                        ), a);
+                        return null === o ? (i.FailRule(e),
+                        {
+                            v: null
+                        }) : (n = i.SucceedRule(e, o),
+                        "continue")
+                    }
+                    return i.FailRule(e),
+                    "break"
+                }; ; ) {
+                    var a = r();
+                    if ("continue" !== a) {
+                        if ("break" === a)
+                            break;
+                        if ("object" === e(a))
+                            return a.v
+                    }
+                }
+                return i.Whitespace(),
+                n
+            }
+            ,
+            i.ExpressionUnary = function() {
+                var t = i.Parse(i.ExpressionDivertTarget);
+                if (null !== t)
+                    return t;
+                var e = i.OneOf([i.String("-"), i.String("!")]);
+                null === e && (e = i.Parse(i.ExpressionNot)),
+                i.Whitespace();
+                var n = i.OneOf([i.ExpressionList, i.ExpressionParen, i.ExpressionFunctionCall, i.ExpressionVariableName, i.ExpressionLiteral]);
+                if (null === n && null !== e && (n = i.ExpressionUnary()),
+                null === n)
+                    return null;
+                null !== e && (n = ot.WithInner(n, e)),
+                i.Whitespace();
+                var r = i.OneOf([i.String("++"), i.String("--")]);
+                if (null !== r) {
+                    var a = "++" === r;
+                    if (n instanceof Wt)
+                        n = new ne(n.identifier,a);
+                    else
+                        i.Error("can only increment and decrement variables, but saw '".concat(n, "'."))
+                }
+                return n
+            }
+            ,
+            i.ExpressionNot = function() {
+                var t = i.Identifier();
+                return "not" === t ? t : null
+            }
+            ,
+            i.ExpressionLiteral = function() {
+                return i.OneOf([i.ExpressionFloat, i.ExpressionInt, i.ExpressionBool, i.ExpressionString])
+            }
+            ,
+            i.ExpressionDivertTarget = function() {
+                i.Whitespace();
+                var t = i.Parse(i.SingleDivert);
+                return !t || t && t.isThread ? null : (i.Whitespace(),
+                new Vt(t))
+            }
+            ,
+            i.ExpressionInt = function() {
+                var t = i.ParseInt();
+                return null === t ? null : new at(t,"int")
+            }
+            ,
+            i.ExpressionFloat = function() {
+                var t = i.ParseFloat();
+                return null === t ? null : new at(t,"float")
+            }
+            ,
+            i.ExpressionString = function() {
+                if (null === i.ParseString('"'))
+                    return null;
+                i.parsingStringExpression = !0;
+                var t = i.Parse(i.MixedTextAndLogic);
+                return i.Expect(i.String('"'), "close quote for string expression"),
+                i.parsingStringExpression = !1,
+                null === t ? t = [new Et("")] : t.find((function(t) {
+                    return t instanceof jt
+                }
+                )) && i.Error("String expressions cannot contain diverts (->)"),
+                new ke(t)
+            }
+            ,
+            i.ExpressionBool = function() {
+                var t = i.Parse(i.Identifier);
+                return "true" === t ? new at(!0,"bool") : "false" === t ? new at(!1,"bool") : null
+            }
+            ,
+            i.ExpressionFunctionCall = function() {
+                var t = i.Parse(i.IdentifierWithMetadata);
+                if (null === t)
+                    return null;
+                i.Whitespace();
+                var e = i.Parse(i.ExpressionFunctionCallArguments);
+                return null === e ? null : new Rt(t,e)
+            }
+            ,
+            i.ExpressionFunctionCallArguments = function() {
+                if (null === i.ParseString("("))
+                    return null;
+                var t = i.Exclude(i.String(","))
+                  , e = i.Interleave(i.Expression, t);
+                return null === e && (e = []),
+                i.Whitespace(),
+                i.Expect(i.String(")"), "closing ')' for function call"),
+                e
+            }
+            ,
+            i.ExpressionVariableName = function() {
+                var t = i.Interleave(i.IdentifierWithMetadata, i.Exclude(i.Spaced(i.String("."))));
+                return null === t || we.IsReservedKeyword(t[0].name) ? null : new Wt(t)
+            }
+            ,
+            i.ExpressionParen = function() {
+                if (null === i.ParseString("("))
+                    return null;
+                var t = i.Parse(i.Expression);
+                return null === t ? null : (i.Whitespace(),
+                i.Expect(i.String(")"), "closing parenthesis ')' for expression"),
+                t)
+            }
+            ,
+            i.ExpressionInfixRight = function(t, e) {
+                if (!t)
+                    return null;
+                i.Whitespace();
+                var n = i.Parse((function() {
+                    return i.Expression(e.precedence)
+                }
+                ));
+                return n ? new st(t,n,e.type) : null
+            }
+            ,
+            i.ParseInfixOperator = function() {
+                var t, e = S(i._binaryOperators);
+                try {
+                    for (e.s(); !(t = e.n()).done; ) {
+                        var n = t.value
+                          , r = i.BeginRule();
+                        if (null !== i.ParseString(n.type)) {
+                            if (n.requireWhitespace && null === i.Whitespace()) {
+                                i.FailRule(r);
+                                continue
+                            }
+                            return i.SucceedRule(r, n)
+                        }
+                        i.FailRule(r)
+                    }
+                } catch (t) {
+                    e.e(t)
+                } finally {
+                    e.f()
+                }
+                return null
+            }
+            ,
+            i.ExpressionList = function() {
+                if (i.Whitespace(),
+                null === i.ParseString("("))
+                    return null;
+                i.Whitespace();
+                var t = i.SeparatedList(i.ListMember, i.Spaced(i.String(",")));
+                return i.Whitespace(),
+                null === i.ParseString(")") ? null : new oe(t)
+            }
+            ,
+            i.ListMember = function() {
+                i.Whitespace();
+                var t = i.Parse(i.IdentifierWithMetadata);
+                if (null === t)
+                    return null;
+                if (null !== i.ParseString(".")) {
+                    var e = i.Expect(i.IdentifierWithMetadata, "element name within the set ".concat(t));
+                    t.name += ".".concat(null == e ? void 0 : e.name)
+                }
+                return i.Whitespace(),
+                t
+            }
+            ,
+            i.RegisterExpressionOperators = function() {
+                i.RegisterBinaryOperator("&&", 1),
+                i.RegisterBinaryOperator("||", 1),
+                i.RegisterBinaryOperator("and", 1, !0),
+                i.RegisterBinaryOperator("or", 1, !0),
+                i.RegisterBinaryOperator("==", 2),
+                i.RegisterBinaryOperator(">=", 2),
+                i.RegisterBinaryOperator("<=", 2),
+                i.RegisterBinaryOperator("<", 2),
+                i.RegisterBinaryOperator(">", 2),
+                i.RegisterBinaryOperator("!=", 2),
+                i.RegisterBinaryOperator("?", 3),
+                i.RegisterBinaryOperator("has", 3, !0),
+                i.RegisterBinaryOperator("!?", 3),
+                i.RegisterBinaryOperator("hasnt", 3, !0),
+                i.RegisterBinaryOperator("^", 3),
+                i.RegisterBinaryOperator("+", 4),
+                i.RegisterBinaryOperator("-", 5),
+                i.RegisterBinaryOperator("*", 6),
+                i.RegisterBinaryOperator("/", 7),
+                i.RegisterBinaryOperator("%", 8),
+                i.RegisterBinaryOperator("mod", 8, !0)
+            }
+            ,
+            i.RegisterBinaryOperator = function(t, e) {
+                var n = arguments.length > 2 && void 0 !== arguments[2] && arguments[2]
+                  , r = new ie(t,e,n);
+                i._binaryOperators.push(r),
+                i._maxBinaryOpLength = Math.max(i._maxBinaryOpLength, t.length)
+            }
+            ,
+            i._openFilenames = [],
+            i.IncludeStatement = function() {
+                if (i.Whitespace(),
+                null === i.ParseString("INCLUDE"))
+                    return null;
+                i.Whitespace();
+                var t = i.Expect((function() {
+                    return i.ParseUntilCharactersFromString("\n\r")
+                }
+                ), "filename for include statement");
+                t = t.replace(new RegExp(/[ \t]+$/g), "");
+                var e = i.fileHandler.ResolveInkFilename(t);
+                if (i.FilenameIsAlreadyOpen(e))
+                    return i.Error("Recursive INCLUDE detected: '".concat(e, "' is already open.")),
+                    i.ParseUntilCharactersFromString("\r\n"),
+                    new re(null);
+                i.AddOpenFilename(e);
+                var n = null
+                  , r = "";
+                try {
+                    r = i._rootParser.fileHandler.LoadInkFileContents(e)
+                } catch (e) {
+                    i.Error("Failed to load: '".concat(t, "'.\nError:").concat(e))
+                }
+                r && (n = new o(r,t,i._externalErrorHandler,i._rootParser,i.fileHandler).ParseStory());
+                return i.RemoveOpenFilename(e),
+                new re(n)
+            }
+            ,
+            i.FilenameIsAlreadyOpen = function(t) {
+                return i._rootParser._openFilenames.includes(t)
+            }
+            ,
+            i.AddOpenFilename = function(t) {
+                i._rootParser._openFilenames.push(t)
+            }
+            ,
+            i.RemoveOpenFilename = function(t) {
+                i._rootParser._openFilenames.splice(i._rootParser._openFilenames.indexOf(t), 1)
+            }
+            ,
+            i.KnotDefinition = function() {
+                var t = i.Parse(i.KnotDeclaration);
+                if (null === t)
+                    return null;
+                i.Expect(i.EndOfLine, "end of line after knot name definition", i.SkipToNextLine);
+                var e = i.Expect((function() {
+                    return i.StatementsAtLevel(Xt.Knot)
+                }
+                ), "at least one line within the knot", i.KnotStitchNoContentRecoveryRule);
+                return new ae(t.name,e,t.args,t.isFunction)
+            }
+            ,
+            i.KnotDeclaration = function() {
+                if (i.Whitespace(),
+                null === i.KnotTitleEquals())
+                    return null;
+                i.Whitespace();
+                var t, e = i.Parse(i.IdentifierWithMetadata), n = "function" === (null == e ? void 0 : e.name);
+                n ? (i.Expect(i.Whitespace, "whitespace after the 'function' keyword"),
+                t = i.Parse(i.IdentifierWithMetadata)) : t = e,
+                null === t && (i.Error("Expected the name of the ".concat(n ? "function" : "knot")),
+                t = new xt("")),
+                i.Whitespace();
+                var r = i.Parse(i.BracketedKnotDeclArguments);
+                return i.Whitespace(),
+                i.Parse(i.KnotTitleEquals),
+                new Qt(t,r,n)
+            }
+            ,
+            i.KnotTitleEquals = function() {
+                var t = i.ParseCharactersFromString("=");
+                return null === t || t.length <= 1 ? null : t
+            }
+            ,
+            i.StitchDefinition = function() {
+                var t = i.Parse(i.StitchDeclaration);
+                if (null === t)
+                    return null;
+                i.Expect(i.EndOfLine, "end of line after stitch name", i.SkipToNextLine);
+                var e = i.Expect((function() {
+                    return i.StatementsAtLevel(Xt.Stitch)
+                }
+                ), "at least one line within the stitch", i.KnotStitchNoContentRecoveryRule);
+                return new le(t.name,e,t.args,t.isFunction)
+            }
+            ,
+            i.StitchDeclaration = function() {
+                if (i.Whitespace(),
+                null === i.ParseString("="))
+                    return null;
+                if (null !== i.ParseString("="))
+                    return null;
+                i.Whitespace();
+                var t = null !== i.ParseString("function");
+                t && i.Whitespace();
+                var e = i.Parse(i.IdentifierWithMetadata);
+                if (null === e)
+                    return null;
+                i.Whitespace();
+                var n = i.Parse(i.BracketedKnotDeclArguments);
+                return i.Whitespace(),
+                new Qt(e,n,t)
+            }
+            ,
+            i.KnotStitchNoContentRecoveryRule = function() {
+                return i.ParseUntil(i.KnotDeclaration, new lt("="), null),
+                [new Et("<ERROR IN FLOW>")]
+            }
+            ,
+            i.BracketedKnotDeclArguments = function() {
+                if (null === i.ParseString("("))
+                    return null;
+                var t = i.Interleave(i.Spaced(i.FlowDeclArgument), i.Exclude(i.String(",")));
+                return i.Expect(i.String(")"), "closing ')' for parameter list"),
+                null === t && (t = []),
+                t
+            }
+            ,
+            i.FlowDeclArgument = function() {
+                var t = i.Parse(i.IdentifierWithMetadata);
+                i.Whitespace();
+                var e = i.ParseDivertArrow();
+                i.Whitespace();
+                var n = i.Parse(i.IdentifierWithMetadata);
+                if (null == t && null === n)
+                    return null;
+                var r = new E;
+                return null !== e && (r.isDivertTarget = !0),
+                null !== t && "ref" === t.name ? (null === n && i.Error("Expected an parameter name after 'ref'"),
+                r.identifier = n,
+                r.isByReference = !0) : (r.isDivertTarget ? r.identifier = n : r.identifier = t,
+                null === r.identifier && i.Error("Expected an parameter name"),
+                r.isByReference = !1),
+                r
+            }
+            ,
+            i.ExternalDeclaration = function() {
+                i.Whitespace();
+                var t = i.Parse(i.IdentifierWithMetadata);
+                if (null === t || "EXTERNAL" != t.name)
+                    return null;
+                i.Whitespace();
+                var e = i.Expect(i.IdentifierWithMetadata, "name of external function") || new xt("");
+                i.Whitespace();
+                var n = i.Expect(i.BracketedKnotDeclArguments, "declaration of arguments for EXTERNAL, even if empty, i.e. 'EXTERNAL ".concat(e, "()'"));
+                null === n && (n = []);
+                var r = n.map((function(t) {
+                    var e;
+                    return null === (e = t.identifier) || void 0 === e ? void 0 : e.name
+                }
+                )).filter(O);
+                return new Zt(e,r)
+            }
+            ,
+            i._identifierCharSet = null,
+            i.LogicLine = function() {
+                if (i.Whitespace(),
+                null === i.ParseString("~"))
+                    return null;
+                i.Whitespace();
+                var t = i.Expect((function() {
+                    return i.OneOf([i.ReturnStatement, i.TempDeclarationOrAssignment, i.Expression])
+                }
+                ), "expression after '~'", i.SkipToNextLine);
+                if (null === t)
+                    return new It;
+                t instanceof nt && !(t instanceof Rt || t instanceof ne) && i.Error("Logic following a '~' can't be that type of expression. It can only be something like:\n\t~ return\n\t~ var x = blah\n\t~ x++\n\t~ myFunction()");
+                var e = _(t, Rt);
+                return e && (e.shouldPopReturnedValue = !0),
+                null !== t.Find(Rt)() && (t = new It(t,new Et("\n"))),
+                i.Expect(i.EndOfLine, "end of line", i.SkipToNextLine),
+                t
+            }
+            ,
+            i.VariableDeclaration = function() {
+                if (i.Whitespace(),
+                "VAR" !== i.Parse(i.Identifier))
+                    return null;
+                i.Whitespace();
+                var t = i.Expect(i.IdentifierWithMetadata, "variable name");
+                i.Whitespace(),
+                i.Expect(i.String("="), "the '=' for an assignment of a value, e.g. '= 5' (initial values are mandatory)"),
+                i.Whitespace();
+                var e = i.Expect(i.Expression, "initial value for ");
+                if (e) {
+                    if (e instanceof at || e instanceof ke || e instanceof Vt || e instanceof Wt || e instanceof oe || i.Error("initial value for a variable must be a number, constant, list or divert target"),
+                    null !== i.Parse(i.ListElementDefinitionSeparator))
+                        i.Error("Unexpected ','. If you're trying to declare a new list, use the LIST keyword, not VAR");
+                    else if (e instanceof ke) {
+                        e.isSingleString || i.Error("Constant strings cannot contain any logic.")
+                    }
+                    return new Jt({
+                        assignedExpression: e,
+                        isGlobalDeclaration: !0,
+                        variableIdentifier: t
+                    })
+                }
+                return null
+            }
+            ,
+            i.ListDeclaration = function() {
+                if (i.Whitespace(),
+                "LIST" != i.Parse(i.Identifier))
+                    return null;
+                i.Whitespace();
+                var t = i.Expect(i.IdentifierWithMetadata, "list name");
+                i.Whitespace(),
+                i.Expect(i.String("="), "the '=' for an assignment of the list definition"),
+                i.Whitespace();
+                var e = i.Expect(i.ListDefinition, "list item names");
+                return e ? (e.identifier = new xt(t.name),
+                new Jt({
+                    variableIdentifier: t,
+                    listDef: e
+                })) : null
+            }
+            ,
+            i.ListDefinition = function() {
+                i.AnyWhitespace();
+                var t = i.SeparatedList(i.ListElementDefinition, i.ListElementDefinitionSeparator);
+                return null === t ? null : new Ht(t)
+            }
+            ,
+            i.ListElementDefinitionSeparator = function() {
+                return i.AnyWhitespace(),
+                null === i.ParseString(",") ? null : (i.AnyWhitespace(),
+                ",")
+            }
+            ,
+            i.ListElementDefinition = function() {
+                var t = null !== i.ParseString("(")
+                  , e = t;
+                i.Whitespace();
+                var n = i.Parse(i.IdentifierWithMetadata);
+                if (null === n)
+                    return null;
+                i.Whitespace(),
+                t && null != i.ParseString(")") && (e = !1,
+                i.Whitespace());
+                var r = null;
+                if (null !== i.ParseString("=")) {
+                    i.Whitespace();
+                    var a = i.Expect(i.ExpressionInt, "value to be assigned to list item");
+                    null !== a && (r = a.value),
+                    e && (i.Whitespace(),
+                    null !== i.ParseString(")") && (e = !1))
+                }
+                return e && i.Error("Expected closing ')'"),
+                new se(n,t,r)
+            }
+            ,
+            i.ConstDeclaration = function() {
+                if (i.Whitespace(),
+                "CONST" !== i.Parse(i.Identifier))
+                    return null;
+                i.Whitespace();
+                var t = i.Expect(i.IdentifierWithMetadata, "constant name");
+                i.Whitespace(),
+                i.Expect(i.String("="), "the '=' for an assignment of a value, e.g. '= 5' (initial values are mandatory)"),
+                i.Whitespace();
+                var e = i.Expect(i.Expression, "initial value for ");
+                if (e instanceof at || e instanceof Vt || e instanceof ke) {
+                    if (e instanceof ke) {
+                        e.isSingleString || i.Error("Constant strings cannot contain any logic.")
+                    }
+                } else
+                    i.Error("initial value for a constant must be a number or divert target");
+                return new _t(t,e)
+            }
+            ,
+            i.InlineLogicOrGlueOrStartTag = function() {
+                return i.OneOf([i.InlineLogic, i.Glue, i.StartTag])
+            }
+            ,
+            i.Glue = function() {
+                return null !== i.ParseString("<>") ? new te(new ee) : null
+            }
+            ,
+            i.InlineLogic = function() {
+                if (null === i.ParseString("{"))
+                    return null;
+                var t = i.parsingStringExpression
+                  , e = i.tagActive;
+                i.Whitespace();
+                var n = i.Expect(i.InnerLogic, "some kind of logic, conditional or sequence within braces: { ... }");
+                if (null === n)
+                    return i.parsingStringExpression = t,
+                    null;
+                i.DisallowIncrement(n);
+                var r = _(n, It);
+                return r || (r = new It(n)),
+                i.Whitespace(),
+                i.Expect(i.String("}"), "closing brace '}' for inline logic"),
+                i.parsingStringExpression = t,
+                e || i.EndTagIfNecessary(r),
+                r
+            }
+            ,
+            i.InnerLogic = function() {
+                i.Whitespace();
+                var t = i.ParseObject(i.SequenceTypeAnnotation);
+                if (null !== t) {
+                    var e = i.Expect(i.InnerSequenceObjects, "sequence elements (for cycle/stoping etc)");
+                    return null === e ? null : new qt(e,t)
+                }
+                var n = i.Parse(i.ConditionExpression);
+                if (n)
+                    return i.Expect((function() {
+                        return i.InnerConditionalContent(n)
+                    }
+                    ), "conditional content following query");
+                var r = [i.InnerConditionalContent, i.InnerSequence, i.InnerExpression];
+                i.tagActive;
+                for (var a = 0, o = r; a < o.length; a++) {
+                    var s = o[a]
+                      , l = i.BeginRule()
+                      , u = i.ParseObject(s);
+                    if (u) {
+                        if (null !== i.Peek(i.Spaced(i.String("}"))))
+                            return i.SucceedRule(l, u);
+                        i.FailRule(l)
+                    } else
+                        i.FailRule(l)
+                }
+                return null
+            }
+            ,
+            i.InnerExpression = function() {
+                var t = i.Parse(i.Expression);
+                return t && (t.outputWhenComplete = !0),
+                t
+            }
+            ,
+            i.IdentifierWithMetadata = function() {
+                var t = i.Identifier();
+                return null === t ? null : new xt(t)
+            }
+            ,
+            i.Identifier = function() {
+                var t = i.ParseCharactersFromCharSet(i.identifierCharSet);
+                if (null === t)
+                    return null;
+                var e, n = !0, r = S(t);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        var a = e.value;
+                        if (!(a >= "0" && a <= "9")) {
+                            n = !1;
+                            break
+                        }
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return n ? null : t
+            }
+            ,
+            i._sequenceTypeSymbols = new lt("!&~$"),
+            i.InnerSequence = function() {
+                i.Whitespace();
+                var t = Dt.Stopping
+                  , e = i.Parse(i.SequenceTypeAnnotation);
+                null !== e && (t = e);
+                var n = i.Parse(i.InnerSequenceObjects);
+                return null === n || n.length <= 1 ? null : new qt(n,t)
+            }
+            ,
+            i.SequenceTypeAnnotation = function() {
+                var t = i.Parse(i.SequenceTypeSymbolAnnotation);
+                if (null === t && (t = i.Parse(i.SequenceTypeWordAnnotation)),
+                null === t)
+                    return null;
+                switch (t) {
+                case Dt.Once:
+                case Dt.Cycle:
+                case Dt.Stopping:
+                case Dt.Shuffle:
+                case Dt.Shuffle | Dt.Stopping:
+                case Dt.Shuffle | Dt.Once:
+                    break;
+                default:
+                    return i.Error("Sequence type combination not supported: ".concat(t)),
+                    Dt.Stopping
+                }
+                return t
+            }
+            ,
+            i.SequenceTypeSymbolAnnotation = function() {
+                null === i._sequenceTypeSymbols && (i._sequenceTypeSymbols = new lt("!&~$ "));
+                var t = 0
+                  , e = i.ParseCharactersFromCharSet(i._sequenceTypeSymbols);
+                if (null === e)
+                    return null;
+                var n, r = S(e);
+                try {
+                    for (r.s(); !(n = r.n()).done; ) {
+                        switch (n.value) {
+                        case "!":
+                            t |= Dt.Once;
+                            break;
+                        case "&":
+                            t |= Dt.Cycle;
+                            break;
+                        case "~":
+                            t |= Dt.Shuffle;
+                            break;
+                        case "$":
+                            t |= Dt.Stopping
+                        }
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return 0 === t ? null : t
+            }
+            ,
+            i.SequenceTypeWordAnnotation = function() {
+                var t = i.Interleave(i.SequenceTypeSingleWord, i.Exclude(i.Whitespace));
+                if (null === t || 0 === t.length)
+                    return null;
+                if (null === i.ParseString(":"))
+                    return null;
+                var e, n = 0, r = S(t);
+                try {
+                    for (r.s(); !(e = r.n()).done; ) {
+                        n |= e.value
+                    }
+                } catch (t) {
+                    r.e(t)
+                } finally {
+                    r.f()
+                }
+                return n
+            }
+            ,
+            i.SequenceTypeSingleWord = function() {
+                var t = null
+                  , e = i.Parse(i.IdentifierWithMetadata);
+                if (null !== e)
+                    switch (e.name) {
+                    case "once":
+                        t = Dt.Once;
+                        break;
+                    case "cycle":
+                        t = Dt.Cycle;
+                        break;
+                    case "shuffle":
+                        t = Dt.Shuffle;
+                        break;
+                    case "stopping":
+                        t = Dt.Stopping
+                    }
+                return null === t ? null : t
+            }
+            ,
+            i.InnerSequenceObjects = function() {
+                return null !== i.Parse(i.Newline) ? i.Parse(i.InnerMultilineSequenceObjects) : i.Parse(i.InnerInlineSequenceObjects)
+            }
+            ,
+            i.InnerInlineSequenceObjects = function() {
+                var t = i.Interleave(i.Optional(i.MixedTextAndLogic), i.String("|"), null, !1);
+                if (null === t)
+                    return null;
+                var e, n = [], r = !1, a = S(t);
+                try {
+                    for (a.s(); !(e = a.n()).done; ) {
+                        var o = e.value;
+                        if ("|" === o)
+                            r || n.push(new It),
+                            r = !1;
+                        else {
+                            var s = o;
+                            null === s ? i.Error("Expected content, but got ".concat(o, " (this is an ink compiler bug!)")) : n.push(new It(s)),
+                            r = !0
+                        }
+                    }
+                } catch (t) {
+                    a.e(t)
+                } finally {
+                    a.f()
+                }
+                return r || n.push(new It),
+                n
+            }
+            ,
+            i.InnerMultilineSequenceObjects = function() {
+                i.MultilineWhitespace();
+                var t = i.OneOrMore(i.SingleMultilineSequenceElement);
+                return null === t ? null : t
+            }
+            ,
+            i.SingleMultilineSequenceElement = function() {
+                if (i.Whitespace(),
+                null !== i.ParseString("->"))
+                    return null;
+                if (null === i.ParseString("-"))
+                    return null;
+                i.Whitespace();
+                var t = i.StatementsAtLevel(Xt.InnerBlock);
+                return null === t ? i.MultilineWhitespace() : t.unshift(new Et("\n")),
+                new It(t)
+            }
+            ,
+            i._statementRulesAtLevel = [],
+            i._statementBreakRulesAtLevel = [],
+            i.StatementsAtLevel = function(t) {
+                t === Xt.InnerBlock && (null !== i.Parse(i.GatherDashes) && i.Error("You can't use a gather (the dashes) within the { curly braces } context. For multi-line sequences and conditions, you should only use one dash."));
+                return i.Interleave(i.Optional(i.MultilineWhitespace), (function() {
+                    return i.StatementAtLevel(t)
+                }
+                ), (function() {
+                    return i.StatementsBreakForLevel(t)
+                }
+                ))
+            }
+            ,
+            i.StatementAtLevel = function(t) {
+                var e = i._statementRulesAtLevel[t]
+                  , n = i.OneOf(e);
+                return t === Xt.Top && n instanceof Pt && i.Error("should not have return statement outside of a knot"),
+                n
+            }
+            ,
+            i.StatementsBreakForLevel = function(t) {
+                i.Whitespace();
+                var e = i._statementBreakRulesAtLevel[t]
+                  , n = i.OneOf(e);
+                return null === n ? null : n
+            }
+            ,
+            i.GenerateStatementLevelRules = function() {
+                var t = Object.values(Xt);
+                i._statementRulesAtLevel = "f".repeat(t.length).split("f").map((function() {
+                    return []
+                }
+                )),
+                i._statementBreakRulesAtLevel = "f".repeat(t.length).split("f").map((function() {
+                    return []
+                }
+                ));
+                for (var e = 0, n = t; e < n.length; e++) {
+                    var r = n[e]
+                      , a = []
+                      , o = [];
+                    a.push(i.Line(i.MultiDivert)),
+                    r >= Xt.Top && a.push(i.KnotDefinition),
+                    a.push(i.Line(i.Choice)),
+                    a.push(i.Line(i.AuthorWarning)),
+                    r > Xt.InnerBlock && a.push(i.Gather),
+                    r >= Xt.Knot && a.push(i.StitchDefinition),
+                    a.push(i.Line(i.ListDeclaration)),
+                    a.push(i.Line(i.VariableDeclaration)),
+                    a.push(i.Line(i.ConstDeclaration)),
+                    a.push(i.Line(i.ExternalDeclaration)),
+                    a.push(i.Line(i.IncludeStatement)),
+                    a.push(i.LogicLine),
+                    a.push(i.LineOfMixedTextAndLogic),
+                    r <= Xt.Knot && o.push(i.KnotDeclaration),
+                    r <= Xt.Stitch && o.push(i.StitchDeclaration),
+                    r <= Xt.InnerBlock && (o.push(i.ParseDashNotArrow),
+                    o.push(i.String("}"))),
+                    i._statementRulesAtLevel[r] = a,
+                    i._statementBreakRulesAtLevel[r] = o
+                }
+            }
+            ,
+            i.SkipToNextLine = function() {
+                return i.ParseUntilCharactersFromString("\n\r"),
+                i.ParseNewline(),
+                Ct
+            }
+            ,
+            i.Line = function(t) {
+                return function() {
+                    var e = i.ParseObject(t);
+                    return null === e ? null : (i.Expect(i.EndOfLine, "end of line", i.SkipToNextLine),
+                    e)
+                }
+            }
+            ,
+            i.StartTag = function() {
+                if (i.Whitespace(),
+                null === i.ParseString("#"))
+                    return null;
+                i.parsingStringExpression && i.Error("Tags aren't allowed inside of strings. Please use \\# if you want a hash symbol.");
+                var t = null;
+                if (i.tagActive) {
+                    var e = new It;
+                    e.AddContent(new Ee(!1)),
+                    e.AddContent(new Ee(!0)),
+                    t = e
+                } else
+                    t = new Ee(!0);
+                return i.tagActive = !0,
+                i.Whitespace(),
+                t
+            }
+            ,
+            i._inlineWhitespaceChars = new lt(" \t"),
+            i.EndOfLine = function() {
+                return i.OneOf([i.Newline, i.EndOfFile])
+            }
+            ,
+            i.Newline = function() {
+                return i.Whitespace(),
+                null !== i.ParseNewline() ? Ct : null
+            }
+            ,
+            i.EndOfFile = function() {
+                return i.Whitespace(),
+                i.endOfInput ? Ct : null
+            }
+            ,
+            i.MultilineWhitespace = function() {
+                var t = i.OneOrMore(i.Newline);
+                return null === t ? null : t.length >= 1 ? Ct : null
+            }
+            ,
+            i.Whitespace = function() {
+                return null !== i.ParseCharactersFromCharSet(i._inlineWhitespaceChars) ? Ct : null
+            }
+            ,
+            i.Spaced = function(t) {
+                return function() {
+                    i.Whitespace();
+                    var e = i.ParseObject(t);
+                    return null === e ? null : (i.Whitespace(),
+                    e)
+                }
+            }
+            ,
+            i.AnyWhitespace = function() {
+                for (var t = !1; null !== i.OneOf([i.Whitespace, i.MultilineWhitespace]); )
+                    t = !0;
+                return t ? Ct : null
+            }
+            ,
+            i.MultiSpaced = function(t) {
+                return function() {
+                    i.AnyWhitespace();
+                    var e = i.ParseObject(t);
+                    return null === e ? null : (i.AnyWhitespace(),
+                    e)
+                }
+            }
+            ,
+            i._filename = null,
+            i._externalErrorHandler = null,
+            i._fileHandler = null,
+            i._filename = a,
+            i.RegisterExpressionOperators(),
+            i.GenerateStatementLevelRules(),
+            i.errorHandler = i.OnStringParserError,
+            i._externalErrorHandler = s,
+            i._fileHandler = null === u ? new _e : u,
+            null === l) {
+                if (i._rootParser = h(i),
+                i._openFilenames = [],
+                null !== i._filename) {
+                    var c = i.fileHandler.ResolveInkFilename(i._filename);
+                    i._openFilenames.push(c)
+                }
+            } else
+                i._rootParser = l;
+            return i
+        }
+        return i(o, [{
+            key: "fileHandler",
+            get: function() {
+                if (!this._fileHandler)
+                    throw new Error("No FileHandler defined");
+                return this._fileHandler
+            },
+            set: function(t) {
+                this._fileHandler = t
+            }
+        }, {
+            key: "PreProcessInputString",
+            value: function(t) {
+                return new wt(t).Process()
+            }
+        }, {
+            key: "parsingStringExpression",
+            get: function() {
+                return this.GetFlag(Number(Gt.ParsingString))
+            },
+            set: function(t) {
+                this.SetFlag(Number(Gt.ParsingString), t)
+            }
+        }, {
+            key: "tagActive",
+            get: function() {
+                return this.GetFlag(Number(Gt.TagActive))
+            },
+            set: function(t) {
+                this.SetFlag(Number(Gt.TagActive), t)
+            }
+        }, {
+            key: "identifierCharSet",
+            get: function() {
+                return null === this._identifierCharSet && ((this._identifierCharSet = new lt).AddRange("A", "Z").AddRange("a", "z").AddRange("0", "9").Add("_"),
+                this.ExtendIdentifierCharacterRanges(this._identifierCharSet)),
+                this._identifierCharSet
+            }
+        }, {
+            key: "EndTagIfNecessary",
+            value: function(t) {
+                this.tagActive && (null != t && (t instanceof It ? t.AddContent(new Ee(!1)) : t.push(new Ee(!1))),
+                this.tagActive = !1)
+            }
+        }]),
+        o
+    }(St);
+    Te.LatinBasic = ut.Define("A", "z", (new lt).AddRange("[", "`")),
+    Te.LatinExtendedA = ut.Define("Ā", "ſ"),
+    Te.LatinExtendedB = ut.Define("ƀ", "ɏ"),
+    Te.Greek = ut.Define("Ͱ", "Ͽ", (new lt).AddRange("͸", "΅").AddCharacters("ʹ͵͸·΋΍΢")),
+    Te.Cyrillic = ut.Define("Ѐ", "ӿ", (new lt).AddRange("҂", "҉")),
+    Te.Armenian = ut.Define("԰", "֏", (new lt).AddCharacters("԰").AddRange("՗", "ՠ").AddRange("ֈ", "֎")),
+    Te.Hebrew = ut.Define("֐", "׿", new lt),
+    Te.Arabic = ut.Define("؀", "ۿ", new lt),
+    Te.Korean = ut.Define("가", "힯", new lt),
+    Te.ListAllCharacterRanges = function() {
+        return [Te.LatinBasic, Te.LatinExtendedA, Te.LatinExtendedB, Te.Arabic, Te.Armenian, Te.Cyrillic, Te.Greek, Te.Hebrew, Te.Korean]
+    }
+    ;
+    var Ae = i((function t(e) {
+        var r = this;
+        n(this, t),
+        this.fileHierarchy = e,
+        this.ResolveInkFilename = function(t) {
+            if (Object.keys(r.fileHierarchy).includes(t))
+                return t;
+            throw new Error("Cannot locate ".concat(t, ". Are you trying a relative import ? This is not yet implemented."))
+        }
+        ,
+        this.LoadInkFileContents = function(t) {
+            if (Object.keys(r.fileHierarchy).includes(t))
+                return r.fileHierarchy[t];
+            throw new Error("Cannot open ".concat(t, "."))
+        }
+    }
+    ))
+      , Pe = function() {
+        function t(e) {
+            var r = this
+              , i = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null;
+            n(this, t),
+            this._errors = [],
+            this._warnings = [],
+            this._authorMessages = [],
+            this._parsedStory = null,
+            this._runtimeStory = null,
+            this._parser = null,
+            this._debugSourceRanges = [],
+            this.Compile = function() {
+                return r._parser = new Te(r.inputString,r.options.sourceFilename || null,r.OnError,null,r.options.fileHandler),
+                r._parsedStory = r.parser.ParseStory(),
+                0 === r.errors.length ? (r.parsedStory.countAllVisits = r.options.countAllVisits,
+                r._runtimeStory = r.parsedStory.ExportRuntime(r.OnError)) : r._runtimeStory = null,
+                r.runtimeStory
+            }
+            ,
+            this.RetrieveDebugSourceForLatestContent = function() {
+                var t, e, n = S(r.runtimeStory.state.outputStream);
+                try {
+                    for (n.s(); !(e = n.n()).done; ) {
+                        var i = _(e.value, $);
+                        if (null !== i) {
+                            var a = new k((null === (t = i.value) || void 0 === t ? void 0 : t.length) || 0,i.debugMetadata,i.value || "unknown");
+                            r.debugSourceRanges.push(a)
+                        }
+                    }
+                } catch (t) {
+                    n.e(t)
+                } finally {
+                    n.f()
+                }
+            }
+            ,
+            this.DebugMetadataForContentAtOffset = function(t) {
+                var e, n = 0, i = null, a = S(r.debugSourceRanges);
+                try {
+                    for (a.s(); !(e = a.n()).done; ) {
+                        var o = e.value;
+                        if (null !== o.debugMetadata && (i = o.debugMetadata),
+                        t >= n && t < n + o.length)
+                            return i;
+                        n += o.length
+                    }
+                } catch (t) {
+                    a.e(t)
+                } finally {
+                    a.f()
+                }
+                return null
+            }
+            ,
+            this.OnError = function(t, e) {
+                switch (e) {
+                case b.Author:
+                    r._authorMessages.push(t);
+                    break;
+                case b.Warning:
+                    r._warnings.push(t);
+                    break;
+                case b.Error:
+                    r._errors.push(t)
+                }
+                null !== r.options.errorHandler && r.options.errorHandler(t, e)
+            }
+            ,
+            this._inputString = e,
+            this._options = i || new w
+        }
+        return i(t, [{
+            key: "errors",
+            get: function() {
+                return this._errors
+            }
+        }, {
+            key: "warnings",
+            get: function() {
+                return this._warnings
+            }
+        }, {
+            key: "authorMessages",
+            get: function() {
+                return this._authorMessages
+            }
+        }, {
+            key: "inputString",
+            get: function() {
+                return this._inputString
+            }
+        }, {
+            key: "options",
+            get: function() {
+                return this._options
+            }
+        }, {
+            key: "parsedStory",
+            get: function() {
+                if (!this._parsedStory)
+                    throw new Error;
+                return this._parsedStory
+            }
+        }, {
+            key: "runtimeStory",
+            get: function() {
+                if (!this._runtimeStory)
+                    throw new Error("Compilation failed.");
+                return this._runtimeStory
+            }
+        }, {
+            key: "parser",
+            get: function() {
+                if (!this._parser)
+                    throw new Error;
+                return this._parser
+            }
+        }, {
+            key: "debugSourceRanges",
+            get: function() {
+                return this._debugSourceRanges
+            }
+        }]),
+        t
+    }();
+    t.Compiler = Pe,
+    t.CompilerOptions = w,
+    t.InkList = M,
+    t.JsonFileHandler = Ae,
+    Object.defineProperty(t, "__esModule", {
+        value: !0
+    })
+}
+));

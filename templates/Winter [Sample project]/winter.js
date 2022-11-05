@@ -8,8 +8,6 @@ options.preload_tags.image.push("frame");
 // always attempt to break to a new line in a way that
 // preserves a minimum number of words per line
 import "./patches/minwordsperline.js";
-// style choices using tags that appear on the same line
-import "./patches/choicetags.js";
 // click and drag to scroll the page
 import "./patches/dragtoscroll.js";
 // convert markdown to HTML tags
@@ -50,6 +48,9 @@ options.shorthandclasstags_tags = ["red", "winter"];
 // allow stepping the story forwards and backwards
 import "./patches/stepback.js"
 
+// bind shortcuts to stepBack and stepForwards
+// (we're creating an empty patch so we can wait until
+// after the story is loaded before running our code)
 Patches.add(function() 
 {
 	Shortcuts.add("q", this.stepBack);
@@ -63,6 +64,8 @@ options.passagedelay = 200.0;
 options.showlength = 1000.0;
 options.hidelength = 750.0;
 options.suppresschoice = 0.0;
+// enable debug mode, which prints a (probably far too detailed) log to the browser console
+options.debug = true;
 
 // create our game
-var winter = new Story("winter.json");
+var winter = new Story("winter.ink");
