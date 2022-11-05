@@ -6,7 +6,7 @@ var credits = {
 	emoji: "🤖",
 	name: "eval()",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "1.1",
 	description: ["Allows you to execute Javascript directly from your ink.", "This patch is highly irresponsible in like four different ways."],
 	licences: {
 		self: "2021",
@@ -28,6 +28,8 @@ var options = {};
 Tags.add("eval",
 		function(story, property)
 		{
+			if (!options.eval_enabled) return;
+
 			// make sure we have something to execute
 			if (property.trim())
 			{			
