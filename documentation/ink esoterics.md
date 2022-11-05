@@ -98,33 +98,35 @@ READ_COUNT
 
 ## CONTROL COMMAND TYPES
 
-Not necessary unless you're doing some truly wild things with the ink runtime.
+Not necessary unless you're doing some truly wild things with the ink runtime. Current as of inkjs 2.2.0. 
 
 ```
 -1 : NotSet
-0 : EvalStart
-1 : EvalOutput
-2 : EvalEnd
-3 : Duplicate
-4 : PopEvaluatedValue
-5 : PopFunction
-6 : PopTunnel
-7 : BeginString
-8 : EndString
-9 : NoOp
+ 0 : EvalStart
+ 1 : EvalOutput
+ 2 : EvalEnd
+ 3 : Duplicate
+ 4 : PopEvaluatedValue
+ 5 : PopFunction
+ 6 : PopTunnel
+ 7 : BeginString
+ 8 : EndString
+ 9 : NoOp
 10 : ChoiceCount
 11 : Turns
 12 : TurnsSince
-13 : Random
-14 : SeedRandom
-15 : VisitIndex
-16 : SequenceShuffleIndex
-17 : StartThread
-18 : Done
-19 : End
-20 : ListFromInt
-21 : ListRange
-22 : ListRandom
-23 : ReadCount
-24 : TOTAL_VALUES
+13 : ReadCount
+14 : Random
+15 : SeedRandom
+16 : VisitIndex
+17 : SequenceShuffleIndex
+18 : StartThread
+19 : Done
+20 : End
+21 : ListFromInt
+22 : ListRange
+23 : ListRandom
+24 : BeginTag
+25 : EndTag
+26 : TOTAL_VALUES
 ```
