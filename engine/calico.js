@@ -2496,7 +2496,7 @@ function notify(name, details = {}, target = window)
 	// enable them in the live build, since spitting out
 	// hundreds of debug messages can cause occasional frame drops
 
-	if (options.debug && (location.hostname == "localhost" || !location.hostname))
+	if (options.debug && (window.location.protocol=="file:"))
 	{
 		// if you're testing animations or anything you need smooth
 		// or fast, it might be worth temporarily commenting out
