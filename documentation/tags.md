@@ -4,7 +4,14 @@ Calico contains several functional tags you can use by default, and makes it eas
 
 A tag indicates to Calico that you want the engine to do something - maybe you want it to set a background image, delay the appearance of a particular line, clear the screen, or something else.
 
+## Options
 More information on how to use tags can be found [here](https://github.com/elliotherriman/calico/blob/main/documentation/getting%20started.md#tags).
+
+Some tags can be customised via options, which by convention are separated with a ">>". For example, in `musicplayer.js`, you can delay a track by using the `delay` option.
+
+```
+#play: act4 >> delay: 500
+```
 
 ## Default Tags
 
