@@ -93,11 +93,12 @@ a:hover
 	color: white;
 }
 
+
 .choice
 {
-	color: inherit;
 	opacity: 0.5;
 	transition: all 1s;
+	color: white;
 }
 
 .choice:hover
@@ -105,6 +106,11 @@ a:hover
 	color: white;
 	opacity: 1;
 	transition: all 1s;	
+}
+
+.choice > a
+{
+	color: inherit;
 }
 
 .choice > a:active
