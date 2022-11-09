@@ -4,16 +4,11 @@
 // preserves a minimum number of words per line
 import "./patches/minwordsperline.js";
 
-// style choices using tags that appear on the same line
-import "./patches/choicetags.js";
-
 // click and drag to scroll the page
 import "./patches/dragtoscroll.js";
 
 // convert markdown to HTML tags
 import "./patches/markdowntohtml.js"
-
-import "./patches/storylets.js"
 
 // -----------------------------------
 
