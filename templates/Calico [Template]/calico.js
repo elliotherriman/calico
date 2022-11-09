@@ -1601,7 +1601,7 @@ Tags.add("linebyline",
 		function(story, property)
 		{
 			// if nothing was provided, then we toggle it
-			if (typeof property === undefined)
+			if (typeof property === "undefined")
 			{
 				story.queue.setLineByLine(!story.queue.lineByLine || true)
 			} 
