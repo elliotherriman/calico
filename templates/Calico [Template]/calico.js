@@ -143,21 +143,55 @@ class Story
 			return new Promise((resolve, reject) => 
 			{
 				// we open up the file,
-				fetch(input)
-				// read that file's contents,
-				.then((response) => { return response.text(); })
+				fetchText(input)
 				// and with that text,
 				.then((storyContent) => 
 				{
-					// (unless something went wrong,
+					// (unless something went wrong,)
 					if (!storyContent)
 					{
 						// (in which case we'll throw an error about here,)
 						throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
 					}
 					
+					// anyway, now we have to search our ink for any INCLUDEs
+					let includeFiles = new Set(Array.from(
+						storyContent.matchAll(/^\s*INCLUDE (.+\.ink)\s*/gi), m => m["1"]
+					));
+
+					// and iterate through the ones we find,
+					let includes = {};
+					let promises = [];
+					includeFiles.forEach(include =>
+					{
+						// create an array of promises (to make sure things don't get too asynchronous)
+						promises.push(new Promise((resolve, reject) =>
+						{
+							fetchText(include).then(text => 
+							{
+								// store its contents for later
+								includes[include] = text;
+								// and mark that we're done
+								resolve();
+							});
+						}));
+					});
+
+					// then once, everything is done,
+					return Promise.all(promises).then(() => 
+					{
+						// return an object containing everything we need
+						return {storyContent: storyContent, includes: includes};
+					});
+				}).then((inkData) =>
+				{
+					// create compiler options so we can set up a filehandler
+					let compilerOptions = new inkjs.CompilerOptions();
+					// add our includes to the filehandler
+					compilerOptions.fileHandler = new inkjs.JsonFileHandler(inkData.includes);
+
 					// then we can use it to create the story object
-					this.ink = new inkjs.Compiler(storyContent).Compile();
+					this.ink = new inkjs.Compiler(inkData.storyContent, compilerOptions).Compile();
 				
 					// and return the compiled ink itself in case we need that
 					resolve(this.ink.ToJson());
@@ -185,9 +219,7 @@ class Story
 				// so...
 				return new Promise((resolve, reject) => {
 					// we open up the file,
-					fetch(input)
-					// read that file's contents,
-					.then((response) => { return response.text(); })
+					fetchText(input)
 					// and with that text,
 					.then((storyContent) => 
 					{
@@ -2129,6 +2161,25 @@ class Patches
 // HELPER FUNCTIONS
 // ================================================
 // assorted functions used in this file and patch files
+
+// a function to grab a text file (asynchronously) and return its contents
+function fetchText(fileName)
+{
+	return new Promise((resolve, reject) =>
+	{
+		// grab the file
+		fetch(fileName)
+		.then(response => 
+		{
+			// then grab that file's contents
+			return response.text();
+		}).then(text => 
+		{
+			// return it
+			resolve(text)
+		});
+	});
+}
 
 // a function that takes a credits object (from a patch, presumably) 
 // and prints out a bunch of messages describing the patch. this is 
