@@ -42,7 +42,7 @@ function noOrphans(textItems, length) {
 	// Stick a span right before the second to last word
 	textItems[textItems.length - length] = `<span style='white-space: nowrap'>` + textItems[textItems.length - 2];
 	// Stick a closing span right after the last word
-	targetWord[textItems.length - 1] = targetWord[textItems.length - 1] + `</span>`;
+	textItems[textItems.length - 1] = textItems[textItems.length - 1] + `</span>`;
 
 	return textItems;
 }
