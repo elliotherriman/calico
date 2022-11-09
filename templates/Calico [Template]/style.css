@@ -93,14 +93,14 @@ a:hover
 	color: white;
 }
 
-.choice > a
+.choice
 {
 	color: inherit;
 	opacity: 0.5;
 	transition: all 1s;
 }
 
-.choice > a:hover
+.choice:hover
 {
 	color: white;
 	opacity: 1;
