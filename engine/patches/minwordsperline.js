@@ -15,17 +15,12 @@
 // just because it looks a little nicer, honestly. i mean, it doesn't matter,
 // not really, but these sort of little aesthetic considerations are what
 // set apart good developers from great ones
-//
-// not that i'm calling myself a great developer. you've seen how i code.
-// also, this may not be compatible with inline HTML. like, custom classes and
-// spans that are in the physical ink. i'm not sure how to neatly avoid that?
-// please feel free to pull request this
 
 var credits = {
 	emoji: "📝",
 	name: "Minimum words per line",
-	author: "Elliot Herriman",
-	version: "1.0.1",
+	author: "qt-dork and Elliot Herriman",
+	version: "1.1",
 	description: "Prevent lines from breaking in a way that only leaves one (or more) word(s) on the next line.",
 	licences: {
 		self: "2021",
