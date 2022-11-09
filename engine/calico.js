@@ -136,109 +136,113 @@ class Story
 	// ink file, or that raw text parsed into a javascript object
 	loadInk(input)
 	{
-		// if we tried loading an ink file,
-		if (input.endsWith(".ink"))
-		{ 
-			// WE CAN DO THIS NOW
-			return new Promise((resolve, reject) => 
-			{
-				// we open up the file,
-				fetchText(input)
-				// and with that text,
-				.then((storyContent) => 
-				{
-					// (unless something went wrong,)
-					if (!storyContent)
-					{
-						// (in which case we'll throw an error about here,)
-						throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
-					}
-					
-					// anyway, now we have to search our ink for any INCLUDEs
-					let includeFiles = new Set(Array.from(
-						storyContent.matchAll(/^\s*INCLUDE (.+\.ink)\s*/gi), m => m["1"]
-					));
-
-					// and iterate through the ones we find,
-					let includes = {};
-					let promises = [];
-					includeFiles.forEach(include =>
-					{
-						// create an array of promises (to make sure things don't get too asynchronous)
-						promises.push(new Promise((resolve, reject) =>
-						{
-							fetchText(include).then(text => 
-							{
-								// store its contents for later
-								includes[include] = text;
-								// and mark that we're done
-								resolve();
-							});
-						}));
-					});
-
-					// then once, everything is done,
-					return Promise.all(promises).then(() => 
-					{
-						// return an object containing everything we need
-						return {storyContent: storyContent, includes: includes};
-					});
-				}).then((inkData) =>
-				{
-					// create compiler options so we can set up a filehandler
-					let compilerOptions = new inkjs.CompilerOptions();
-					// add our includes to the filehandler
-					compilerOptions.fileHandler = new inkjs.JsonFileHandler(inkData.includes);
-
-					// then we can use it to create the story object
-					this.ink = new inkjs.Compiler(inkData.storyContent, compilerOptions).Compile();
-				
-					// and return the compiled ink itself in case we need that
-					resolve(this.ink.ToJson());
-				});
-			});
-		}
-		// if we've been handed a string, it might be the story data, or it 
-		// might be a file name that we need to load
-		else if (typeof input === "string")
+		if (typeof input === "string")
 		{
-			// so we try to load it as if it's story data
-			try
-			{
-				input = JSON.parse(input);
-
-				return new Promise((resolve, reject) =>
+			// if we tried loading an ink file,
+			if (input.endsWith(".ink"))
+			{ 
+				// WE CAN DO THIS NOW
+				return new Promise((resolve, reject) => 
 				{
-					this.ink = new inkjs.Story(input);
-					resolve(input);
-				});
-			} 
-			// and if that breaks, then it was probably a story file
-			catch (e) 
-			{
-				// so...
-				return new Promise((resolve, reject) => {
 					// we open up the file,
 					fetchText(input)
 					// and with that text,
 					.then((storyContent) => 
 					{
-						// (unless something went wrong,
+						// (unless something went wrong,)
 						if (!storyContent)
 						{
 							// (in which case we'll throw an error about here,)
 							throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
 						}
 						
+						// anyway, now we have to search our ink for any INCLUDEs
+						let includeFiles = new Set(Array.from(
+							storyContent.matchAll(/^\s*INCLUDE (.+\.ink)\s*/gi), m => m["1"]
+						));
+
+						// and iterate through the ones we find,
+						let includes = {};
+						let promises = [];
+						includeFiles.forEach(include =>
+						{
+							// create an array of promises (to make sure things don't get too asynchronous)
+							promises.push(new Promise((resolve, reject) =>
+							{
+								fetchText(include).then(text => 
+								{
+									// store its contents for later
+									includes[include] = text;
+									// and mark that we're done
+									resolve();
+								});
+							}));
+						});
+
+						// then once, everything is done,
+						return Promise.all(promises).then(() => 
+						{
+							// return an object containing everything we need
+							return {storyContent: storyContent, includes: includes};
+						});
+					}).then((inkData) =>
+					{
+						// create compiler options so we can set up a filehandler
+						let compilerOptions = new inkjs.CompilerOptions();
+						// add our includes to the filehandler
+						compilerOptions.fileHandler = new inkjs.JsonFileHandler(inkData.includes);
+
 						// then we can use it to create the story object
-						this.ink = new inkjs.Story(storyContent);
-						resolve(storyContent);
+						this.ink = new inkjs.Compiler(inkData.storyContent, compilerOptions).Compile();
+					
+						// and return the compiled ink itself in case we need that
+						resolve(this.ink.ToJson());
 					});
 				});
 			}
+			// if we've been handed a string, it might be the story data, or it 
+			// might be a file name that we need to load
+			else 
+			{
+				// so we try to load it as if it's story data
+				try
+				{
+					input = JSON.parse(input);
+
+					return new Promise((resolve, reject) =>
+					{
+						this.ink = new inkjs.Story(input);
+						resolve(input);
+					});
+				} 
+				// and if that breaks, then it was probably a story file
+				catch (e) 
+				{
+					// so...
+					return new Promise((resolve, reject) => 
+					{
+						// we open up the file,
+						fetchText(input)
+						// and with that text,
+						.then((storyContent) => 
+						{
+							// (unless something went wrong,
+							if (!storyContent)
+							{
+								// (in which case we'll throw an error about here,)
+								throw throwIntoVoid(console.error, "\"" + input + "\" could not be found.");
+							}
+							
+							// then we can use it to create the story object
+							this.ink = new inkjs.Story(storyContent);
+							resolve(storyContent);
+						});
+					});
+				}
+			}
 		}
 		// otherwise, if it's already loaded as an object, we load that
-		else if (input.inkVersionCurrent)
+		else if (input.inkVersion)
 		{
 			// and continue with our code once it's loaded
 			return new Promise((resolve, reject) => 
