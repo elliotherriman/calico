@@ -103,7 +103,7 @@ Patches.add(function(content)
 		this.options.preload_tags[type].forEach((tag) =>
 		{
 			// and grab all their properties
-			for (var match of content.matchAll(new RegExp('"#":"' + tag + ':\\s*(.*?)(?="})', "gi"))) 
+			for (var match of content.matchAll(new RegExp('"#","\\^' + tag + ':\\s*(.*?)(?=","/#")', "gi")))
 			{
 				if (match["1"]) 
 				{
