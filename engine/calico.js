@@ -1639,13 +1639,12 @@ Tags.add("linebyline",
 			// if nothing was provided, then we toggle it
 			if (typeof property === "undefined")
 			{
-				story.queue.setLineByLine(!story.queue.lineByLine || true)
-			} 
-			// otherwise, we can use !! to convert it to a boolean
-			// (by inverting it twice)
+				story.queue.setLineByLine(!story.queue.lineByLine)
+			}
 			else
 			{	// otherwise, update linebyline
-				story.queue.setLineByLine(!!property);
+				// anything other than "true" is considered false
+				story.queue.setLineByLine(property.trim() === "true");
 			}
 		});
 
