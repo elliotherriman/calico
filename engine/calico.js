@@ -1465,7 +1465,7 @@ Tags.add("image",
 			function(story, property)
 			{
 				// make sure a file name was provided
-				if (!typeof property === "string" || !property.trim()) 
+				if (typeof property !== "string" || !property.trim())
 				{
 					warn.warn("(#image) no file was provided.");
 					return;
@@ -1508,7 +1508,7 @@ Tags.add("background",
 			function(story, property)
 			{
 				// make sure a file name was provided
-				if (!typeof property === "string" || !property.trim()) 
+				if (typeof property !== "string" || !property.trim())
 				{
 					// remove remove background
 					story.outerdiv.style.backgroundImage = "";
