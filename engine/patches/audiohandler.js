@@ -23,12 +23,12 @@ let sfx_player = document.createElement("audio")
 Tags.add("music", (story, property) =>
 	 {
 		// make sure a file name was provided
-		if (!typeof property === "string" || !property.trim()) 
+		if (!typeof property === "string" || !property.trim())
 		{
 			console.warn("(#music) no file was provided.");
 			return;
 		}
-		//If the player writes stop, stop the music. 
+		//If the player writes stop, stop the music.
 		if (property.toLowerCase() === "stop")
 		{
 			music_player.pause()
@@ -41,19 +41,19 @@ Tags.add("music", (story, property) =>
 		}
 		music_player.src = property;
 		music_player.loop = true;
-		
+
 		music_player.play()
 	});
 
 Tags.add("sfx", (story, property)=>
 	 {
 		// make sure a file name was provided
-		if (!typeof property === "string" || !property.trim()) 
+		if (!typeof property === "string" || !property.trim())
 		{
 			console.warn("(#sfx) no file was provided.");
 			return;
 		}
-		
+
 		// if the image provided isn't a URL,
 		if (!property.startsWith("http"))
 		{
@@ -71,6 +71,10 @@ Tags.add("sfx", (story, property)=>
 
 Patches.add(function()
 {
+	// If the preload patch is being used, we need to tell it not to preload the "stop" file.
+	if (Array.isArray(this.options.preload_blacklist)) {
+		this.options.preload_blacklist.push("stop");
+	}
 	this.outerdiv.addEventListener("story ready", (event) =>
 	{
 		this.outerdiv.appendChild(music_player);
