@@ -167,7 +167,7 @@ class audio
 
 		if (file)
 		{
-			var track = audio.sounds.get(file); 
+			var track = audio.sounds.get(file.name);
 			if (track) kill(track, options);
 		}
 		else
@@ -193,7 +193,7 @@ class audio
 
 		if (file)
 		{
-			var track = audio.sounds.get(file); 
+			var track = audio.sounds.get(file.name);
 			if (track) track.fade(audio.volume, 0, options.duration);
 		}
 		else
@@ -208,7 +208,7 @@ class audio
 
 		if (file)
 		{
-			var track = audio.sounds.get(file); 
+			var track = audio.sounds.get(file.name);
 			if (track) track.fade(0, audio.volume, options.duration);
 		}
 		else
