@@ -25,15 +25,19 @@ var options = {};
 // that, unless you're sure, please go ask someone for help. this
 // is almost Definitely the wrong solution for your problem
 
+// eval.bind(this) or eval.call(this) doesn't work (that's the specification) so we wrap eval in a function so we can change "this".
+function evalWithThis(code) {
+	eval(code);
+}
 Tags.add("eval",
 		function(story, property)
 		{
-			if (!options.eval_enabled) return;
+			if (!story.options.eval_enabled) return;
 
 			// make sure we have something to execute
 			if (property.trim())
-			{			
-				eval.bind(story)(property);
+			{
+				evalWithThis.call(story, property);
 			}
 		});
 

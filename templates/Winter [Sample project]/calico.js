@@ -1465,7 +1465,7 @@ Tags.add("image",
 			function(story, property)
 			{
 				// make sure a file name was provided
-				if (!typeof property === "string" || !property.trim()) 
+				if (typeof property !== "string" || !property.trim())
 				{
 					warn.warn("(#image) no file was provided.");
 					return;
@@ -1508,7 +1508,7 @@ Tags.add("background",
 			function(story, property)
 			{
 				// make sure a file name was provided
-				if (!typeof property === "string" || !property.trim()) 
+				if (typeof property !== "string" || !property.trim())
 				{
 					// remove remove background
 					story.outerdiv.style.backgroundImage = "";
@@ -1639,13 +1639,12 @@ Tags.add("linebyline",
 			// if nothing was provided, then we toggle it
 			if (typeof property === "undefined")
 			{
-				story.queue.setLineByLine(!story.queue.lineByLine || true)
-			} 
-			// otherwise, we can use !! to convert it to a boolean
-			// (by inverting it twice)
+				story.queue.setLineByLine(!story.queue.lineByLine)
+			}
 			else
 			{	// otherwise, update linebyline
-				story.queue.setLineByLine(!!property);
+				// anything other than "true" is considered false
+				story.queue.setLineByLine(property.trim() === "true");
 			}
 		});
 
@@ -1958,10 +1957,10 @@ class ExternalFunctions
 
 	static bind(story, id)
 	{
-		var f = ExternalFunctions.get(id) || window[id];
-		if (f)
+		var externalFunction = ExternalFunctions.get(id) || window[id];
+		if (externalFunction)
 		{
-			story.ink.BindExternalFunction(id, f.bind(story));
+			story.ink.BindExternalFunction(id, externalFunction.bind(story));
 		}
 	}
 
@@ -2359,7 +2358,7 @@ function splitAtCharacter(text, character)
 // 
 // for example,
 //
-// 		image:6, image2, image3.gif:4.5 | height:0.2
+// 		image:6, image2, image3.gif:4.5 >> height:0.2
 //
 // would return as
 //
@@ -2377,11 +2376,11 @@ function getTagOptions(text)
 		return {options: {}, text: text};
 	}
 
-	// if there's a "|", the tag has a value as well as options
-	if (text.indexOf("|") !== -1)
+	// if there's a ">>", the tag has a value as well as options
+	if (text.indexOf(">>") !== -1)
 	{
 		// quickly declare options and update text using some magic syntax idk
-		var {before: text, after: options} = splitAtCharacter(text, "|");
+		var {before: text, after: options} = splitAtCharacter(text, ">>");
 	}
 	
 	// split up all the arguments into arrays of length x

@@ -6,7 +6,7 @@ var credits = {
 	emoji: "📦",
 	name: "Storage",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "1.1",
 	description: "Enables saving semi-persistent data to the browser's storage.",
 	licences: {
 		self: "2021",
@@ -33,35 +33,49 @@ var credits = {
 // 		and also totals around 5mb, browser depending
 
 var options = {
-	storage_defaultformat: "session"
+	storage_defaultformat: "session",
+	storage_ID: "",
 }
 
-function get(id, format = options.storage_defaultformat)
+function get(id, format = options.storage_defaultformat, story = this)
 {
+	var data = undefined;
+	id = story.options.storage_ID + id;
+
 	switch (format) 
 	{
 		case "cookies":
-			
 			if (id)
 			{
 				try
 				{
-					return document.cookie.split('; ').find(row => row.startsWith(id + "=")).split('=')[1];
-				} catch (e) { return ""; }
+					data = document.cookie.split('; ').find(row => row.startsWith(id + "=")).split('=')[1];
+				} catch (e) { data = ""; }
+				break;
 			}
 			
-			return document.cookie;
+			data = document.cookie;
+			break;
 
 		case "session":
-			return sessionStorage.getItem(id);
+			data = sessionStorage.getItem(id);
+			break;
 
 		case "local":
-			return localStorage.getItem(id);
+			data = localStorage.getItem(id);
+			break;
 	}
+
+	data = JSON.parse(data) || data;
+	data = (isNaN(data) ? data : parseFloat(data));
+	return data || (data == 0 ? data : false);
 }
 
-function set(id, data, format = options.storage_defaultformat)
+function set(id, data, format = options.storage_defaultformat, story = this)
 {
+	data = JSON.stringify(data) || data;
+	id = story.options.storage_ID + id;
+
 	switch (format) 
 	{
 		case "cookies":
@@ -86,8 +100,10 @@ function set(id, data, format = options.storage_defaultformat)
 	}
 }
 
-function remove(id, format = options.storage_defaultformat) 
+function remove(story, id, format = options.storage_defaultformat) 
 {
+	id = story.options.storage_ID + id;
+
 	switch (format) 
 	{
 		case "cookies":
@@ -125,17 +141,15 @@ function clear(format = options.storage_defaultformat)
 	}
 }
 
-ExternalFunctions.add("get", (value) => 
-	{ 
-		var v = get(value);
-		return (isNaN(v) ? v : parseFloat(v)) || false;
-	
-	});
+ExternalFunctions.add("get", get);
 ExternalFunctions.add("set", set);
 
 Patches.add(function()
 {
-	
+	// if you haven't set an ID, just use the URL
+	if (!this.options.storage_ID) 
+		this.options.storage_ID = window.location.pathname;
+
 }, options, credits);
 
-export default {options: options, credits: credits, get: get, set: set, remove: remove, clear: clear}
+export default {options: options, credits: credits, get: get, set: set, remove: remove, clear: clear};

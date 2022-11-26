@@ -12,7 +12,7 @@ var credits = {
 	emoji: "📑",
 	name: "Preload files",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "2.0",
 	description: "Waits until everything's downloaded before starting the game. Includes a little loading bar.",
 	licences: {
 		self: "2021",
@@ -103,18 +103,18 @@ Patches.add(function(content)
 		this.options.preload_tags[type].forEach((tag) =>
 		{
 			// and grab all their properties
-			for (var match of content.matchAll(new RegExp('"#":"' + tag + ':\\s*(.*?)(?="})', "gi"))) 
+			for (var match of content.matchAll(new RegExp('"#","\\^' + tag + ':\\s*(.*?)(?=","/#")', "gi")))
 			{
 				if (match["1"]) 
 				{
 					for (var file of match["1"].split(", "))
 					{
-						if (file.startsWith(":") || file.startsWith("|")) 
+						if (file.startsWith(":") || file.startsWith(">>")) 
 						{
 							continue;
 						}
 
-						file = splitAtCharacter(splitAtCharacter(file, ":").before, "|").before.trim();
+						file = splitAtCharacter(splitAtCharacter(file, ":").before, ">>").before.trim();
 
 						switch (type)
 						{

@@ -44,6 +44,9 @@ var options = {
 	scrollafterchoice_durationmultiplier: 3,
 	// longest possible scroll in ms
 	scrollafterchoice_maxduration: 1250,
+	// how much space you want above the scroll target 
+	// (with 0.2 being 20% of the div's height)
+	scrollafterchoice_scrollTargetPadding: 0.2,
 }
 
 Story.prototype.scrollAfterChoice = function() 
@@ -54,7 +57,7 @@ Story.prototype.scrollAfterChoice = function()
 
 	var div = this.outerdiv;
 	var start = div.scrollTop;
-	var target = endOfText - window.innerHeight * 0.2;
+	var target = endOfText - window.innerHeight * this.options.scrollafterchoice_scrollTargetPadding;
 
 	if (this.innerdiv.scrollHeight - window.innerHeight - target < 20) 
 	{

@@ -22,7 +22,7 @@ import "./patches/autosave.js"
 // -----------------------------------
 // import media tag stuff for this game
 import "./patches/parallaxframes.js"
-import "./patches/musicplayer.js"
+import "./patches/audioplayer.js"
 // -----------------------------------
 // import helper patch for binding shortcuts to choices
 import choices from "./patches/shortcuts/choices.js";
