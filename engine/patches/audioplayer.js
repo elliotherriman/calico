@@ -1,7 +1,7 @@
 // -----------------------------------
-// music player (howler.js)
+// audio player (howler.js)
 // -----------------------------------
-// simple module used to play music
+// simple module used to play audio
 // creates four tags, #play, #pause, #resume, and #stop
 
 // #play: song will play a song
@@ -17,13 +17,13 @@
 // #pause and #resume without a value will do the same, though 
 // multiple songs aren't enabled by default
 
-// chrome won't let you play music until after the player has interacted with 
+// chrome won't let you play audio until after the player has interacted with 
 // the page at least once. like, clicked on it, basically. so make sure there's
-// some sort of choice or link the player clicks before you try to play music
+// some sort of choice or link the player clicks before you try to play audio
 
 // since we're using web audio api, ios won't play anything unless your phone's 
 // off silent, or you have headphones on. which is Ridiculous. but i couldn't 
-// find a way for it to fade out the music if you close the browser or 
+// find a way for it to fade out the audio if you close the browser or 
 // switch tabs, and i think this is somehow a less hostile experience
 
 // look this doesn't play nicely with ios at the moment in general but i do 
@@ -31,9 +31,9 @@
 
 var credits = {
 	emoji: "🎧",
-	name: "Music player",
+	name: "Audio player",
 	author: "Elliot Herriman",
-	version: "1.0",
+	version: "2.0",
 	description: "Adds tags allowing for playback and control of audio files.",
 	licences: {
 		self: "2021",
@@ -43,11 +43,11 @@ var credits = {
 
 var options = {
 	// if false, will stop previous tracks when adding a new one
-	musicplayer_allowmultipletracks: false,
+	audioplayer_allowmultipletracks: false,
 	// how long it takes by default to fade in a track
-	musicplayer_fadein: 2000,
+	audioplayer_fadein: 2000,
 	// how long it takes by default to fade out a track
-	musicplayer_fadeout: 2000,
+	audioplayer_fadeout: 2000,
 };
 
 Tags.add("play", function(story, property)
@@ -121,11 +121,11 @@ class audio
 
 	static play(story, file, options = {}, loop = true)
 	{	
-		options.fadein = parseFloat(options.fadein) || story.options.musicplayer_fadein;
-		options.fadeout = parseFloat(options.fadeout) || story.options.musicplayer_fadeout;
+		options.fadein = parseFloat(options.fadein) || story.options.audioplayer_fadein;
+		options.fadeout = parseFloat(options.fadeout) || story.options.audioplayer_fadeout;
 		options.delay = parseFloat(options.delay) || 0;
 		
-		if (!story.options.musicplayer_allowmultipletracks && audio.sounds.size)
+		if (!story.options.audioplayer_allowmultipletracks && audio.sounds.size)
 		{
 			audio.sounds.forEach((sounds) =>
 			{
@@ -163,7 +163,7 @@ class audio
 
 	static stop(story, file, options = {})
 	{
-		options.duration = parseFloat(options.duration) || story.options.musicplayer_fadeout;
+		options.duration = parseFloat(options.duration) || story.options.audioplayer_fadeout;
 
 		if (file)
 		{
@@ -189,7 +189,7 @@ class audio
 
 	static pause(story, file, options = {})
 	{
-		options.duration = parseFloat(options.duration) || story.options.musicplayer_fadeout;
+		options.duration = parseFloat(options.duration) || story.options.audioplayer_fadeout;
 
 		if (file)
 		{
@@ -204,7 +204,7 @@ class audio
 
 	static resume(story, file, options = {})
 	{
-		options.duration = parseFloat(options.duration) || story.options.musicplayer_fadein;
+		options.duration = parseFloat(options.duration) || story.options.audioplayer_fadein;
 
 		if (file)
 		{
