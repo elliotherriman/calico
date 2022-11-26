@@ -11,27 +11,28 @@ var credits = {
 	licences: {
 		self: "2021",
 	}
-}
+};
 
 var options = {};
 
-let music_player = document.createElement("audio")
-let sfx_player = document.createElement("audio")
+let music_player = document.createElement("audio");
+let sfx_player = document.createElement("audio");
 
 
 
 Tags.add("music", (story, property) =>
 	 {
 		// make sure a file name was provided
-		if (!typeof property === "string" || !property.trim()) 
+		if (!typeof property === "string" || !property.trim())
 		{
 			console.warn("(#music) no file was provided.");
 			return;
 		}
-		//If the player writes stop, stop the music. 
+		//If the player writes stop, stop the music.
 		if (property.toLowerCase() === "stop")
 		{
-			music_player.pause()
+			music_player.pause();
+			return;
 		}
 		// if the image provided isn't a URL,
 		if (!property.startsWith("http"))
@@ -41,19 +42,19 @@ Tags.add("music", (story, property) =>
 		}
 		music_player.src = property;
 		music_player.loop = true;
-		
-		music_player.play()
+
+		music_player.play();
 	});
 
 Tags.add("sfx", (story, property)=>
 	 {
 		// make sure a file name was provided
-		if (!typeof property === "string" || !property.trim()) 
+		if (!typeof property === "string" || !property.trim())
 		{
 			console.warn("(#sfx) no file was provided.");
 			return;
 		}
-		
+
 		// if the image provided isn't a URL,
 		if (!property.startsWith("http"))
 		{
@@ -64,7 +65,7 @@ Tags.add("sfx", (story, property)=>
 		sfx_player.src = property;
 		sfx_player.loop = false;
 
-		sfx_player.play()
+		sfx_player.play();
 	});
 
 
