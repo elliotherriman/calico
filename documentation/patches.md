@@ -59,6 +59,7 @@ The following code was used in Winter. Feel free to edit the `height` and `min-h
 
 ## preload.js
 
+### Finding files
 `preload.js` will automatically attempt to preload files detected in `image` and `background` tags. To preload files found in other tags, you'll need to add those tags yourself.
 
 The following code will allow preloading of files from a number of audio and image tags.
@@ -71,6 +72,21 @@ options.preload_tags.image.push("frame");
 You can also add tags to `options.preload_tags.other` through the same method. 
 
 The distinction between audio, image, and other types of files is used to simplify project structure (allowing you to put the relevant files in `defaultaudiolocation` and `defaultimagelocation`), and to simplify your ink (unspecified audio and image file types will default to `defaultaudioformat` and `defaultimageformat` respectively).
+
+### Loading bar
+In order to show the loading bar, you'll need to add some CSS. Winter uses the following rules.
+
+```css
+.progressbar
+{
+	position: absolute;
+	overflow: hidden;
+	top: 0;
+	background: #7690ac;
+	width: 0%;	
+	height: 1vh;
+}
+```
 
 ## shortcuts/choices.js
 
