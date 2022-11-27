@@ -40,6 +40,7 @@ Patches.add(function() {
 
         // when we start to render the next pasasage, fade out everything in the old queue
         this.outerdiv.addEventListener("render start", (event) => {
+            if (!event.detail.queue.fadeafterchoice_queue) return;
             event.detail.queue.fadeafterchoice_queue.forEach(p => {
                 transition(p, "opacity", this.options.fadeafterchoice_fadelevel + "%", this.options.fadeafterchoice_fadespeed, this.options.fadeafterchoice_fadedelay);
             });
