@@ -100,7 +100,7 @@ function set(id, data, format = options.storage_defaultformat, story = this)
 	}
 }
 
-function remove(story, id, format = options.storage_defaultformat) 
+function remove(id, format = options.storage_defaultformat, story = this) 
 {
 	id = story.options.storage_ID + id;
 

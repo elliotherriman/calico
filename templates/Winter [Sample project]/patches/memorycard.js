@@ -24,6 +24,7 @@ var options = {
 function save(story, id = "save", format = story.options.memorycard_format)
 {
 	var save = Object.assign({}, story);
+	
 	save.history.turnIndex = story.ink.state.currentTurnIndex;
 	save.ink = undefined;
 	save.options = undefined;
@@ -34,12 +35,12 @@ function save(story, id = "save", format = story.options.memorycard_format)
 	save.externalFunctions = undefined;
 	save.state = undefined;
 
-	storage.set(id, JSON.stringify(save), format);
+	storage.set(id, JSON.stringify(save), format, story);
 }
 
 function load(story, id = "save", format = story.options.memorycard_format)
 {
-	var save = storage.get(id, format);
+	var save = storage.get(id, format, story);
 	if (save) 
 	{
 		save = JSON.parse(save);
