@@ -18,7 +18,7 @@ Right now, most of the details you'll find will simply be links to the original 
 - [Glue `<>`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#glue)
 - [Gathers `-` `--` `---`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#1-gathers)
 - [Alternatives `{}` `|` `&` `!` `~`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#sequences-cycles-and-other-alternatives)  
-  have to "*\ " choices if you want to start them with a sequence
+    have to "*\ " choices if you want to start them with a sequence
   - Sequences `{}` `|`
   - Cycles `{}` `|` `&`
   - Once-only sequences `{}` `|` `!`
@@ -56,9 +56,7 @@ Right now, most of the details you'll find will simply be links to the original 
   - Divide `~` `/`
   - Modulo, remainder `~` `%` `mod`
   - Increment variable `~` `++`  
-    has additional meaning in other languages, but here, is literally just identical to +=
-  - Decrement variable `~` `--`  
-    has additional meaning in other languages, but here, is literally just identical to -=
+  - Decrement variable `~` `--`
   - [Round numbers `INT()` `FLOAT()` `FLOOR()`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#advanced-int-floor-and-float)
   - X to the power of Y `POW()`
   - [Generate a random number `RANDOM()`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#randommin-max)
@@ -88,7 +86,7 @@ Right now, most of the details you'll find will simply be links to the original 
 - Is less than or equal to `<=`
 - Is greater than or equal to `>=`
 - [Not `!` `not`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#logical-operators-and-and-or)  
-  use `not` instead of `!`, otherwise compiler may see text as once only list
+    use `not` instead of `!`, otherwise compiler may see text as once only list
 - [And `&&` `and`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#logical-operators-and-and-or)
 - [Or `||` `or`](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#logical-operators-and-and-or)
 
