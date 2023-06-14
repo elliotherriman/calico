@@ -1154,9 +1154,6 @@ class Element
 
 		// set the state to added
 		el.state = Element.states.added;
-		
-		// hide the element
-		el.style.opacity = 0;
 
 		notify("element added", {element: el, story: el.parent.story, queue: el.parent}, el.parent.story.outerdiv);
 
@@ -1860,24 +1857,24 @@ TextAnimation.add("none",
 	{
 		options: { },
 		
-		added: function() 
+		added: function(el)
 		{
-			Element.show(this);
+			Element.show(el);
 		},
 
-		show: function() 
+		show: function(el)
 		{
-			Element.rendered(this);
+			Element.rendered(el);
 		},
 
-		rendered: function()
+		rendered: function(el)
 		{
 
 		},
 
-		hide: function() 
+		hide: function(el)
 		{
-			Element.remove(this);
+			Element.remove(el);
 		},
 	}
 );
