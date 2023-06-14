@@ -1367,7 +1367,7 @@ class Tags
 		notify("tags process", {story: story, tag: inputString}, story.outerdiv);
 
 		// detect and handles tags of the form "#X" or "#X: Y"
-		var splitTag = splitAtCharacter(inputString, ":");
+		var splitTag = splitAtString(inputString, ":");
 		
 		// make sure that there's still a tag?
 		// not sure if this is necessary but i'm leavin' it
@@ -1717,7 +1717,7 @@ class Parser
 			line.tags.forEach(function(tag)
 			{
 				// split up the tag into tag and property
-				tag = splitAtCharacter(tag, ":");
+				tag = splitAtString(tag, ":");
 
 				// if the tag exists in our tags,
 				if (tag.before in Parser.tags)
@@ -2322,9 +2322,9 @@ function bindFunctions(target)
 	});
 };
 
-// splits string at the first occurance of the given character
+// splits string at the first occurence of the given splitter
 // useful for splitting up tags
-function splitAtCharacter(text, character) 
+function splitAtString(text, splitter) 
 {
 	// if we don't have any text, return nothing?
 	if (!text)
@@ -2332,10 +2332,10 @@ function splitAtCharacter(text, character)
 		return;
 	}
 
-	// find first occurence of character
-	var splitIndex = text.indexOf(character);
+	// find first occurence of splitter
+	var splitIndex = text.indexOf(splitter);
 
-	// if the text doesn't contain that character,
+	// if the text doesn't contain that string,
 	if (splitIndex == -1)
 	{
 		// return it
@@ -2349,7 +2349,7 @@ function splitAtCharacter(text, character)
 		// return it, and the value after
 		return {
 					before: text.substr(0, splitIndex).trim(),
-					after: text.substr(splitIndex+1).trim()
+					after: text.substr(splitIndex + splitter.length).trim()
 				};
 	}
 }
@@ -2380,7 +2380,7 @@ function getTagOptions(text)
 	if (text.indexOf(">>") !== -1)
 	{
 		// quickly declare options and update text using some magic syntax idk
-		var {before: text, after: options} = splitAtCharacter(text, ">>");
+		var {before: text, after: options} = splitAtString(text, ">>");
 	}
 	
 	// split up all the arguments into arrays of length x
